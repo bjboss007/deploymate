@@ -6,6 +6,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -51,6 +52,16 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
 		slog.Error("preview: proxy", "app", app.Slug, "err", err)
 		http.Error(w, "preview proxy error: "+err.Error(), http.StatusBadGateway)
+	}
+	// Apps that redirect with absolute URLs back to their loopback port
+	// (Spring Security logins, trailing-slash redirects) must stay inside
+	// the preview path.
+	loopbackPrefix := "http://127.0.0.1:" + strconv.Itoa(runtime.PreviewPort(app.Slug))
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, loopbackPrefix) {
+			resp.Header.Set("Location", "/preview/"+app.Slug+strings.TrimPrefix(loc, loopbackPrefix))
+		}
+		return nil
 	}
 	proxy.ServeHTTP(w, r)
 }
