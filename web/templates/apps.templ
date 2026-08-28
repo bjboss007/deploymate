@@ -45,45 +45,69 @@ templ appCard(app store.App) {
 	</a>
 }
 
-templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool) {
-	@Layout(vc, app.Name, app.Slug) {
+templ AppHeadActions(vc ViewCtx, app store.App) {
+	<div class="head-actions" id="head-actions">
+		if app.Status == "running" {
+			<form method="post" action={ "/apps/" + app.Slug + "/stop" }
+				hx-post={ "/apps/" + app.Slug + "/stop" }
+				hx-target="#head-actions" hx-swap="outerHTML">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-ghost" type="submit">Stop</button>
+			</form>
+		} else {
+			<form method="post" action={ "/apps/" + app.Slug + "/start" }
+				hx-post={ "/apps/" + app.Slug + "/start" }
+				hx-target="#head-actions" hx-swap="outerHTML">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-ghost" type="submit">Start</button>
+			</form>
+		}
+		<form method="post" action={ "/apps/" + app.Slug + "/delete" } onsubmit="return confirm('Delete this app and its container?')">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<button class="btn btn-danger" type="submit">Delete</button>
+		</form>
+	</div>
+}
+
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string) {
+	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ app.Name }</h1>
-				<p class="muted">~/{ project.Slug }/{ app.Slug }</p>
 			</div>
-			<div class="head-actions">
-				if app.Status == "running" {
-					<form method="post" action={ "/apps/" + app.Slug + "/stop" }>
-						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-						<button class="btn btn-ghost" type="submit">Stop</button>
-					</form>
-				} else {
-					<form method="post" action={ "/apps/" + app.Slug + "/start" }>
-						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-						<button class="btn btn-ghost" type="submit">Start</button>
-					</form>
-				}
-				<form method="post" action={ "/apps/" + app.Slug + "/delete" } onsubmit="return confirm('Delete this app and its container?')">
-					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-					<button class="btn btn-danger" type="submit">Delete</button>
-				</form>
-			</div>
+			@AppHeadActions(vc, app)
 		</div>
 
+		if git == nil {
+			<div class="panel">
+				<div class="panel-title">Deploy</div>
+				<form method="post" action={ "/apps/" + app.Slug + "/deploy" } class="deploy-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<label>Image
+						<input type="text" name="image" placeholder="nginx:alpine" value={ app.Image } required/>
+					</label>
+					<label>Port
+						<input class="port-input" type="text" name="port" placeholder="80" value={ fmtPort(app.Port) }/>
+					</label>
+					<button class="btn btn-primary" type="submit">Deploy</button>
+				</form>
+				<p class="muted panel-hint">Runs any container image on the private deploymate network. Connect a git repo below to build from source instead.</p>
+			</div>
+		}
+
 		<div class="panel">
-			<div class="panel-title">Deploy</div>
-			<form method="post" action={ "/apps/" + app.Slug + "/deploy" } class="deploy-form">
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<label>Image
-					<input type="text" name="image" placeholder="nginx:alpine" value={ app.Image } required/>
-				</label>
-				<label>Port
-					<input class="port-input" type="text" name="port" placeholder="80" value={ fmtPort(app.Port) }/>
-				</label>
-				<button class="btn btn-primary" type="submit">Deploy</button>
-			</form>
-			<p class="muted panel-hint">The container runs on the private deploymate network — its port is used for health checks and routing (phase 5).</p>
+			<div class="panel-title">Access</div>
+			<table class="deploy-table">
+				<tbody>
+					<tr>
+						<td>Preview URL</td>
+						<td>
+							<a class="mono deploy-link" href={ previewURL } target="_blank" rel="noopener">{ previewURL }</a>
+						</td>
+					</tr>
+				</tbody>
+			</table>
+			<p class="muted panel-hint">Works the moment the app is running — add a domain below for a real URL with TLS.</p>
 		</div>
 
 		<div class="panel">
@@ -121,6 +145,40 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					Certificates come from Let's Encrypt production on the next deploy.
 				} else {
 					Certificates come from the Let's Encrypt staging resolver (safe for testing). Set DEPLOYMATE_LE_MODE=production for real certs.
+				}
+			</p>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Build</div>
+			<form method="post" action={ "/apps/" + app.Slug + "/runtime" } class="git-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<label>Build method
+					<select name="runtime">
+						<option value="dockerfile" selected?={ app.Runtime == "" }>Dockerfile</option>
+						<option value="node" selected?={ runtimeKey(app.Runtime) == "node" }>Node.js</option>
+						<option value="python" selected?={ runtimeKey(app.Runtime) == "python" }>Python</option>
+						<option value="golang" selected?={ runtimeKey(app.Runtime) == "golang" }>Go</option>
+						<option value="ruby" selected?={ runtimeKey(app.Runtime) == "ruby" }>Ruby</option>
+						<option value="php" selected?={ runtimeKey(app.Runtime) == "php" }>PHP</option>
+						<option value="java" selected?={ runtimeKey(app.Runtime) == "java" }>Java</option>
+						<option value="rust" selected?={ runtimeKey(app.Runtime) == "rust" }>Rust</option>
+						<option value="deno" selected?={ runtimeKey(app.Runtime) == "deno" }>Deno</option>
+						<option value="elixir" selected?={ runtimeKey(app.Runtime) == "elixir" }>Elixir</option>
+						<option value="dotnet" selected?={ runtimeKey(app.Runtime) == "dotnet" }>.NET</option>
+						<option value="staticfile" selected?={ runtimeKey(app.Runtime) == "staticfile" }>Static site</option>
+					</select>
+				</label>
+				<label>Version <span class="muted">(optional)</span>
+					<input class="branch-input" type="text" name="version" placeholder="22 / 3.13 / 1.24" value={ runtimeVersion(app.Runtime) }/>
+				</label>
+				<button class="btn btn-primary" type="submit">Save build method</button>
+			</form>
+			<p class="muted panel-hint">
+				if app.Runtime == "" {
+					Builds run the repo's Dockerfile.
+				} else {
+					Builds use Railpack — the runtime is installed automatically and your repo's version files (.node-version, .python-version, mise config) win unless you pin a version here.
 				}
 			</p>
 		</div>
@@ -250,14 +308,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 
 		<div class="panel">
 			<div class="panel-title">Logs</div>
-			<div
-				id="logs"
-				class="log-panel"
-				hx-ext="sse"
-				sse-connect={ "/apps/" + app.Slug + "/logs" }
-				sse-swap="log"
-				hx-swap="beforeend"
-			>
+			<div id="logs" class="log-panel" data-log-src={ "/apps/" + app.Slug + "/logs" }>
 				<span class="log-wait">connecting…</span>
 			</div>
 		</div>

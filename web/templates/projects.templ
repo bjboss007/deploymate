@@ -3,7 +3,7 @@ package templates
 import "github.com/habibmuhammad/deploymate/internal/store"
 
 templ ProjectsPage(vc ViewCtx, projects []store.Project) {
-	@Layout(vc, "Projects") {
+	@Layout(vc, "Projects", "", nil) {
 		<div class="page-head">
 			<div>
 				<h1>Projects</h1>
@@ -34,11 +34,11 @@ templ ProjectsPage(vc ViewCtx, projects []store.Project) {
 }
 
 templ ProjectPage(vc ViewCtx, p store.Project, apps []store.App, svcs []store.Service) {
-	@Layout(vc, p.Name) {
+	@Layout(vc, p.Name, "", []Crumb{{Label: p.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ p.Name }</h1>
-				<p class="muted">~/{ p.Slug }</p>
+				<p class="muted">Apps, databases, and caches in this project.</p>
 			</div>
 			<form method="post" action={ "/projects/" + p.Slug + "/delete" } onsubmit="return confirm('Delete this project and everything in it?')">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>

@@ -23,8 +23,11 @@ One Go binary, one server, Docker as the compute substrate.
 - **Projects** grouping apps, databases, and caches
 - **Apps** — deploy a container image in seconds, or connect a git repo
 - **Git deploys** — deploy key + webhook (GitHub/GitLab/Gitea), every push to
-  your branch builds (Dockerfile via BuildKit) and deploys automatically,
-  with live build logs and one-click rollback (last 5 images kept)
+  your branch builds and deploys automatically, with live build logs and
+  one-click rollback (last 5 images kept). Build from a **Dockerfile** or
+  select a **runtime** — Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno,
+  Elixir, .NET, static sites — built with Railpack, no Dockerfile needed,
+  optionally version-pinned
 - **Databases & caches** — one-click Postgres 16, MySQL 8, Redis 7 with
   generated passwords (encrypted at rest), named volumes, readiness checks,
   and automatic connection-string injection (`DATABASE_URL`, `MYSQL_URL`,
@@ -33,6 +36,8 @@ One Go binary, one server, Docker as the compute substrate.
   the UI
 - **Domains & HTTPS** — automatic Let's Encrypt via Traefik (staging
   resolver by default), label-driven routing with zero proxy restarts
+- **Preview URLs** — every running app gets `/preview/<slug>` on the
+  dashboard instantly, before any domain exists
 - **Monitoring** — CPU/memory charts (5s sampling), live container logs over
   SSE, and 30s uptime probes per domain with history
 
@@ -109,7 +114,8 @@ systemd unit, Traefik config), `testdata/` (fixture repos + e2e script).
 
 ## Roadmap
 
-- Nixpacks/Railpack builds for repos without a Dockerfile
+- Build cache export for Railpack builds (`--cache-to/--cache-from`)
+- Per-runtime build/start command overrides
 - Remote servers (the `Runtime` interface seam)
 - Scheduled/periodic deployments, deploy previews per PR
 - Backups for database volumes

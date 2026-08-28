@@ -1,0 +1,2 @@
+# stdlib-only app — this file exists so Railpack's python provider has a
+# manifest to key off.

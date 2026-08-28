@@ -1,4 +1,5 @@
-// DeployMate dashboard behaviors. Kept tiny: htmx does the heavy lifting,
+// DeployMate dashboard behaviors. Kept tiny: htmx handles forms, a plain
+// EventSource streams logs (the vendored htmx core has no SSE support),
 // Chart.js draws the two metric charts.
 document.body.addEventListener("htmx:afterSwap", (e) => {
   // Keep live log panels pinned to the bottom as events stream in.
@@ -6,6 +7,30 @@ document.body.addEventListener("htmx:afterSwap", (e) => {
     e.target.scrollTop = e.target.scrollHeight;
   }
 });
+
+// --- live logs via EventSource -------------------------------------------
+function attachLogStream(panel) {
+  const src = panel.dataset.logSrc;
+  if (!src) return;
+
+  const es = new EventSource(src);
+  let gotFirst = false;
+
+  const appendLine = (text) => {
+    if (!gotFirst) {
+      panel.replaceChildren(); // clear the "connecting…" placeholder
+      gotFirst = true;
+    }
+    const div = document.createElement("div");
+    div.textContent = text; // textContent: build logs are data, not HTML
+    panel.appendChild(div);
+    panel.scrollTop = panel.scrollHeight;
+  };
+
+  es.addEventListener("log", (e) => appendLine(e.data));
+  es.addEventListener("deploy", (e) => appendLine("▸ " + e.data));
+  es.onmessage = (e) => appendLine(e.data); // unnamed events, if any
+}
 
 // --- metrics charts -----------------------------------------------------
 const CHART_COLORS = { cpu: "#ffb224", mem: "#3ecf8e" };
@@ -54,6 +79,8 @@ async function loadMetrics(appSlug) {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+  document.querySelectorAll("[data-log-src]").forEach(attachLogStream);
+
   const slug = document.body.dataset.appSlug;
   if (slug) loadMetrics(slug);
 });

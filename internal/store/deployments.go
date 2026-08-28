@@ -86,6 +86,20 @@ func (s *Store) ClaimNextQueued() (Deployment, error) {
 	return s.GetDeployment(id)
 }
 
+// FailStaleBuilding marks every deployment left in "building" by a dead
+// worker as failed — a restart mid-build must not leave the queue jammed.
+// Returns the number of rows reaped.
+func (s *Store) FailStaleBuilding() (int64, error) {
+	res, err := s.db.Exec(
+		`UPDATE deployments SET status = 'failed', error = 'worker restarted mid-build — redeploy to retry', finished_at = ? WHERE status = 'building'`,
+		Now(),
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // ListDeployments returns an app's deployment history, newest first.
 func (s *Store) ListDeployments(appID string, limit int) ([]Deployment, error) {
 	rows, err := s.db.Query(

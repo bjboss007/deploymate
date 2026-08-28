@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// App is a runnable thing: a manual container (image set) now, a
-// git-connected buildable app (git_source_id set) from P4 on.
+// App is a runnable thing: a manual container (image set), or a
+// git-connected buildable app — built from its Dockerfile or from a
+// selected runtime (Runtime != "", see builder.Runtimes).
 type App struct {
 	ID                  string
 	ProjectID           string
@@ -20,6 +21,7 @@ type App struct {
 	CurrentDeploymentID string
 	Image               string
 	Port                int
+	Runtime             string // "" = Dockerfile; else "node:22", "python", ...
 	CreatedAt           string
 }
 
@@ -36,10 +38,10 @@ func (s *Store) CreateApp(a App) (App, error) {
 		gitSourceID = a.GitSourceID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.ProjectID, a.Name, a.Slug, gitSourceID, a.BuildType, a.RootDirectory,
-		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.CreatedAt,
+		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.CreatedAt,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return a, ErrSlugTaken
@@ -50,7 +52,7 @@ func (s *Store) CreateApp(a App) (App, error) {
 // ListApps returns all apps in a project, newest first.
 func (s *Store) ListApps(projectID string) ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, created_at
 		 FROM apps WHERE project_id = ? ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -66,11 +68,11 @@ func (s *Store) GetAppBySlug(slug string) (App, error) {
 	var a App
 	var gitSourceID sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, created_at
 		 FROM apps WHERE slug = ?`,
 		slug,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.CreatedAt)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -98,16 +100,23 @@ func (s *Store) UpdateAppPort(id string, port int) error {
 	return err
 }
 
+// UpdateAppRuntime sets the build method: "" for Dockerfile, or a
+// runtime spec like "node:22" for Railpack builds.
+func (s *Store) UpdateAppRuntime(id, runtime string) error {
+	_, err := s.db.Exec(`UPDATE apps SET runtime = ? WHERE id = ?`, runtime, id)
+	return err
+}
+
 // GetAppByID fetches an app by ID.
 func (s *Store) GetAppByID(id string) (App, error) {
 	var a App
 	var gitSourceID sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, created_at
 		 FROM apps WHERE id = ?`,
 		id,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.CreatedAt)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -124,7 +133,7 @@ func (s *Store) SetAppCurrentDeployment(appID, deploymentID string) error {
 // ListAllApps returns every app across projects (monitor use).
 func (s *Store) ListAllApps() ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, created_at
 		 FROM apps ORDER BY created_at`,
 	)
 	if err != nil {
@@ -137,7 +146,7 @@ func (s *Store) ListAllApps() ([]App, error) {
 // ListAppsByGitSource returns apps linked to a git source.
 func (s *Store) ListAppsByGitSource(gitSourceID string) ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, created_at
 		 FROM apps WHERE git_source_id = ?`,
 		gitSourceID,
 	)
@@ -160,7 +169,7 @@ func scanApps(rows *sql.Rows) ([]App, error) {
 		var a App
 		var gitSourceID sql.NullString
 		if err := rows.Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType,
-			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.CreatedAt); err != nil {
+			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		a.GitSourceID = gitSourceID.String

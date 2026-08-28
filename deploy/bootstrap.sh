@@ -63,6 +63,21 @@ else
   exit 1
 fi
 
+echo "==> railpack (runtime-selected builds, no Dockerfile needed)"
+RAILPACK_VERSION="${RAILPACK_VERSION:-v0.38.0}"
+if [ ! -x /usr/local/bin/railpack ]; then
+  RAILPACK_ARCH="$(uname -m)"
+  [ "$RAILPACK_ARCH" = "aarch64" ] && RAILPACK_ARCH="arm64"
+  curl -fsSL "https://github.com/railwayapp/railpack/releases/download/${RAILPACK_VERSION}/railpack-${RAILPACK_VERSION}-${RAILPACK_ARCH}-unknown-linux-musl.tar.gz" \
+    | tar xz -C /usr/local/bin railpack
+fi
+
+echo "==> buildkit daemon for railpack (docker-container://dm-buildkit)"
+if ! docker ps -a --format '{{.Names}}' | grep -qx dm-buildkit; then
+  docker run -d --name dm-buildkit --restart unless-stopped --privileged moby/buildkit:latest
+fi
+docker start dm-buildkit >/dev/null 2>&1 || true
+
 echo "==> traefik static config"
 sed "s/ADMIN_EMAIL/$LE_EMAIL/" "$(dirname "$0")/traefik/static.yml" > "$DATA_DIR/traefik.yml"
 

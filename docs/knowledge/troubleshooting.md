@@ -95,6 +95,28 @@ https://github.com/<owner>/<repo>.git`).
 branch name mismatch (must equal `default_branch`, reply says
 "ignored"), no app linked to the source (worker log warns).
 
-**Deployment stuck `building` forever** → the worker died mid-build
-(hard kill). Known gap: no reaper for stale `building` rows yet — mark it
-failed manually or restart; see improvements.
+**Deployment stuck `building` forever** → fixed by the startup reaper:
+the worker now fails stale `building` rows on boot. If you see one,
+redeploy — or restart if it predates the reaper.
+
+**Docker Desktop: MySQL fails to initialize — "Initialization of the
+server's UUID failed" / "No space left on device"** → the Docker Desktop
+virtual disk is full (build caches + toolchain images). Fix:
+`docker exec dm-buildkit buildctl prune --all`, `docker system prune -f`,
+`docker builder prune -f`, `docker volume prune -f`. Wipe the service's
+volume and re-provision after (see database.md).
+
+**Container has `HostConfig.PortBindings` but `docker port` shows
+nothing** → Docker Desktop's image store only materializes bindings for
+ports present in the container's `ExposedPorts`. The docker CLI always
+adds them from `-p`, so SDK users must set
+`container.Config.ExposedPorts` explicitly — done in
+`internal/runtime/docker.go`. Also: passing `NetworkingConfig` to
+ContainerCreate silently drops PortBindings — network goes in
+`HostConfig.NetworkMode` ONLY.
+
+**Railpack java build fails: `JAVA_HOME is not defined correctly`** →
+the repo ships the old Apache `mvnw` wrapper (pre-maven-wrapper 3.2)
+which demands JAVA_HOME; Railpack exposes java via mise PATH shims only.
+DeployMate removes `mvnw`/`.mvn` from the throwaway checkout for java
+builds so the platform's managed Maven is used (`internal/builder/railpack.go`).

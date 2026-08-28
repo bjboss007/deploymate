@@ -35,8 +35,9 @@ func (s *Server) handleGitConnect(w http.ResponseWriter, r *http.Request) {
 	if branch == "" {
 		branch = "main"
 	}
-	if repoURL == "" || !strings.Contains(repoURL, "@") {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Repo URL must be the SSH form, e.g. git@github.com:you/repo.git"), http.StatusSeeOther)
+	if repoURL == "" ||
+		!(strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://") || strings.HasPrefix(repoURL, "https://")) {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Repo URL must be SSH (git@github.com:you/repo.git) or HTTPS (https://github.com/you/repo.git)"), http.StatusSeeOther)
 		return
 	}
 	if provider != "github" && provider != "gitlab" && provider != "gitea" {
@@ -215,7 +216,13 @@ func (s *Server) handleDeploymentPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	render(w, r, http.StatusOK, templates.DeploymentPage(s.viewCtx(r), app, d))
+	project, err := s.store.GetProjectByID(app.ProjectID)
+	if err != nil {
+		slog.Error("deployments: get project", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	render(w, r, http.StatusOK, templates.DeploymentPage(s.viewCtx(r), project, app, d))
 }
 
 // handleDeploymentStream replays stored build lines then streams live events

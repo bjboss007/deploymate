@@ -92,6 +92,15 @@ button, input { font: inherit; color: inherit; }
 
 /* ---- layout ---------------------------------------------------------- */
 .container { max-width: 1060px; margin: 0 auto; padding: 36px 24px 72px; }
+.crumbs {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-family: var(--font-mono); font-size: 13px;
+  color: var(--muted); margin-bottom: 20px;
+}
+.crumb-link { color: var(--muted); }
+.crumb-link:hover { color: var(--accent); }
+.crumb-here { color: var(--text); }
+.crumb-sep { color: var(--border-strong); }
 .page-head {
   display: flex; justify-content: space-between; align-items: flex-start;
   gap: 16px; margin-bottom: 28px;

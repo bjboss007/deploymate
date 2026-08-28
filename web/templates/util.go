@@ -2,6 +2,7 @@ package templates
 
 import (
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -23,4 +24,28 @@ func shortTime(ts string) string {
 		return ts
 	}
 	return t.Local().Format("2006-01-02 15:04")
+}
+
+// shortDeployID shortens a deployment UUID for breadcrumbs.
+func shortDeployID(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
+// runtimeKey splits "node:22" → "node".
+func runtimeKey(spec string) string {
+	if i := strings.Index(spec, ":"); i >= 0 {
+		return spec[:i]
+	}
+	return spec
+}
+
+// runtimeVersion splits "node:22" → "22".
+func runtimeVersion(spec string) string {
+	if i := strings.Index(spec, ":"); i >= 0 {
+		return spec[i+1:]
+	}
+	return ""
 }

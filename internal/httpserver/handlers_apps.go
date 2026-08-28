@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/docker/docker/pkg/stdcopy"
 
@@ -139,7 +140,7 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 		}
 		uptime[dm.ID] = dots
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime))
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, previewURL(r, app)))
 }
 
 // mustDecrypt decrypts or returns "" (best-effort display helper).
@@ -232,6 +233,8 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 	if port > 0 {
 		spec.Labels["deploymate.port"] = strconv.Itoa(port)
+		spec.Port = port
+		spec.HostPort = runtime.PreviewPort(app.Slug)
 	}
 	for k, v := range s.domainLabels(app) {
 		spec.Labels[k] = v
@@ -265,6 +268,11 @@ func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "stopped")
+	if r.Header.Get("HX-Request") == "true" {
+		app.Status = "stopped"
+		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
+		return
+	}
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
 
@@ -283,6 +291,11 @@ func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "running")
+	if r.Header.Get("HX-Request") == "true" {
+		app.Status = "running"
+		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
+		return
+	}
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
 
@@ -309,6 +322,11 @@ func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 // handleAppLogs streams container logs to the browser over SSE. Each
 // connection tails its own docker stream; closing the connection closes the
 // tail.
+//
+// The connection NEVER closes on its own while the browser is open: if the
+// container is missing or stopped, the handler sends a waiting event every
+// few seconds and keeps the stream alive. Closing would make the browser's
+// EventSource reconnect in a tight loop — constant reload churn.
 func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
@@ -323,53 +341,75 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	name := dmContainerName(app.Slug)
 
-	info, err := s.rt.Inspect(ctx, name)
-	if err != nil || !info.Running {
-		_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: "container not running — deploy or start the app to see logs"})
-		return
-	}
-
-	rc, err := s.rt.Logs(ctx, name, true, 200)
-	if err != nil {
-		_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: "could not open logs: " + err.Error()})
-		return
-	}
-	defer rc.Close()
-	// Closing the reader is what cancels a follow tail; do it on disconnect.
-	go func() {
-		<-ctx.Done()
-		rc.Close()
-	}()
-
-	stdoutR, stdoutW := io.Pipe()
-	stderrR, stderrW := io.Pipe()
-	go func() {
-		_, _ = stdcopy.StdCopy(stdoutW, stderrW, rc)
-		stdoutW.Close()
-		stderrW.Close()
-	}()
-
 	go sse.Heartbeat(ctx.Done(), w, flusher)
 
-	var wg sync.WaitGroup
-	var mu sync.Mutex
-	emit := func(line string) {
-		mu.Lock()
-		defer mu.Unlock()
-		_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: line})
-	}
-	scan := func(rd io.Reader, prefix string) {
-		defer wg.Done()
-		sc := bufio.NewScanner(rd)
-		sc.Buffer(make([]byte, 64*1024), 1024*1024)
-		for sc.Scan() {
-			emit(prefix + sc.Text())
+	emitted := false
+	for {
+		info, err := s.rt.Inspect(ctx, name)
+		if err != nil || !info.Running {
+			if !emitted {
+				_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: "waiting for the container — deploy or start the app to see logs"})
+				emitted = true
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(3 * time.Second):
+				continue
+			}
 		}
+
+		rc, err := s.rt.Logs(ctx, name, true, 200)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(3 * time.Second):
+				continue
+			}
+		}
+
+		// Closing the reader cancels the follow tail; do it on disconnect.
+		go func() {
+			<-ctx.Done()
+			rc.Close()
+		}()
+
+		stdoutR, stdoutW := io.Pipe()
+		stderrR, stderrW := io.Pipe()
+		go func() {
+			_, _ = stdcopy.StdCopy(stdoutW, stderrW, rc)
+			stdoutW.Close()
+			stderrW.Close()
+		}()
+
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		emit := func(line string) {
+			mu.Lock()
+			defer mu.Unlock()
+			_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: line})
+		}
+		scan := func(rd io.Reader, prefix string) {
+			defer wg.Done()
+			sc := bufio.NewScanner(rd)
+			sc.Buffer(make([]byte, 64*1024), 1024*1024)
+			for sc.Scan() {
+				emit(prefix + sc.Text())
+			}
+		}
+		wg.Add(2)
+		go scan(stdoutR, "")
+		go scan(stderrR, "[stderr] ")
+		wg.Wait()
+		rc.Close()
+
+		// The container exited or was recreated; loop back and re-inspect.
+		if ctx.Err() != nil {
+			return
+		}
+		emitted = false
 	}
-	wg.Add(2)
-	go scan(stdoutR, "")
-	go scan(stderrR, "[stderr] ")
-	wg.Wait()
 }
 
 // appEnv builds the container environment for an app: connection URLs for

@@ -6,10 +6,15 @@ change.
 
 ## Near-term (high value, low risk)
 
-- [ ] **Reap stale `building` deployments** — a hard kill mid-build leaves
-  rows stuck forever (no queue progress, app shows "building"). On worker
-  startup, fail any `building` rows whose owner is gone, or add a
-  heartbeat + timeout.
+- [x] **Reap stale `building` deployments** — done: the worker fails
+  in-flight rows on startup (Aug 2026).
+- [x] **Preview URLs** — done: `/preview/{slug}` on the dashboard
+  reverse-proxies to the app via loopback-published ports (Aug 2026).
+- [ ] **Preview hostnames** — the server-side sibling of preview URLs:
+  `{slug}.{server-ip}.nip.io`-style auto-subdomains via Traefik with
+  staging TLS, so previews work without a real domain AND without the
+  dashboard in the URL path. Requires Traefik, so server-only (see
+  `deploy/traefik/`).
 - [ ] **Deployment command/timeout** — manual deploys run in the HTTP
   handler with no timeout; a hung pull blocks the request. Move manual
   deploys onto the worker queue (they already create deployment rows).
@@ -34,9 +39,12 @@ change.
 
 ## Medium-term (feature depth)
 
-- [ ] **Nixpacks/Railpack fallback builds** — repos without a Dockerfile
-  currently fail with a clear message. Railpack (Go, BuildKit LLB) is the
-  modern choice; Nixpacks is maintenance-mode.
+- [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
+  (BuildKit registry cache) so rebuilds across deploys are faster than
+  cold.
+- [ ] **Per-runtime build/start command overrides** — Railpack supports
+  `--build-cmd`/`--start-cmd`; surface them in the Build panel for
+  runtimes whose auto-detection falls short.
 - [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
   schedule into the data dir (or S3), with restore UI. Named volumes
   alone are not backups.

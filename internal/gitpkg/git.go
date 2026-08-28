@@ -53,22 +53,27 @@ func GenerateDeployKey() (*DeployKey, error) {
 }
 
 // Clone checks out repoURL into destDir. branch is required; commitSHA, when
-// non-empty, pins the checkout to that commit. The private key is written to
-// a 0600 temp file for the clone's SSH transport and removed afterwards.
+// non-empty, pins the checkout to that commit. SSH URLs (git@…, ssh://…)
+// authenticate with the deploy key written to a 0600 temp file; HTTPS URLs
+// clone without a key (public repos, or PAT-in-URL later).
 func Clone(ctx context.Context, repoURL, branch, commitSHA, privateKeyPEM, destDir string) error {
 	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
 		return fmt.Errorf("prepare clone dir: %w", err)
 	}
-	keyPath := filepath.Join(destDir+".key")
-	if err := os.WriteFile(keyPath, []byte(privateKeyPEM), 0o600); err != nil {
-		return fmt.Errorf("write deploy key: %w", err)
-	}
-	defer os.Remove(keyPath)
 
-	sshCmd := fmt.Sprintf(
-		"ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
-		keyPath,
-	)
+	sshCmd := ""
+	if strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://") {
+		keyPath := filepath.Join(destDir+".key")
+		if err := os.WriteFile(keyPath, []byte(privateKeyPEM), 0o600); err != nil {
+			return fmt.Errorf("write deploy key: %w", err)
+		}
+		defer os.Remove(keyPath)
+		sshCmd = fmt.Sprintf(
+			"ssh -i %s -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o BatchMode=yes",
+			keyPath,
+		)
+	}
+
 	args := []string{"clone", "--filter=blob:none", "--depth", "1", "--branch", branch, repoURL, destDir}
 	if out, err := runGit(ctx, sshCmd, args...); err != nil {
 		return fmt.Errorf("clone: %w: %s", err, out)

@@ -16,6 +16,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
+	"github.com/docker/go-connections/nat"
 )
 
 // Docker implements Runtime against a Docker daemon (DOCKER_HOST or the
@@ -122,20 +123,35 @@ func (d *Docker) RemoveImage(ctx context.Context, tag string) (bool, error) {
 }
 
 func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
+	// Network via HostConfig.NetworkMode ONLY — exactly what the docker CLI
+	// sends for `--network X -p ...`. Passing NetworkingConfig alongside it
+	// (or instead of it) makes the daemon silently drop PortBindings.
+	hostCfg := &container.HostConfig{
+		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
+		NetworkMode:   container.NetworkMode(spec.Network),
+		Binds:         spec.Binds,
+	}
+	if spec.HostPort > 0 && spec.Port > 0 {
+		hostCfg.PortBindings = nat.PortMap{
+			nat.Port(fmt.Sprintf("%d/tcp", spec.Port)): {{HostIP: "127.0.0.1", HostPort: fmt.Sprintf("%d", spec.HostPort)}},
+		}
+	}
+	// ExposedPorts must include the published port: Docker Desktop's image
+	// store only materializes PortBindings for ports present here (the CLI
+	// always adds them from -p, masking the requirement).
+	exposed := nat.PortSet{}
+	if spec.Port > 0 {
+		exposed[nat.Port(fmt.Sprintf("%d/tcp", spec.Port))] = struct{}{}
+	}
 	resp, err := d.cli.ContainerCreate(ctx,
 		&container.Config{
-			Image:  spec.Image,
-			Env:    spec.Env,
-			Labels: spec.Labels,
+			Image:        spec.Image,
+			Env:          spec.Env,
+			Labels:       spec.Labels,
+			ExposedPorts: exposed,
 		},
-		&container.HostConfig{
-			RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
-			NetworkMode:   container.NetworkMode(spec.Network),
-			Binds:         spec.Binds,
-		},
-		&network.NetworkingConfig{
-			EndpointsConfig: map[string]*network.EndpointSettings{spec.Network: {}},
-		},
+		hostCfg,
+		nil, // no NetworkingConfig — it silently disables PortBindings
 		nil,
 		spec.Name,
 	)

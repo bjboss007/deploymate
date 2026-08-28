@@ -27,25 +27,34 @@ const imageRetention = 5
 
 // Worker processes the deployment queue.
 type Worker struct {
-	store    *store.Store
-	rt       runtime.Runtime
-	events   *sse.Broker
-	encKey   [32]byte
-	dataDir  string
-	network  string
-	leMode   string
-	buildEnv func(app store.App) []string // injected by the server (services + env vars)
+	store        *store.Store
+	rt           runtime.Runtime
+	events       *sse.Broker
+	encKey       [32]byte
+	dataDir      string
+	network      string
+	leMode       string
+	railpackPath string
+	buildEnv     func(app store.App) []string // injected by the server (services + env vars)
 }
 
 // NewWorker builds a Worker. buildEnv supplies the app container environment
 // (shared with the manual-deploy path).
-func NewWorker(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, dataDir, network, leMode string, buildEnv func(store.App) []string) *Worker {
-	return &Worker{store: st, rt: rt, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, buildEnv: buildEnv}
+func NewWorker(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string) *Worker {
+	return &Worker{store: st, rt: rt, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv}
 }
 
 // Run polls the queue until ctx is cancelled.
 func (w *Worker) Run(ctx context.Context) {
 	slog.Info("deployment worker started")
+
+	// Reap anything left mid-build by a previous (killed) process.
+	if n, err := w.store.FailStaleBuilding(); err != nil {
+		slog.Error("worker: reap stale builds", "err", err)
+	} else if n > 0 {
+		slog.Info("worker: failed stale in-flight builds", "count", n)
+	}
+
 	t := time.NewTicker(time.Second)
 	defer t.Stop()
 	for {
@@ -124,17 +133,30 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	w.log(d, "system", "building commit "+sha[:12]+" — "+message)
 	w.publish("deploy:"+app.Slug, "log", "building commit "+sha[:12])
 
-	if builder.DetectBuildType(checkoutDir, app.RootDirectory) != "dockerfile" {
-		return errors.New("no Dockerfile found in the repo root — only Dockerfile builds are supported right now")
-	}
-
 	imageTag := fmt.Sprintf("deploymate/apps/%s:%s", app.Slug, d.ID)
-	buildErr := builder.Build(ctx, checkoutDir, app.RootDirectory, imageTag, func(line string) {
+	streamLog := func(line string) {
 		w.log(d, "stdout", line)
 		w.publish("deploy:"+app.Slug, "log", line)
-	})
-	if buildErr != nil {
-		return buildErr
+	}
+
+	runtimeSpec := builder.ParseRuntimeSpec(app.Runtime)
+	if runtimeSpec.Key != "" {
+		// Railpack: the runtime is installed from the app's own version
+		// files, or pinned by us via .mise.toml.
+		rt, _ := builder.RuntimeByKey(runtimeSpec.Key)
+		w.log(d, "system", "railpack build with runtime "+rt.Label+
+			optionalVersion(runtimeSpec.Version))
+		if err := builder.BuildRailpack(ctx, w.railpackPath, checkoutDir, imageTag, runtimeSpec, streamLog); err != nil {
+			return err
+		}
+	} else {
+		// Dockerfile: the explicit, familiar path.
+		if builder.DetectBuildType(checkoutDir, app.RootDirectory) != "dockerfile" {
+			return errors.New("no Dockerfile found in the repo root — select a runtime on the app page (Node.js, Python, Go, …) or add a Dockerfile")
+		}
+		if err := builder.Build(ctx, checkoutDir, app.RootDirectory, imageTag, streamLog); err != nil {
+			return err
+		}
 	}
 
 	d.ImageTag = imageTag
@@ -201,6 +223,10 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		Env:     env,
 		Labels:  labels,
 		Network: w.network,
+	}
+	if app.Port > 0 {
+		spec.Port = app.Port
+		spec.HostPort = runtime.PreviewPort(app.Slug)
 	}
 	w.publish("deploy:"+app.Slug, "deploy", "starting container "+name)
 	if _, err := w.rt.Create(ctx, spec); err != nil {
@@ -278,6 +304,13 @@ func shortID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+func optionalVersion(v string) string {
+	if v == "" {
+		return " (auto-detected version)"
+	}
+	return " pinned to " + v
 }
 
 func removeTree(dir string) error { return os.RemoveAll(dir) }

@@ -7,7 +7,14 @@ type ViewCtx struct {
 	Flash string
 }
 
-templ Layout(vc ViewCtx, title string, appSlug ...string) {
+// Crumb is one breadcrumb step. Href "" renders the step as the current
+// page (not a link).
+type Crumb struct {
+	Label string
+	Href  string
+}
+
+templ Layout(vc ViewCtx, title string, appSlug string, crumbs []Crumb) {
 	<!DOCTYPE html>
 	<html lang="en">
 		<head>
@@ -20,8 +27,8 @@ templ Layout(vc ViewCtx, title string, appSlug ...string) {
 			<script src="/static/app.js" defer></script>
 		</head>
 		<body
-			if len(appSlug) > 0 && appSlug[0] != "" {
-				data-app-slug={ appSlug[0] }
+			if appSlug != "" {
+				data-app-slug={ appSlug }
 			}
 		>
 			<header class="topbar">
@@ -38,6 +45,21 @@ templ Layout(vc ViewCtx, title string, appSlug ...string) {
 				</div>
 			</header>
 			<main class="container">
+				<nav class="crumbs" aria-label="Breadcrumb">
+					if len(crumbs) == 0 {
+						<span class="crumb-here">Projects</span>
+					} else {
+						<a class="crumb-link" href="/projects">Projects</a>
+						for _, c := range crumbs {
+							<span class="crumb-sep" aria-hidden="true">/</span>
+							if c.Href != "" {
+								<a class="crumb-link" href={ c.Href }>{ c.Label }</a>
+							} else {
+								<span class="crumb-here">{ c.Label }</span>
+							}
+						}
+					}
+				</nav>
 				if vc.Flash != "" {
 					<div class="flash">{ vc.Flash }</div>
 				}

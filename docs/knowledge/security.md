@@ -8,7 +8,7 @@ deploys or read secrets.**
 
 | Surface | Control |
 |---|---|
-| Host ports | ufw allows 22/80/443 only; **only Traefik publishes ports** — app/db containers live on the internal bridge, neutralizing Docker's iptables bypass of ufw |
+| Host ports | ufw allows 22/80/443 only; **only Traefik publishes publicly-reachable ports** — app/db containers live on the internal bridge. Apps additionally publish their port to **127.0.0.1 loopback only** (for `/preview/<slug>`); loopback bindings are unreachable from the internet |
 | Dashboard | argon2id password (PHC-encoded), httpOnly SameSite session cookie, per-session CSRF token on every POST, constant-time comparisons |
 | Webhooks | HMAC-SHA256 (`X-Hub-Signature-256`) / `X-GitLab-Token`, raw-body read once, 1 MiB cap, delivery-ID dedup (24 h), branch filter; handlers never execute repo code |
 | Secrets | XChaCha20-Poly1305 at rest (deploy keys, webhook secrets, env values, DB passwords); key file 0600; DB creds never displayed |

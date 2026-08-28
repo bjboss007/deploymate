@@ -37,11 +37,11 @@ var Postgres = Template{
 	},
 }
 
-// MySQL provisions mysql:8.0 with a generated root + app user.
+// MySQL provisions mysql:8.4 (LTS) with a generated root + app user.
 var MySQL = Template{
 	Type:  "mysql",
 	Label: "MySQL",
-	Image: "mysql:8.0",
+	Image: "mysql:8.4",
 	Port:  3306,
 	Mount: "/var/lib/mysql",
 	URLEnv: "MYSQL_URL",

@@ -24,6 +24,10 @@ type Config struct {
 	// LEMode selects the Let's Encrypt resolver: "staging" (default) or
 	// "production".
 	LEMode string
+	// RailpackPath is the railpack CLI to invoke for runtime builds.
+	// Defaults to "railpack" (resolved via PATH); set it explicitly in dev
+	// where go/bin etc. is not on the server's PATH.
+	RailpackPath string
 }
 
 // Load reads configuration from the environment, applying defaults suitable
@@ -35,6 +39,7 @@ func Load() (*Config, error) {
 		SetupEmail:    os.Getenv("DEPLOYMATE_SETUP_EMAIL"),
 		SetupPassword: os.Getenv("DEPLOYMATE_SETUP_PASSWORD"),
 		LEMode:        getenv("DEPLOYMATE_LE_MODE", "staging"),
+		RailpackPath:  getenv("DEPLOYMATE_RAILPACK", "railpack"),
 	}
 	cfg.KeyPath = filepath.Join(cfg.DataDir, "keys", "root.key")
 

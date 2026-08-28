@@ -9,6 +9,7 @@ package runtime
 import (
 	"context"
 	"errors"
+	"hash/crc32"
 	"io"
 )
 
@@ -16,14 +17,25 @@ import (
 var ErrContainerNotFound = errors.New("runtime: container not found")
 
 // Spec describes a container DeployMate wants to run. App containers never
-// publish host ports — only the reverse proxy (Traefik) does.
+// publish publicly-reachable host ports — only the reverse proxy (Traefik)
+// does. HostPort, when set, publishes the container's Port to the HOST
+// LOOPBACK only (127.0.0.1) so the dashboard's /preview proxy can reach the
+// app from the host process — needed on Docker Desktop (bridge IPs are not
+// host-reachable) and harmless on Linux servers.
 type Spec struct {
-	Name    string            // container name, e.g. "dm-myapp"
-	Image   string            // image reference
-	Env     []string          // KEY=VALUE pairs
-	Labels  map[string]string // docker labels (Traefik routing, ownership)
-	Network string            // docker network to attach
-	Binds   []string          // volume mounts, e.g. "vol-name:/data"
+	Name     string            // container name, e.g. "dm-myapp"
+	Image    string            // image reference
+	Env      []string          // KEY=VALUE pairs
+	Labels   map[string]string // docker labels (Traefik routing, ownership)
+	Network  string            // docker network to attach
+	Binds    []string          // volume mounts, e.g. "vol-name:/data"
+	Port     int               // the container's listening port (0 = none)
+	HostPort int               // loopback-published host port for Port (0 = no publish)
+}
+
+// PreviewPort derives a stable loopback port for an app's preview URL.
+func PreviewPort(slug string) int {
+	return 20000 + int(crc32.ChecksumIEEE([]byte(slug))%30000)
 }
 
 // Info is a snapshot of a container's state.

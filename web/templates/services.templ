@@ -13,12 +13,12 @@ templ serviceCard(sv store.Service) {
 	</a>
 }
 
-templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel string) {
-	@Layout(vc, sv.Name) {
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string) {
+	@Layout(vc, sv.Name, "", []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: sv.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ sv.Name }</h1>
-				<p class="muted">~/{ project.Slug } · { typeLabel }</p>
+				<p class="muted">{ typeLabel }</p>
 			</div>
 			<div class="head-actions">
 				if sv.Status == "running" {
@@ -59,9 +59,15 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 						<td>Data volume</td>
 						<td class="mono">{ sv.VolumeName }</td>
 					</tr>
+					if connURL != "" {
+						<tr>
+							<td>Connection string</td>
+							<td class="mono key-cell">{ connURL }</td>
+						</tr>
+					}
 				</tbody>
 			</table>
-			<p class="muted panel-hint">While running, apps in this project get its connection URL injected automatically. Passwords are generated once, encrypted at rest, and never shown.</p>
+			<p class="muted panel-hint">While running, apps in this project get this URL injected automatically as { urlEnvKey }. Copy the connection string into an env var if an app expects it under a different key. Passwords are generated once, encrypted at rest, and never shown anywhere else.</p>
 		</div>
 	}
 }

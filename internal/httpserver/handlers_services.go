@@ -82,7 +82,17 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tpl, _ := services.ForType(svc.Type)
-	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label))
+
+	// The owner may see their own connection string — copying it into an
+	// env var is the escape hatch for apps with custom expectations.
+	connURL := ""
+	if svc.Status == "running" {
+		if credsEnc, err := s.store.GetServiceCredentials(svc.ID); err == nil && len(credsEnc) > 0 {
+			creds := s.decryptCreds(credsEnc)
+			connURL = tpl.ConnURL(creds, dmServiceName(svc.Slug))
+		}
+	}
+	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL))
 }
 
 // handleServiceStart provisions (first run) or resumes a service: creds,

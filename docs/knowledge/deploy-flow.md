@@ -20,10 +20,16 @@ every build line with sequence numbers.
    into `<data>/repos/<deployment_id>` with the source's deploy key; if a
    SHA was pinned by a webhook, fetch + checkout it. Checkout dir is
    removed after the deploy.
-3. **Build** — `docker buildx build --progress=plain --load -t
-   deploymate/apps/<slug>:<deployment_id>`; each line → `build_logs` +
-   SSE topic `deploy:<slug>` (the deployment page replays history on
-   connect, so a reload loses nothing).
+3. **Build** — one of two engines, chosen by `apps.runtime`:
+   - `""` (Dockerfile): `docker buildx build --progress=plain --load
+     -t deploymate/apps/<slug>:<deployment_id>`
+   - `key[:version]` (runtime): `railpack build` with
+     `BUILDKIT_HOST=docker-container://dm-buildkit` (a `moby/buildkit`
+     container); a pinned version is written as `.mise.toml` unless the
+     repo has its own; the image lands in the local daemon via
+     railpack's built-in `docker load` pipe.
+   Every line → `build_logs` + SSE topic `deploy:<slug>` (the deployment
+   page replays history on connect, so a reload loses nothing).
 4. **Record** — deployment gets `image_tag`; an `images` row is created.
 5. **Swap** — stop + remove `dm-<slug>`, create + start a new container
    with:
