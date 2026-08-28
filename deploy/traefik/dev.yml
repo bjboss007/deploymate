@@ -1,0 +1,35 @@
+# Local development Traefik config: high ports so nothing collides with
+# Docker Desktop or other dev services, and the API enabled so the label →
+# router pipeline can be verified without a public domain.
+api:
+  insecure: true
+
+entryPoints:
+  web:
+    address: ":8081"
+  websecure:
+    address: ":8443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: deploymate-net
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: dev@deploymate.dev
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+  staging:
+    acme:
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      email: dev@deploymate.dev
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+log:
+  level: DEBUG

@@ -1,0 +1,310 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+// GitInfo is the connected-repo data shown on the app page.
+type GitInfo struct {
+	RepoURL       string
+	Provider      string
+	DefaultBranch string
+	PublicKey     string
+	WebhookPath   string
+	WebhookSecret string
+}
+
+templ statusDot(status string) {
+	if status == "running" {
+		<span class="status-dot status-running" aria-hidden="true"></span>
+	} else if status == "failed" {
+		<span class="status-dot status-failed" aria-hidden="true"></span>
+	} else {
+		<span class="status-dot status-stopped" aria-hidden="true"></span>
+	}
+}
+
+templ statusBadge(status string) {
+	if status == "running" {
+		<span class="badge badge-running">@statusDot("running"){ status }</span>
+	} else if status == "failed" {
+		<span class="badge badge-failed">@statusDot("failed"){ status }</span>
+	} else {
+		<span class="badge">@statusDot("stopped"){ status }</span>
+	}
+}
+
+templ appCard(app store.App) {
+	<a class="app-card" href={ "/apps/" + app.Slug }>
+		<div class="card-title">{ app.Name }</div>
+		<div class="card-meta">/{ app.Slug }</div>
+		<div class="app-card-foot">
+			@statusBadge(app.Status)
+			if app.Image != "" {
+				<span class="mono app-image">{ app.Image }</span>
+			}
+		</div>
+	</a>
+}
+
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool) {
+	@Layout(vc, app.Name, app.Slug) {
+		<div class="page-head">
+			<div>
+				<h1>{ app.Name }</h1>
+				<p class="muted">~/{ project.Slug }/{ app.Slug }</p>
+			</div>
+			<div class="head-actions">
+				if app.Status == "running" {
+					<form method="post" action={ "/apps/" + app.Slug + "/stop" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost" type="submit">Stop</button>
+					</form>
+				} else {
+					<form method="post" action={ "/apps/" + app.Slug + "/start" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost" type="submit">Start</button>
+					</form>
+				}
+				<form method="post" action={ "/apps/" + app.Slug + "/delete" } onsubmit="return confirm('Delete this app and its container?')">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-danger" type="submit">Delete</button>
+				</form>
+			</div>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Deploy</div>
+			<form method="post" action={ "/apps/" + app.Slug + "/deploy" } class="deploy-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<label>Image
+					<input type="text" name="image" placeholder="nginx:alpine" value={ app.Image } required/>
+				</label>
+				<label>Port
+					<input class="port-input" type="text" name="port" placeholder="80" value={ fmtPort(app.Port) }/>
+				</label>
+				<button class="btn btn-primary" type="submit">Deploy</button>
+			</form>
+			<p class="muted panel-hint">The container runs on the private deploymate network — its port is used for health checks and routing (phase 5).</p>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Domains</div>
+			if len(domains) == 0 {
+				<p class="muted">No domains yet. Point an A record at your server first, then add it here.</p>
+			} else {
+				<table class="deploy-table">
+					<tbody>
+						for _, dm := range domains {
+							<tr>
+								<td class="mono">https://{ dm.Hostname }</td>
+								<td>{ dm.TLSStatus }</td>
+								<td class="env-actions">
+									<form method="post" action={ "/apps/" + app.Slug + "/domains/" + dm.ID + "/delete" }>
+										<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+										<button class="btn btn-ghost btn-sm" type="submit">Remove</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+			<form method="post" action={ "/apps/" + app.Slug + "/domains" } class="env-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<input type="text" name="hostname" placeholder="app.example.com" required/>
+				<button class="btn btn-primary" type="submit">Add domain</button>
+				<span class="muted">routing port</span>
+				<input class="port-input" type="text" name="port" formaction={ "/apps/" + app.Slug + "/port" } value={ fmtPort(app.Port) } placeholder="80"/>
+				<button class="btn btn-ghost" type="submit" formaction={ "/apps/" + app.Slug + "/port" }>Save port</button>
+			</form>
+			<p class="muted panel-hint">
+				if leMode == "production" {
+					Certificates come from Let's Encrypt production on the next deploy.
+				} else {
+					Certificates come from the Let's Encrypt staging resolver (safe for testing). Set DEPLOYMATE_LE_MODE=production for real certs.
+				}
+			</p>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Git</div>
+			if git == nil {
+				<form method="post" action={ "/apps/" + app.Slug + "/git" } class="git-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<label>Repository
+						<input type="text" name="repo_url" placeholder="git@github.com:you/repo.git" required/>
+					</label>
+					<label>Provider
+						<select name="provider">
+							<option value="github">GitHub</option>
+							<option value="gitlab">GitLab</option>
+							<option value="gitea">Gitea</option>
+						</select>
+					</label>
+					<label>Branch
+						<input class="branch-input" type="text" name="branch" value="main"/>
+					</label>
+					<button class="btn btn-primary" type="submit">Connect repo</button>
+				</form>
+				<p class="muted panel-hint">Connecting generates a deploy key and webhook secret. Builds run on every push to the branch.</p>
+			} else {
+				<div class="git-connect">
+					<table class="deploy-table">
+						<tbody>
+							<tr>
+								<td>Repository</td>
+								<td class="mono">{ git.RepoURL } <span class="muted">({ git.Provider }, { git.DefaultBranch })</span></td>
+							</tr>
+							<tr>
+								<td>Deploy key</td>
+								<td class="mono key-cell">{ git.PublicKey }</td>
+							</tr>
+							<tr>
+								<td>Webhook URL</td>
+								<td class="mono">https://your-host{ git.WebhookPath }</td>
+							</tr>
+							<tr>
+								<td>Webhook secret</td>
+								<td class="mono">{ git.WebhookSecret }</td>
+							</tr>
+						</tbody>
+					</table>
+					<form method="post" action={ "/apps/" + app.Slug + "/git/deploy" } class="git-deploy">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-primary" type="submit">Deploy latest commit</button>
+					</form>
+				</div>
+				<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
+			}
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Environment</div>
+			if len(envVars) == 0 {
+				<p class="muted">No variables yet. Databases and caches in this project inject their connection URLs automatically when running.</p>
+			} else {
+				<table class="deploy-table">
+					<tbody>
+						for _, v := range envVars {
+							<tr>
+								<td class="mono">{ v.Key }</td>
+								if v.IsSecret {
+									<td class="mono muted">••••••••••</td>
+								} else {
+									<td class="mono">{ v.Value }</td>
+								}
+								<td class="env-actions">
+									<form method="post" action={ "/apps/" + app.Slug + "/env/" + v.ID + "/delete" }>
+										<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+										<button class="btn btn-ghost btn-sm" type="submit">Remove</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+			<form method="post" action={ "/apps/" + app.Slug + "/env" } class="env-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<input type="text" name="key" placeholder="KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits, underscores — starting with a letter" required/>
+				<input type="text" name="value" placeholder="value" required/>
+				<label class="checkbox"><input type="checkbox" name="is_secret"/> secret</label>
+				<button class="btn btn-primary" type="submit">Add variable</button>
+			</form>
+			<p class="muted panel-hint">Values are encrypted at rest. Changes apply on the next deploy.</p>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Monitoring</div>
+			if len(domains) > 0 {
+				<div class="uptime-strip">
+					for _, dm := range domains {
+						<div class="uptime-row">
+							<span class="mono uptime-host">{ dm.Hostname }</span>
+							<span class="uptime-dots">
+								for _, ok := range uptime[dm.ID] {
+									if ok {
+										<span class="udot udot-ok" aria-hidden="true"></span>
+									} else {
+										<span class="udot udot-bad" aria-hidden="true"></span>
+									}
+								}
+							</span>
+						</div>
+					}
+				</div>
+			} else {
+				<p class="muted">Add a domain to get uptime probes (every 30s).</p>
+			}
+			<div class="chart-grid">
+				<div>
+					<div class="chart-label">CPU %</div>
+					<canvas id="cpu-chart" height="90"></canvas>
+				</div>
+				<div>
+					<div class="chart-label">Memory (MB)</div>
+					<canvas id="mem-chart" height="90"></canvas>
+				</div>
+			</div>
+			<p class="muted panel-hint">Sampled every 5 seconds from the running container. Uptime dots show the last 30 probes (15 minutes).</p>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Logs</div>
+			<div
+				id="logs"
+				class="log-panel"
+				hx-ext="sse"
+				sse-connect={ "/apps/" + app.Slug + "/logs" }
+				sse-swap="log"
+				hx-swap="beforeend"
+			>
+				<span class="log-wait">connecting…</span>
+			</div>
+		</div>
+
+		if len(deployments) > 0 {
+			<div class="panel">
+				<div class="panel-title">Deployments</div>
+				<table class="deploy-table">
+					<thead>
+						<tr>
+							<th>Status</th>
+							<th>Image / commit</th>
+							<th>Kind</th>
+							<th>When</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, d := range deployments {
+							<tr>
+								<td>
+									<a class="mono deploy-link" href={ "/deployments/" + d.ID }>@statusBadge(d.Status)</a>
+								</td>
+								<td class="mono">
+									if d.ImageTag != "" {
+										{d.ImageTag}
+									} else if d.CommitSHA != "" {
+										{d.CommitSHA}
+									} else {
+										<span class="muted">—</span>
+									}
+								</td>
+								<td>{ d.Kind }</td>
+								<td class="mono muted">{ shortTime(d.CreatedAt) }</td>
+								<td class="env-actions">
+									if d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" {
+										<form method="post" action={ "/deployments/" + d.ID + "/rollback" }>
+											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+											<button class="btn btn-ghost btn-sm" type="submit">Rollback</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	}
+}

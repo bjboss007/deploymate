@@ -1,0 +1,31 @@
+[Unit]
+Description=DeployMate control plane
+Documentation=https://github.com/habibmuhammad/deploymate
+After=docker.service network-online.target
+Wants=docker.service network-online.target
+
+[Service]
+Type=simple
+User=deploymate
+Group=deploymate
+SupplementaryGroups=docker
+ExecStart=/usr/local/bin/deploymate serve
+Restart=always
+RestartSec=5
+Environment=DEPLOYMATE_ADDR=127.0.0.1:8080
+Environment=DEPLOYMATE_DATA_DIR=/var/lib/deploymate
+
+# Hardening: the service only needs its data dir, the docker socket,
+# and outbound network.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/deploymate
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,67 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+templ serviceCard(sv store.Service) {
+	<a class="app-card" href={ "/services/" + sv.Slug }>
+		<div class="card-title">{ sv.Name }</div>
+		<div class="card-meta">{ sv.Type } · { sv.Image }</div>
+		<div class="app-card-foot">
+			@statusBadge(sv.Status)
+			<span class="mono app-image">:{ sv.Port }</span>
+		</div>
+	</a>
+}
+
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel string) {
+	@Layout(vc, sv.Name) {
+		<div class="page-head">
+			<div>
+				<h1>{ sv.Name }</h1>
+				<p class="muted">~/{ project.Slug } · { typeLabel }</p>
+			</div>
+			<div class="head-actions">
+				if sv.Status == "running" {
+					<form method="post" action={ "/services/" + sv.Slug + "/stop" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost" type="submit">Stop</button>
+					</form>
+				} else {
+					<form method="post" action={ "/services/" + sv.Slug + "/start" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-primary" type="submit">Start</button>
+					</form>
+				}
+				<form method="post" action={ "/services/" + sv.Slug + "/delete" } onsubmit="return confirm('Delete this service? Its data volume will be kept.')">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-danger" type="submit">Delete</button>
+				</form>
+			</div>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Details</div>
+			<table class="deploy-table">
+				<tbody>
+					<tr>
+						<td>Status</td>
+						<td>@statusBadge(sv.Status)</td>
+					</tr>
+					<tr>
+						<td>Image</td>
+						<td class="mono">{ sv.Image }</td>
+					</tr>
+					<tr>
+						<td>Internal port</td>
+						<td class="mono">:{ sv.Port }</td>
+					</tr>
+					<tr>
+						<td>Data volume</td>
+						<td class="mono">{ sv.VolumeName }</td>
+					</tr>
+				</tbody>
+			</table>
+			<p class="muted panel-hint">While running, apps in this project get its connection URL injected automatically. Passwords are generated once, encrypted at rest, and never shown.</p>
+		</div>
+	}
+}

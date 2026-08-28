@@ -1,0 +1,94 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+templ ProjectsPage(vc ViewCtx, projects []store.Project) {
+	@Layout(vc, "Projects") {
+		<div class="page-head">
+			<div>
+				<h1>Projects</h1>
+				<p class="muted">Everything you deploy lives in a project — apps, databases, and caches.</p>
+			</div>
+		</div>
+		<form method="post" action="/projects" class="inline-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<input type="text" name="name" placeholder="project name" maxlength="64" required/>
+			<button class="btn btn-primary" type="submit">Create project</button>
+		</form>
+		if len(projects) == 0 {
+			<div class="empty">
+				<p>No projects yet.</p>
+				<p>Create one above — apps, databases, and caches live inside projects.</p>
+			</div>
+		} else {
+			<div class="card-grid">
+				for _, p := range projects {
+					<a class="project-card" href={ "/projects/" + p.Slug }>
+						<div class="card-title">{ p.Name }</div>
+						<div class="card-meta">/{ p.Slug }</div>
+					</a>
+				}
+			</div>
+		}
+	}
+}
+
+templ ProjectPage(vc ViewCtx, p store.Project, apps []store.App, svcs []store.Service) {
+	@Layout(vc, p.Name) {
+		<div class="page-head">
+			<div>
+				<h1>{ p.Name }</h1>
+				<p class="muted">~/{ p.Slug }</p>
+			</div>
+			<form method="post" action={ "/projects/" + p.Slug + "/delete" } onsubmit="return confirm('Delete this project and everything in it?')">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-danger" type="submit">Delete project</button>
+			</form>
+		</div>
+
+		<div class="section-title">Apps</div>
+		<form method="post" action={ "/projects/" + p.Slug + "/apps" } class="inline-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<input type="text" name="name" placeholder="app name" maxlength="64" required/>
+			<button class="btn btn-primary" type="submit">Create app</button>
+		</form>
+
+		if len(apps) == 0 {
+			<div class="empty">
+				<p>No apps yet.</p>
+				<p>Create an app above, then deploy a container image to it.</p>
+			</div>
+		} else {
+			<div class="card-grid">
+				for _, a := range apps {
+					@appCard(a)
+				}
+			</div>
+		}
+
+		<div class="section-title">Databases &amp; caches</div>
+		<form method="post" action={ "/projects/" + p.Slug + "/services" } class="inline-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<input type="text" name="name" placeholder="service name" maxlength="64" required/>
+			<select name="type">
+				<option value="postgres">PostgreSQL</option>
+				<option value="mysql">MySQL</option>
+				<option value="redis">Redis</option>
+			</select>
+			<button class="btn btn-primary" type="submit">Create service</button>
+		</form>
+
+		if len(svcs) == 0 {
+			<div class="empty">
+				<p>No databases or caches yet.</p>
+				<p>Create one above — apps in this project get its connection URL automatically.</p>
+			</div>
+		} else {
+			<div class="card-grid">
+				for _, sv := range svcs {
+					@serviceCard(sv)
+				}
+			</div>
+		}
+	}
+}

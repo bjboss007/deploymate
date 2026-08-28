@@ -1,0 +1,48 @@
+package templates
+
+// ViewCtx carries the per-request values every page needs.
+type ViewCtx struct {
+	Email string
+	CSRF  string
+	Flash string
+}
+
+templ Layout(vc ViewCtx, title string, appSlug ...string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · DeployMate</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script src="/static/htmx.min.js" defer></script>
+			<script src="/static/chart.umd.min.js" defer></script>
+			<script src="/static/app.js" defer></script>
+		</head>
+		<body
+			if len(appSlug) > 0 && appSlug[0] != "" {
+				data-app-slug={ appSlug[0] }
+			}
+		>
+			<header class="topbar">
+				<a class="brand" href="/projects">
+					<span class="led"></span>
+					<span>deploymate</span>
+				</a>
+				<div class="topbar-right">
+					<span class="user-chip">{ vc.Email }</span>
+					<form method="post" action="/logout">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost" type="submit">Log out</button>
+					</form>
+				</div>
+			</header>
+			<main class="container">
+				if vc.Flash != "" {
+					<div class="flash">{ vc.Flash }</div>
+				}
+				{ children... }
+			</main>
+		</body>
+	</html>
+}

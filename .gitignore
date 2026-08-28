@@ -1,0 +1,15 @@
+# Binaries
+bin/
+deploymate
+
+# Local data (SQLite, keys, build artifacts)
+data/
+
+# Go
+vendor/
+
+# OS
+.DS_Store
+
+# IDE
+.idea/

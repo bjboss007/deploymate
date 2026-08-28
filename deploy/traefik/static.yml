@@ -1,0 +1,43 @@
+# Traefik v3 static configuration for DeployMate.
+# Installed to /var/lib/deploymate/traefik.yml by bootstrap.sh (which fills
+# in the ACME email). Traefik is the ONLY container publishing host ports;
+# DeployMate writes routing labels onto app containers and Traefik picks
+# them up from the docker provider — no proxy restarts needed.
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: deploymate-net
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: ADMIN_EMAIL
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+  staging:
+    acme:
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      email: ADMIN_EMAIL
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+# api + dashboard are disabled: the socket is mounted read-only and DeployMate
+# owns the admin surface. Logs go to stdout for `docker logs traefik`.
+log:
+  level: WARN

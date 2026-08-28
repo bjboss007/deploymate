@@ -1,0 +1,41 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+templ DeploymentPage(vc ViewCtx, app store.App, d store.Deployment) {
+	@Layout(vc, "Deploy "+app.Name) {
+		<div class="page-head">
+			<div>
+				<h1>Deployment</h1>
+				<p class="muted">
+					<a class="mono deploy-link" href={ "/apps/" + app.Slug }>{ app.Name }</a>
+					if d.CommitSHA != "" {
+						<span> · { d.CommitSHA }</span>
+					}
+				</p>
+			</div>
+			<div class="head-actions">
+				@statusBadge(d.Status)
+				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
+			</div>
+		</div>
+
+		if d.Error != "" {
+			<div class="flash flash-error">{ d.Error }</div>
+		}
+
+		<div class="panel">
+			<div class="panel-title">Build &amp; deploy log</div>
+			<div
+				id="logs"
+				class="log-panel"
+				hx-ext="sse"
+				sse-connect={ "/deployments/" + d.ID + "/stream" }
+				sse-swap="log"
+				hx-swap="beforeend"
+			>
+				<span class="log-wait">connecting — history replays automatically…</span>
+			</div>
+		</div>
+	}
+}

@@ -1,0 +1,34 @@
+package templates
+
+templ LoginPage(err ...string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Sign in · DeployMate</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+		</head>
+		<body class="login-body">
+			<div class="login-card">
+				<div class="login-brand">
+					<span class="led"></span>
+					<span>deploymate</span>
+				</div>
+				<p class="login-sub">Sign in to your server.</p>
+				if len(err) > 0 && err[0] != "" {
+					<div class="flash flash-error">{ err[0] }</div>
+				}
+				<form method="post" action="/login" class="login-form">
+					<label>Email
+						<input type="email" name="email" autocomplete="username" required autofocus/>
+					</label>
+					<label>Password
+						<input type="password" name="password" autocomplete="current-password" required/>
+					</label>
+					<button class="btn btn-primary" type="submit">Sign in</button>
+				</form>
+			</div>
+		</body>
+	</html>
+}
