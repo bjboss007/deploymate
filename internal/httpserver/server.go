@@ -110,6 +110,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/deploy", am.CheckCSRF(s.handleAppDeploy))
 		r.Post("/apps/{slug}/stop", am.CheckCSRF(s.handleAppStop))
 		r.Post("/apps/{slug}/start", am.CheckCSRF(s.handleAppStart))
+		r.Post("/apps/{slug}/restart", am.CheckCSRF(s.handleAppRestart))
 		r.Post("/apps/{slug}/delete", am.CheckCSRF(s.handleAppDelete))
 		r.Post("/apps/{slug}/env", am.CheckCSRF(s.handleEnvVarCreate))
 		r.Post("/apps/{slug}/env/{id}/delete", am.CheckCSRF(s.handleEnvVarDelete))
@@ -125,6 +126,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/services/{slug}", s.handleServicePage)
 		r.Post("/services/{slug}/start", am.CheckCSRF(s.handleServiceStart))
 		r.Post("/services/{slug}/stop", am.CheckCSRF(s.handleServiceStop))
+		r.Post("/services/{slug}/restart", am.CheckCSRF(s.handleServiceRestart))
 		r.Post("/services/{slug}/delete", am.CheckCSRF(s.handleServiceDelete))
 	})
 

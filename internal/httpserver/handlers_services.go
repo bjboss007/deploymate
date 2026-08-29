@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -174,16 +175,8 @@ func (s *Server) handleServiceStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Wait for readiness so "running" means "accepting connections".
-	ready := false
-	for i := 0; i < 30; i++ {
-		if _, err := s.rt.Exec(ctx, name, tpl.ReadyCmd(creds)); err == nil {
-			ready = true
-			break
-		}
-		time.Sleep(2 * time.Second)
-	}
-	if !ready {
-		fail(fmt.Errorf("service did not become ready within 60s — check its logs"))
+	if err := s.waitServiceReady(ctx, name, tpl, creds); err != nil {
+		fail(err)
 		return
 	}
 
@@ -191,6 +184,57 @@ func (s *Server) handleServiceStart(w http.ResponseWriter, r *http.Request) {
 		slog.Error("services: set running", "err", err)
 	}
 	http.Redirect(w, r, "/services/"+svc.Slug, http.StatusSeeOther)
+}
+
+// handleServiceRestart stops and re-provisions a service in one click:
+// stop, start, and the full readiness wait.
+func (s *Server) handleServiceRestart(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.serviceFromRequest(w, r)
+	if !ok {
+		return
+	}
+	tpl, _ := services.ForType(svc.Type)
+	ctx := r.Context()
+	name := dmServiceName(svc.Slug)
+	fail := func(err error) {
+		slog.Error("services: restart", "service", svc.Slug, "err", err)
+		_ = s.store.UpdateServiceStatus(svc.ID, "failed")
+		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Restart failed: "+err.Error()), http.StatusSeeOther)
+	}
+
+	credsEnc, err := s.store.GetServiceCredentials(svc.ID)
+	if err != nil {
+		fail(err)
+		return
+	}
+	creds := s.decryptCreds(credsEnc)
+
+	if err := s.rt.Stop(ctx, name, 10); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+		fail(err)
+		return
+	}
+	if err := s.rt.Start(ctx, name); err != nil {
+		fail(err)
+		return
+	}
+	if err := s.waitServiceReady(ctx, name, tpl, creds); err != nil {
+		fail(err)
+		return
+	}
+	_ = s.store.UpdateServiceStatus(svc.ID, "running")
+	_ = s.store.RecordEvent("", store.EventServiceRestarted, "service "+svc.Name+" restarted and ready")
+	http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Service restarted and ready."), http.StatusSeeOther)
+}
+
+// waitServiceReady polls the service's readiness probe up to 60s.
+func (s *Server) waitServiceReady(ctx context.Context, name string, tpl services.Template, creds map[string]string) error {
+	for i := 0; i < 30; i++ {
+		if _, err := s.rt.Exec(ctx, name, tpl.ReadyCmd(creds)); err == nil {
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
+	return fmt.Errorf("service did not become ready within 60s — check its logs")
 }
 
 func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {

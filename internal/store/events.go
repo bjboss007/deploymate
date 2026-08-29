@@ -26,6 +26,8 @@ const (
 	EventGitConnected    = "git_connected"
 	EventServiceStarted  = "service_started"
 	EventServiceStopped  = "service_stopped"
+	EventAppRestarted    = "app_restarted"
+	EventServiceRestarted = "service_restarted"
 )
 
 // RecordEvent appends one event.

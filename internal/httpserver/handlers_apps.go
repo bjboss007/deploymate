@@ -336,6 +336,34 @@ func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
 
+// handleAppRestart restarts an app's container in one click.
+func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	name := dmContainerName(app.Slug)
+	ctx := r.Context()
+	_ = s.rt.Stop(ctx, name, 10)
+	if err := s.rt.Start(ctx, name); err != nil {
+		if errors.Is(err, runtime.ErrContainerNotFound) {
+			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."), http.StatusSeeOther)
+			return
+		}
+		slog.Error("apps: restart", "err", err)
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Restart failed: "+err.Error()), http.StatusSeeOther)
+		return
+	}
+	_ = s.store.UpdateAppStatus(app.ID, "running")
+	_ = s.store.RecordEvent(app.ID, store.EventAppRestarted, "app restarted from the dashboard")
+	if r.Header.Get("HX-Request") == "true" {
+		app.Status = "running"
+		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
+		return
+	}
+	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
+}
+
 func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
