@@ -126,6 +126,10 @@ make vet
 make e2e    # API smoke test against a running server
 ```
 
+**Handoff:** [progress.md](progress.md) is the project's checkpoint file —
+where work stopped, what's next, and the reading path for anyone (human or
+agent) picking the project up. Read it before anything else.
+
 Layout: `cmd/deploymate` (binary), `internal/` (auth, store, runtime,
 builder, jobs, services, proxy, monitor, sse, webhooks, crypto, config),
 `web/` (Templ templates + vendored static assets), `deploy/` (bootstrap.sh,
