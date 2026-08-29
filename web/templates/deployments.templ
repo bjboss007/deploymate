@@ -2,7 +2,7 @@ package templates
 
 import "github.com/habibmuhammad/deploymate/internal/store"
 
-templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.Deployment) {
+templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.Deployment, commitURL string) {
 	@Layout(vc, "Deploy "+app.Name, "", []Crumb{
 		{Label: project.Name, Href: "/projects/" + project.Slug},
 		{Label: app.Name, Href: "/apps/" + app.Slug},
@@ -13,7 +13,11 @@ templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.D
 				<h1>Deployment</h1>
 				<p class="muted">
 					if d.CommitSHA != "" {
-						<span class="mono">{ d.CommitSHA }</span>
+						if commitURL != "" {
+							<a class="mono deploy-link" href={ commitURL } target="_blank" rel="noopener">{ d.CommitSHA } ↗</a>
+						} else {
+							<span class="mono">{ d.CommitSHA }</span>
+						}
 						if d.CommitMessage != "" {
 							<span> — { d.CommitMessage }</span>
 						}

@@ -222,7 +222,14 @@ func (s *Server) handleDeploymentPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	render(w, r, http.StatusOK, templates.DeploymentPage(s.viewCtx(r), project, app, d))
+	// Commit link to the forge, when the app has a git source.
+	commitURL := ""
+	if app.GitSourceID != "" && d.CommitSHA != "" {
+		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil {
+			commitURL = gitpkg.CommitURL(gs.RepoURL, d.CommitSHA)
+		}
+	}
+	render(w, r, http.StatusOK, templates.DeploymentPage(s.viewCtx(r), project, app, d, commitURL))
 }
 
 // handleDeploymentStream replays stored build lines then streams live events

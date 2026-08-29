@@ -79,7 +79,7 @@ templ AppHeadActions(vc ViewCtx, app store.App) {
 	</div>
 }
 
-templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string) {
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<div class="page-head">
 			<div>
@@ -350,7 +350,11 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 									if d.ImageTag != "" {
 										{d.ImageTag}
 									} else if d.CommitSHA != "" {
-										{d.CommitSHA}
+										if commitURL := commitURLs[d.ID]; commitURL != "" {
+											<a class="deploy-link" href={ commitURL } target="_blank" rel="noopener" title={ commitURL }>{ d.CommitSHA } ↗</a>
+										} else {
+											{d.CommitSHA}
+										}
 									} else {
 										<span class="muted">—</span>
 									}

@@ -155,7 +155,18 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 			healthReason = "container missing — redeploy the app"
 		}
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, previewURL(r, app), healthReason))
+	// Commit links for the deployments table.
+	commitURLs := make(map[string]string)
+	if app.GitSourceID != "" {
+		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil {
+			for _, d := range deployments {
+				if d.CommitSHA != "" {
+					commitURLs[d.ID] = gitpkg.CommitURL(gs.RepoURL, d.CommitSHA)
+				}
+			}
+		}
+	}
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, previewURL(r, app), healthReason, commitURLs))
 }
 
 // mustDecrypt decrypts or returns "" (best-effort display helper).
