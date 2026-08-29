@@ -494,7 +494,7 @@ func (s *Server) AppEnv(app store.App) []string {
 		svcs, err := s.store.ListServices(project.ID)
 		if err == nil {
 			for _, svc := range svcs {
-				if svc.Status != "running" {
+				if svc.Status != "running" || svc.Environment != app.Environment {
 					continue
 				}
 				tpl, ok := services.ForType(svc.Type)

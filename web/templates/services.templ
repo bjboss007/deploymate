@@ -8,6 +8,7 @@ templ serviceCard(sv store.Service) {
 		<div class="card-meta">{ sv.Type } · { sv.Image }</div>
 		<div class="app-card-foot">
 			@statusBadge(sv.Status)
+			@envBadge(sv.Environment)
 			<span class="mono app-image">:{ sv.Port }</span>
 		</div>
 	</a>
@@ -52,6 +53,10 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 						<td>@statusBadge(sv.Status)</td>
 					</tr>
 					<tr>
+						<td>Environment</td>
+						<td>@envBadge(sv.Environment)</td>
+					</tr>
+					<tr>
 						<td>Image</td>
 						<td class="mono">{ sv.Image }</td>
 					</tr>
@@ -71,7 +76,7 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 					}
 				</tbody>
 			</table>
-			<p class="muted panel-hint">While running, apps in this project get this URL injected automatically as { urlEnvKey }. Copy the connection string into an env var if an app expects it under a different key. Passwords are generated once, encrypted at rest, and never shown anywhere else.</p>
+			<p class="muted panel-hint">While running, apps in this project's { sv.Environment } environment get this URL injected automatically as { urlEnvKey }. Copy the connection string into an env var if an app expects it under a different key. Passwords are generated once, encrypted at rest, and never shown anywhere else.</p>
 		</div>
 	}
 }

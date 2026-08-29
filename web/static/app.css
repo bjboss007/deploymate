@@ -204,6 +204,7 @@ select { cursor: pointer; }
 }
 .badge-running { color: var(--green); border-color: rgba(62, 207, 142, 0.3); }
 .badge-failed { color: var(--red); border-color: rgba(255, 92, 92, 0.3); }
+.badge-accent { color: var(--accent); border-color: rgba(255, 178, 36, 0.35); }
 
 /* ---- app cards ------------------------------------------------------- */
 .app-card {

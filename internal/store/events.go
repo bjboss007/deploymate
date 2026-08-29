@@ -31,6 +31,8 @@ const (
 	// EventServiceAutoProvisioned: a deploy manifest created a service
 	// without any human involvement.
 	EventServiceAutoProvisioned = "service_auto_provisioned"
+	// EventEnvironmentChanged: an app moved between staging/production.
+	EventEnvironmentChanged = "environment_changed"
 )
 
 // RecordEvent appends one event.

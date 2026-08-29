@@ -8,26 +8,31 @@ import (
 
 // Service is a managed database or cache: Postgres, MySQL, or Redis.
 type Service struct {
-	ID         string
-	ProjectID  string
-	Type       string
-	Name       string
-	Slug       string
-	Image      string
-	Status     string
-	VolumeName string
-	Port       int
-	CreatedAt  string
+	ID          string
+	ProjectID   string
+	Type        string
+	Name        string
+	Slug        string
+	Image       string
+	Status      string
+	VolumeName  string
+	Port        int
+	Environment string // EnvProduction | EnvStaging — only apps in the same environment see this service
+	CreatedAt   string
 }
 
-// CreateService inserts a new service and returns it.
+// CreateService inserts a new service and returns it. Empty environment
+// normalizes to production (manual services are production).
 func (s *Store) CreateService(sv Service) (Service, error) {
 	sv.ID = NewID()
 	sv.CreatedAt = Now()
+	if sv.Environment == "" {
+		sv.Environment = EnvProduction
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO services (id, project_id, type, name, slug, image, status, volume_name, port, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sv.ID, sv.ProjectID, sv.Type, sv.Name, sv.Slug, sv.Image, sv.Status, sv.VolumeName, sv.Port, sv.CreatedAt,
+		`INSERT INTO services (id, project_id, type, name, slug, image, status, volume_name, port, environment, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sv.ID, sv.ProjectID, sv.Type, sv.Name, sv.Slug, sv.Image, sv.Status, sv.VolumeName, sv.Port, sv.Environment, sv.CreatedAt,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sv, ErrSlugTaken
@@ -38,7 +43,7 @@ func (s *Store) CreateService(sv Service) (Service, error) {
 // ListServices returns all services in a project, newest first.
 func (s *Store) ListServices(projectID string) ([]Service, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, created_at
+		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, created_at
 		 FROM services WHERE project_id = ? ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -53,11 +58,11 @@ func (s *Store) ListServices(projectID string) ([]Service, error) {
 func (s *Store) GetServiceBySlug(slug string) (Service, error) {
 	var sv Service
 	err := s.db.QueryRow(
-		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, created_at
+		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, created_at
 		 FROM services WHERE slug = ?`,
 		slug,
 	).Scan(&sv.ID, &sv.ProjectID, &sv.Type, &sv.Name, &sv.Slug, &sv.Image, &sv.Status,
-		&sv.VolumeName, &sv.Port, &sv.CreatedAt)
+		&sv.VolumeName, &sv.Port, &sv.Environment, &sv.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sv, ErrNotFound
 	}
@@ -82,7 +87,7 @@ func scanServices(rows *sql.Rows) ([]Service, error) {
 	for rows.Next() {
 		var sv Service
 		if err := rows.Scan(&sv.ID, &sv.ProjectID, &sv.Type, &sv.Name, &sv.Slug, &sv.Image,
-			&sv.Status, &sv.VolumeName, &sv.Port, &sv.CreatedAt); err != nil {
+			&sv.Status, &sv.VolumeName, &sv.Port, &sv.Environment, &sv.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, sv)

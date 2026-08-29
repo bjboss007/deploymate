@@ -95,9 +95,14 @@ func testProject(t *testing.T, st *store.Store) store.Project {
 	return p
 }
 
+// ensureOnce calls Ensure in production with the given bare types.
 func ensureOnce(t *testing.T, p *Provisioner, projectID string, types ...string) []Resolution {
 	t.Helper()
-	res, err := p.Ensure(context.Background(), projectID, types)
+	decls := make([]ServiceDecl, 0, len(types))
+	for _, typ := range types {
+		decls = append(decls, ServiceDecl{Type: typ})
+	}
+	res, err := p.Ensure(context.Background(), projectID, store.EnvProduction, decls)
 	if err != nil {
 		t.Fatalf("Ensure(%v) error = %v", types, err)
 	}
@@ -115,6 +120,9 @@ func TestEnsureCreatesMissingService(t *testing.T) {
 	if res[0].Service.Name != "postgres" || res[0].Service.Slug != "postgres" {
 		t.Fatalf("service = %+v, want name/slug %q", res[0].Service, "postgres")
 	}
+	if res[0].Service.Environment != store.EnvProduction {
+		t.Fatalf("service environment = %q, want production", res[0].Service.Environment)
+	}
 
 	svcs, err := st.ListServices(proj.ID)
 	if err != nil || len(svcs) != 1 {
@@ -128,8 +136,12 @@ func TestEnsureCreatesMissingService(t *testing.T) {
 		t.Fatalf("created specs = %d, want 1", len(rt.created))
 	}
 	spec := rt.created[0]
-	if spec.Name != "dm-svc-postgres" || spec.Image != Postgres.Image || spec.Network != "test-net" {
+	if spec.Name != "dm-svc-postgres" || spec.Network != "test-net" {
 		t.Fatalf("spec = %+v", spec)
+	}
+	// No version declared → the latest image of the type.
+	if spec.Image != "postgres:latest" {
+		t.Fatalf("spec image = %q, want postgres:latest (no version → latest)", spec.Image)
 	}
 	if len(spec.Binds) != 1 || spec.Binds[0] != "dm-svc-postgres-data:/var/lib/postgresql/data" {
 		t.Fatalf("binds = %v", spec.Binds)
@@ -149,6 +161,22 @@ func TestEnsureCreatesMissingService(t *testing.T) {
 	creds := decryptCreds([32]byte{7}, credsEnc)
 	if len(creds) != 3 || creds["password"] == "" {
 		t.Fatalf("decrypted creds = %v", creds)
+	}
+}
+
+func TestEnsurePinnedImage(t *testing.T) {
+	p, st, rt := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	res, err := p.Ensure(context.Background(), proj.ID, store.EnvProduction, []ServiceDecl{{Type: "postgres", Pin: "17"}})
+	if err != nil {
+		t.Fatalf("Ensure(pinned) error = %v", err)
+	}
+	if len(res) != 1 || res[0].Service.Image != "postgres:17" {
+		t.Fatalf("service = %+v, want image postgres:17", res[0].Service)
+	}
+	if len(rt.created) != 1 || rt.created[0].Image != "postgres:17" {
+		t.Fatalf("created specs = %+v, want image postgres:17", rt.created)
 	}
 }
 
@@ -263,7 +291,7 @@ func TestEnsureUnknownTypeFails(t *testing.T) {
 	p, st, _ := newTestProvisioner(t)
 	proj := testProject(t, st)
 
-	_, err := p.Ensure(context.Background(), proj.ID, []string{"mongo"})
+	_, err := p.Ensure(context.Background(), proj.ID, store.EnvProduction, []ServiceDecl{{Type: "mongo"}})
 	if err == nil {
 		t.Fatal("Ensure(mongo) succeeded, want error")
 	}
@@ -278,12 +306,104 @@ func TestEnsureReadinessFailureMarksFailed(t *testing.T) {
 	proj := testProject(t, st)
 	rt.failExec = true
 
-	_, err := p.Ensure(context.Background(), proj.ID, []string{"postgres"})
+	_, err := p.Ensure(context.Background(), proj.ID, store.EnvProduction, []ServiceDecl{{Type: "postgres"}})
 	if err == nil {
 		t.Fatal("Ensure succeeded, want readiness error")
 	}
 	svcs, _ := st.ListServices(proj.ID)
 	if len(svcs) != 1 || svcs[0].Status != "failed" {
 		t.Fatalf("services = %+v, want one failed", svcs)
+	}
+}
+
+func TestEnsureCreatesStagingService(t *testing.T) {
+	p, st, rt := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	res, err := p.Ensure(context.Background(), proj.ID, store.EnvStaging, []ServiceDecl{{Type: "postgres"}})
+	if err != nil {
+		t.Fatalf("Ensure(staging) error = %v", err)
+	}
+	if len(res) != 1 || res[0].Action != ActionProvisioned {
+		t.Fatalf("resolutions = %+v, want one provisioned", res)
+	}
+	svc := res[0].Service
+	if svc.Name != "Staging PostgreSQL" || svc.Slug != "staging-postgres" || svc.Environment != store.EnvStaging {
+		t.Fatalf("staging service = %+v, want name %q slug %q env %q", svc, "Staging PostgreSQL", "staging-postgres", store.EnvStaging)
+	}
+	if len(rt.created) != 1 {
+		t.Fatalf("created specs = %d, want 1", len(rt.created))
+	}
+	spec := rt.created[0]
+	if spec.Name != "dm-svc-staging-postgres" {
+		t.Fatalf("container name = %q, want dm-svc-staging-postgres", spec.Name)
+	}
+	if len(spec.Binds) != 1 || spec.Binds[0] != "dm-svc-staging-postgres-data:/var/lib/postgresql/data" {
+		t.Fatalf("binds = %v, want staging volume", spec.Binds)
+	}
+
+	// Production still gets its own service — no slug collision.
+	res2 := ensureOnce(t, p, proj.ID, "postgres")
+	if len(res2) != 1 || res2[0].Service.Slug != "postgres" {
+		t.Fatalf("production resolutions = %+v", res2)
+	}
+	svcs, _ := st.ListServices(proj.ID)
+	if len(svcs) != 2 {
+		t.Fatalf("service rows = %d, want 2 (one per environment)", len(svcs))
+	}
+}
+
+func TestEnsureSeparatesEnvironments(t *testing.T) {
+	p, st, rt := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	// Production postgres exists and runs.
+	prodRes := ensureOnce(t, p, proj.ID, "postgres")
+	// A staging deploy must not reuse or touch it.
+	stagingRes, err := p.Ensure(context.Background(), proj.ID, store.EnvStaging, []ServiceDecl{{Type: "postgres"}})
+	if err != nil {
+		t.Fatalf("Ensure(staging) error = %v", err)
+	}
+	if stagingRes[0].Action != ActionProvisioned {
+		t.Fatalf("staging action = %q, want provisioned (production must not be reused)", stagingRes[0].Action)
+	}
+	if stagingRes[0].Service.ID == prodRes[0].Service.ID {
+		t.Fatal("staging reused the production service")
+	}
+	svcs, _ := st.ListServices(proj.ID)
+	if len(svcs) != 2 {
+		t.Fatalf("service rows = %d, want 2 (one per environment)", len(svcs))
+	}
+	// The production service was never re-created or restarted.
+	if len(rt.created) != 2 {
+		t.Fatalf("created specs = %d, want 2 (one per environment)", len(rt.created))
+	}
+	if rt.created[0].Name != "dm-svc-postgres" || rt.created[1].Name != "dm-svc-staging-postgres" {
+		t.Fatalf("created names = %v", []string{rt.created[0].Name, rt.created[1].Name})
+	}
+}
+
+func TestEnsureStagingReusesOnlyStaging(t *testing.T) {
+	p, st, _ := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	prodRes := ensureOnce(t, p, proj.ID, "postgres")
+	stagingFirst, err := p.Ensure(context.Background(), proj.ID, store.EnvStaging, []ServiceDecl{{Type: "postgres"}})
+	if err != nil {
+		t.Fatalf("first staging Ensure error = %v", err)
+	}
+
+	stagingSecond, err := p.Ensure(context.Background(), proj.ID, store.EnvStaging, []ServiceDecl{{Type: "postgres"}})
+	if err != nil {
+		t.Fatalf("second staging Ensure error = %v", err)
+	}
+	if len(stagingSecond) != 1 || stagingSecond[0].Action != ActionReused {
+		t.Fatalf("staging resolutions = %+v, want one reused", stagingSecond)
+	}
+	if stagingSecond[0].Service.ID != stagingFirst[0].Service.ID {
+		t.Fatalf("staging reused %q, want its own %q", stagingSecond[0].Service.ID, stagingFirst[0].Service.ID)
+	}
+	if stagingSecond[0].Service.ID == prodRes[0].Service.ID {
+		t.Fatal("staging reuse matched the production service")
 	}
 }

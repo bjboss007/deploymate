@@ -18,6 +18,13 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/migrations"
 )
 
+// Environment values for apps and services. Production is the default
+// everywhere; staging apps and services are scoped to each other.
+const (
+	EnvProduction = "production"
+	EnvStaging    = "staging"
+)
+
 // Store wraps the database handle.
 type Store struct {
 	db *sql.DB

@@ -40,6 +40,13 @@ change.
   failures fail the deploy. Provisioning extracted into a shared
   `ServiceProvisioner` used by handlers and the worker (spec:
   docs/specs/infra-manifest.md; Aug 2026).
+- [x] **Environments + image pins (infra manifest v2)** — done:
+  `apps.environment`/`services.environment` labels (staging |
+  production), per-env manifest overlays (`deploymate.{env}.yml`
+  replaces the base services list), env-scoped service resolution and
+  URL injection (`staging-postgres` vs `postgres`), and pinned manifest
+  entries (`postgres:17`; no tag → `latest`) — the service row's image
+  is now what runs. ADR 0017; verified e2e (Aug 2026).
 - [ ] **Preview hostnames go live** — routing, DNS records, and the
   dashboard UI are all in place; the remaining piece is Cloudflare's
   free-plan edge certs for the per-app hostnames (provisioning on first
@@ -87,11 +94,11 @@ change.
 - [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
   schedule into the data dir (or S3), with restore UI. Named volumes
   alone are not backups.
-- [ ] **Infra manifest v2** — the v1 extensions named in
-  docs/specs/infra-manifest.md: per-service image/version pins, teardown
-  of unused services (v1 never deletes — manifest-created services
-  accumulate), environment-specific manifests
-  (`deploymate.staging.yml`), seeding/backups from the manifest.
+- [ ] **Infra manifest teardown & seeding** — the remaining extensions
+  from docs/specs/infra-manifest.md: teardown of unused services (the
+  manifest never deletes — manifest-created services accumulate) and
+  database seeding/backups from the manifest. Pins and
+  environment-specific manifests shipped (see Near-term).
 - [ ] **App log history** — logs are live-only; add a small ring buffer
   per app (or `docker logs` snapshot) so the panel shows context before
   the stream connects.

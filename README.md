@@ -31,8 +31,13 @@ One Go binary, one server, Docker as the compute substrate.
 - **Infra manifest** — a `deploymate.yml` in the repo declares the backing
   services (`services: [postgres, redis]`); every deploy reconciles the
   project's services with it — reuse a running one, start a stopped one, or
-  auto-provision a new one — then injects the connection URLs. Services
-  are never deleted for you.
+  auto-provision a new one — then injects the connection URLs. Entries can
+  pin images (`postgres:17`; no tag means `latest`). Services are never
+  deleted for you.
+- **Environments** — every app runs in `production` or `staging`. Each
+  environment resolves its own services (`staging-postgres` vs `postgres`,
+  separate data volumes) and can carry a `deploymate.{env}.yml` overlay
+  that replaces the base service list for that environment.
 - **Databases & caches** — one-click Postgres 16, MySQL 8, Redis 7 with
   generated passwords (encrypted at rest), named volumes, readiness checks,
   and automatic connection-string injection (`DATABASE_URL`, `MYSQL_URL`,

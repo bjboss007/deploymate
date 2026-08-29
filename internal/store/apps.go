@@ -22,6 +22,7 @@ type App struct {
 	Image               string
 	Port                int
 	Runtime             string // "" = Dockerfile; else "node:22", "python", ...
+	Environment         string // EnvProduction | EnvStaging — selects which services and manifest apply
 	Health              string // healthy | unhealthy | "" (monitor-maintained)
 	MemLimitMB          int    // detected limit; 0 = not yet detected
 	CPULimit            float64
@@ -35,16 +36,19 @@ var ErrSlugTaken = errors.New("store: slug already exists")
 func (s *Store) CreateApp(a App) (App, error) {
 	a.ID = NewID()
 	a.CreatedAt = Now()
+	if a.Environment == "" {
+		a.Environment = EnvProduction
+	}
 	// Empty strings violate the git_sources foreign key; NULL is correct.
 	var gitSourceID any
 	if a.GitSourceID != "" {
 		gitSourceID = a.GitSourceID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, health, mem_limit_mb, cpu_limit, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.ProjectID, a.Name, a.Slug, gitSourceID, a.BuildType, a.RootDirectory,
-		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Health, a.MemLimitMB, a.CPULimit, a.CreatedAt,
+		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.CreatedAt,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return a, ErrSlugTaken
@@ -55,7 +59,7 @@ func (s *Store) CreateApp(a App) (App, error) {
 // ListApps returns all apps in a project, newest first.
 func (s *Store) ListApps(projectID string) ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, health, mem_limit_mb, cpu_limit, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, created_at
 		 FROM apps WHERE project_id = ? ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -71,11 +75,11 @@ func (s *Store) GetAppBySlug(slug string) (App, error) {
 	var a App
 	var gitSourceID sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, health, mem_limit_mb, cpu_limit, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, created_at
 		 FROM apps WHERE slug = ?`,
 		slug,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.CreatedAt)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -110,6 +114,14 @@ func (s *Store) UpdateAppRuntime(id, runtime string) error {
 	return err
 }
 
+// UpdateAppEnvironment sets the app's environment: EnvProduction or
+// EnvStaging. The next deploy uses that environment's manifest overlay
+// and services.
+func (s *Store) UpdateAppEnvironment(id, environment string) error {
+	_, err := s.db.Exec(`UPDATE apps SET environment = ? WHERE id = ?`, environment, id)
+	return err
+}
+
 // UpdateAppHealth sets the monitor-maintained health state.
 func (s *Store) UpdateAppHealth(id, health string) error {
 	_, err := s.db.Exec(`UPDATE apps SET health = ? WHERE id = ?`, health, id)
@@ -127,11 +139,11 @@ func (s *Store) GetAppByID(id string) (App, error) {
 	var a App
 	var gitSourceID sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, health, mem_limit_mb, cpu_limit, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, created_at
 		 FROM apps WHERE id = ?`,
 		id,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.CreatedAt)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -148,7 +160,7 @@ func (s *Store) SetAppCurrentDeployment(appID, deploymentID string) error {
 // ListAllApps returns every app across projects (monitor use).
 func (s *Store) ListAllApps() ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, health, mem_limit_mb, cpu_limit, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, created_at
 		 FROM apps ORDER BY created_at`,
 	)
 	if err != nil {
@@ -161,7 +173,7 @@ func (s *Store) ListAllApps() ([]App, error) {
 // ListAppsByGitSource returns apps linked to a git source.
 func (s *Store) ListAppsByGitSource(gitSourceID string) ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, health, mem_limit_mb, cpu_limit, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, created_at
 		 FROM apps WHERE git_source_id = ?`,
 		gitSourceID,
 	)
@@ -184,7 +196,7 @@ func scanApps(rows *sql.Rows) ([]App, error) {
 		var a App
 		var gitSourceID sql.NullString
 		if err := rows.Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType,
-			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.CreatedAt); err != nil {
+			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		a.GitSourceID = gitSourceID.String

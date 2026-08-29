@@ -55,42 +55,44 @@ const (
 	ActionProvisioned = "provisioned"
 )
 
-// Ensure resolves declared service types against the project's existing
-// services: a running service of the type is reused, a stopped one is
-// started, and a missing one is created and provisioned from scratch.
-// Services are never deleted here — teardown is a human decision.
-func (p *Provisioner) Ensure(ctx context.Context, projectID string, types []string) ([]Resolution, error) {
-	res := make([]Resolution, 0, len(types))
-	for _, typ := range types {
-		svc, err := p.findByType(projectID, typ)
+// Ensure resolves declared service declarations against the project's
+// existing services in the given environment: a running service of the
+// type in that environment is reused, a stopped one is started, and a
+// missing one is created and provisioned from scratch. Services in other
+// environments are never touched or deleted — teardown is a human
+// decision.
+func (p *Provisioner) Ensure(ctx context.Context, projectID, env string, decls []ServiceDecl) ([]Resolution, error) {
+	res := make([]Resolution, 0, len(decls))
+	for _, decl := range decls {
+		svc, err := p.findByType(projectID, env, decl.Type)
 		if errors.Is(err, store.ErrNotFound) {
-			created, err := p.create(ctx, projectID, typ)
+			created, err := p.create(ctx, projectID, env, decl)
 			if err != nil {
 				return res, err
 			}
-			res = append(res, Resolution{Type: typ, Service: created, Action: ActionProvisioned})
+			res = append(res, Resolution{Type: decl.Type, Service: created, Action: ActionProvisioned})
 			continue
 		}
 		if err != nil {
 			return res, err
 		}
 		if svc.Status == "running" {
-			res = append(res, Resolution{Type: typ, Service: svc, Action: ActionReused})
+			res = append(res, Resolution{Type: decl.Type, Service: svc, Action: ActionReused})
 			continue
 		}
 		if err := p.Provision(ctx, svc); err != nil {
-			return res, fmt.Errorf("starting %s service: %w", typ, err)
+			return res, fmt.Errorf("starting %s service: %w", decl.Type, err)
 		}
-		res = append(res, Resolution{Type: typ, Service: svc, Action: ActionStarted})
+		res = append(res, Resolution{Type: decl.Type, Service: svc, Action: ActionStarted})
 	}
 	return res, nil
 }
 
-// findByType returns a running service of the given type, else any service
-// of the type, else ErrNotFound. When a project has several services of
-// one type (e.g. two Postgres instances), declared types converge on the
-// running one.
-func (p *Provisioner) findByType(projectID, typ string) (store.Service, error) {
+// findByType returns a running service of the given type in the given
+// environment, else any service of the type in that environment, else
+// ErrNotFound. When an environment has several services of one type,
+// declared types converge on the running one.
+func (p *Provisioner) findByType(projectID, env, typ string) (store.Service, error) {
 	svcs, err := p.st.ListServices(projectID)
 	if err != nil {
 		return store.Service{}, err
@@ -98,7 +100,7 @@ func (p *Provisioner) findByType(projectID, typ string) (store.Service, error) {
 	var fallback store.Service
 	found := false
 	for _, svc := range svcs {
-		if svc.Type != typ {
+		if svc.Type != typ || svc.Environment != env {
 			continue
 		}
 		if svc.Status == "running" {
@@ -114,21 +116,28 @@ func (p *Provisioner) findByType(projectID, typ string) (store.Service, error) {
 	return store.Service{}, store.ErrNotFound
 }
 
-// create provisions a brand-new service of the given type: metadata row,
-// then the usual provision path. The name is the type — manifest-created
-// services have no human name.
-func (p *Provisioner) create(ctx context.Context, projectID, typ string) (store.Service, error) {
-	tpl, ok := ForType(typ)
+// create provisions a brand-new service of the given declaration:
+// metadata row, then the usual provision path. Production services keep
+// the plain type name; staging services get an environment-prefixed slug
+// ("staging-postgres") so they never collide with production (slugs are
+// globally unique).
+func (p *Provisioner) create(ctx context.Context, projectID, env string, decl ServiceDecl) (store.Service, error) {
+	tpl, ok := ForType(decl.Type)
 	if !ok {
-		return store.Service{}, fmt.Errorf("unknown service type %q", typ)
+		return store.Service{}, fmt.Errorf("unknown service type %q", decl.Type)
+	}
+	name, slug := decl.Type, decl.Type
+	if env != store.EnvProduction {
+		name, slug = "Staging "+tpl.Label, env+"-"+decl.Type
 	}
 	svc, err := p.st.CreateService(store.Service{
-		ProjectID: projectID, Type: tpl.Type, Name: tpl.Type, Slug: tpl.Type,
-		Image: tpl.Image, Status: "stopped", VolumeName: VolumeName(tpl.Type), Port: tpl.Port,
+		ProjectID: projectID, Type: decl.Type, Name: name, Slug: slug,
+		Image: decl.Image(), Status: "stopped", VolumeName: VolumeName(slug), Port: tpl.Port,
+		Environment: env,
 	})
 	if errors.Is(err, store.ErrSlugTaken) {
 		return store.Service{}, fmt.Errorf(
-			"creating %s service: the name %q is already taken by another service — rename or delete it first", typ, typ)
+			"creating %s service: the name %q is already taken by another service — rename or delete it first", decl.Type, slug)
 	}
 	if err != nil {
 		return store.Service{}, err
@@ -178,12 +187,19 @@ func (p *Provisioner) Provision(ctx context.Context, svc store.Service) error {
 	}
 	creds := decryptCreds(p.encKey, credsEnc)
 
-	has, err := p.rt.HasImage(ctx, tpl.Image)
+	// The stored image wins over the template default: manifest pins
+	// ("postgres:17") and the latest rule ("postgres" → postgres:latest)
+	// are recorded on the service row at creation.
+	image := svc.Image
+	if image == "" {
+		image = tpl.Image
+	}
+	has, err := p.rt.HasImage(ctx, image)
 	if err != nil {
 		return fail(err)
 	}
 	if !has {
-		if err := p.rt.PullImage(ctx, tpl.Image); err != nil {
+		if err := p.rt.PullImage(ctx, image); err != nil {
 			return fail(err)
 		}
 	}
@@ -196,7 +212,7 @@ func (p *Provisioner) Provision(ctx context.Context, svc store.Service) error {
 	}
 	spec := runtime.Spec{
 		Name:    name,
-		Image:   tpl.Image,
+		Image:   image,
 		Env:     tpl.Env(creds),
 		Labels:  ContainerLabels(svc.Slug, svc.Type),
 		Network: p.network,

@@ -20,6 +20,11 @@ every build line with sequence numbers.
    into `<data>/repos/<deployment_id>` with the source's deploy key; if a
    SHA was pinned by a webhook, fetch + checkout it. Checkout dir is
    removed after the deploy.
+2b. **Manifest** — read `deploymate.yml` + `deploymate.{env}.yml` from the
+   checkout and reconcile the app's environment (ADR 0017): reuse/start/
+   provision the declared services (`Provisioner.Ensure`), so connection
+   URLs are present in step 5's env assembly. Runs before the build so
+   provisioning overlaps it; failures fail the deploy.
 3. **Build** — one of two engines, chosen by `apps.runtime`:
    - `""` (Dockerfile): `docker buildx build --progress=plain --load
      -t deploymate/apps/<slug>:<deployment_id>`
@@ -33,8 +38,8 @@ every build line with sequence numbers.
 4. **Record** — deployment gets `image_tag`; an `images` row is created.
 5. **Swap** — stop + remove `dm-<slug>`, create + start a new container
    with:
-   - env = service connection URLs (0003/0010) + app env vars (decrypted)
-     + `GIT_SHA`;
+   - env = service connection URLs from the app's **environment** only
+     (0003/0010/0017) + app env vars (decrypted) + `GIT_SHA`;
    - labels = ownership + Traefik routing (if domains exist);
    - network `deploymate-net`, `restart: unless-stopped`.
 6. **Finish** — deployment `running`, app `running` +

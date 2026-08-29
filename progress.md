@@ -7,19 +7,23 @@
 
 ## Where we stopped
 
-**2026-08-29** — Infra manifest feature shipped and e2e-verified: repos can
-declare `deploymate.yml` (`services: [postgres, redis]`); every git deploy
-reconciles the project's services with the declaration (reuse / start /
-auto-provision) before the app container is assembled. Provisioning was
-extracted into a shared `ServiceProvisioner` (`internal/services/provisioner.go`)
-used by handlers and the worker; parser in `internal/services/manifest.go`;
-unit tests in `internal/services/*_test.go`; fixture
-`testdata/repos/manifest-app`. All five spec checks passed against real
-Docker/Postgres. Commit `58ae4ec` (pushed). Spec:
-`docs/specs/infra-manifest.md`.
+**2026-08-29** — **Environments + image pins** shipped and e2e-verified
+(infra-manifest v2, ADR 0017): apps and services carry
+`staging`/`production` labels; per-env manifest overlays
+(`deploymate.{env}.yml` replaces the base services list); service
+resolution and URL injection are environment-scoped (`staging-postgres`
+vs `postgres`, separate volumes); manifest entries accept pins
+(`postgres:17`) and **no tag means `latest`** (owner's rule —
+`postgres:latest` caveat: Postgres volumes are major-version-locked, so
+pin in production). `POST /apps/{slug}/environment` + env badges in the
+UI. E2e verified: both envs in one project with isolated services and
+URLs, overlay replacement, latest + pinned images, idempotent redeploys.
+Spec: `docs/specs/infra-manifest.md`. Also earlier the same day: infra
+manifest v1 (commit `58ae4ec`, pushed) and the progress/CLAUDE.md
+handoff files (`abcbbb2`).
 
-**Commits not yet pushed:** `da76b0b` (backlog entry for manifest v2) and
-the commit adding this file. Push with the bjboss007 rule below.
+**Commits not yet pushed:** `da76b0b`, `abcbbb2`, plus the environments
+commit. Push with the bjboss007 rule below.
 
 **Verified state:** everything shipped so far is e2e-verified on macOS/
 Docker Desktop. **NOT verified:** real Ubuntu server `bootstrap.sh` run,
@@ -76,6 +80,13 @@ real Let's Encrypt issuance, auto-DNS for preview hostnames (needs a server).
   `gh auth status` shows it active — the account flips back to
   `habibmuhammad002` on its own, and pushes fail with "Repository not
   found". Remote: `github.com/bjboss007/deploymate` (HTTPS).
+- **Manifest versions:** entries without a version run `latest` (owner's
+  rule). Postgres volumes are major-version-locked — `postgres:latest`
+  bumping majors can refuse to start on an old volume; pinning is the
+  documented escape hatch.
+- **templ literals:** templ treats `{...}` as expressions — literal
+  braces in text need a string expression (`{ "deploymate.{env}.yml" }`),
+  and `\{` is illegal. `make gen` regenerates; commit `_templ.go` too.
 - Docs live in `docs/` — ADRs, knowledge, specs, improvements. Update them
   with the code, not later.
 - Never silently fix a gap in scope — backlog it first (see above).

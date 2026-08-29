@@ -152,15 +152,20 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 
 	// Infra manifest: reconcile deploymate.yml services before the app
 	// container is assembled, so connection URLs land in the very env
-	// assembly that injects them.
-	manifestTypes, err := services.LoadManifest(checkoutDir, app.RootDirectory)
+	// assembly that injects them. The app's environment selects the
+	// overlay (deploymate.{env}.yml) and the service set.
+	manifestDecls, err := services.LoadManifest(checkoutDir, app.RootDirectory, app.Environment)
 	if err != nil {
 		return fmt.Errorf("deploymate.yml: %w", err)
 	}
-	if len(manifestTypes) > 0 {
-		w.log(d, "system", "manifest: "+strings.Join(manifestTypes, ", "))
-		w.publish("deploy:"+app.Slug, "log", "manifest: "+strings.Join(manifestTypes, ", "))
-		if err := w.resolveManifest(ctx, app, d, manifestTypes); err != nil {
+	if len(manifestDecls) > 0 {
+		prefix := "manifest"
+		if app.Environment != store.EnvProduction {
+			prefix = "manifest (" + app.Environment + ")"
+		}
+		w.log(d, "system", prefix+": "+strings.Join(services.DeclTypes(manifestDecls), ", "))
+		w.publish("deploy:"+app.Slug, "log", prefix+": "+strings.Join(services.DeclTypes(manifestDecls), ", "))
+		if err := w.resolveManifest(ctx, app, d, manifestDecls); err != nil {
 			return err
 		}
 	}
@@ -203,11 +208,11 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	return w.finish(d, app.ID)
 }
 
-// resolveManifest reconciles the declared service types with the
-// project's existing services and reports each action in the build log
-// and the history timeline. Errors fail the deployment.
-func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Deployment, types []string) error {
-	resolutions, err := w.prov.Ensure(ctx, app.ProjectID, types)
+// resolveManifest reconciles the declared services with the app's
+// environment and reports each action in the build log and the history
+// timeline. Errors fail the deployment.
+func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Deployment, decls []services.ServiceDecl) error {
+	resolutions, err := w.prov.Ensure(ctx, app.ProjectID, app.Environment, decls)
 	if err != nil {
 		return fmt.Errorf("manifest: %w", err)
 	}
@@ -220,7 +225,7 @@ func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Dep
 			line = fmt.Sprintf("manifest: starting existing %s service", res.Type)
 			_ = w.store.RecordEvent(app.ID, store.EventServiceStarted, "service "+res.Service.Name+" started by deploy manifest")
 		case services.ActionProvisioned:
-			line = fmt.Sprintf("manifest: provisioning %s (new service)", res.Type)
+			line = fmt.Sprintf("manifest: provisioning %s (new service, %s)", res.Type, res.Service.Image)
 			_ = w.store.RecordEvent(app.ID, store.EventServiceAutoProvisioned, "service "+res.Service.Name+" auto-provisioned by deploy manifest")
 		}
 		w.log(d, "system", line)
