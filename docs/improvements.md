@@ -14,6 +14,15 @@ change.
 - [x] **Runtime environments via Railpack** — done: 11 runtimes with
   version pinning, no Dockerfile needed; node:22, python:3.12, java:21
   verified end-to-end (Aug 2026).
+- [x] **Alerts & notifications** — done: webhook targets with per-event
+  subscriptions, delivery history in the UI, events for deploys,
+  health, uptime transitions, restarts, and docker storage growth
+  (spec: docs/specs/alerts.md, ADR 0014; Aug 2026).
+- [x] **App healthchecks** — done: monitor probes every running app on
+  its loopback port (3-fail/2-ok hysteresis), `apps.health` column,
+  badges on cards + app pages, `app_unhealthy`/`app_recovered` alerts
+  (Aug 2026). The VGG crash-loop incident is now a notification instead
+  of a silent "running".
 - [ ] **Preview hostnames** — the server-side sibling of preview URLs:
   `{slug}.{server-ip}.nip.io`-style auto-subdomains via Traefik with
   staging TLS, so previews work without a real domain AND without the
@@ -22,11 +31,6 @@ change.
 - [ ] **Deployment command/timeout** — manual deploys run in the HTTP
   handler with no timeout; a hung pull blocks the request. Move manual
   deploys onto the worker queue (they already create deployment rows).
-- [ ] **App healthchecks** — `runtime.Spec` has no healthcheck field;
-  containers run without one. Add optional healthcheck (path/port) so
-  "running" means healthy, and surface `unhealthy` state in the UI.
-  *Bitten us already: VGG showed "running" while Spring Boot
-  crash-looped for ten minutes (Aug 2026).*
 - [ ] **Container command override** — image deploys can't pass a
   command/args. Useful for one-off jobs and images with odd entrypoints.
 - [ ] **Disk usage panel** — `docker system df` + per-volume sizes on the

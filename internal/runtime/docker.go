@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	imagetypes "github.com/docker/docker/api/types/image"
@@ -191,11 +192,12 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		return Info{}, mapNotFound(fmt.Errorf("inspect container %s: %w", name, err))
 	}
 	return Info{
-		ID:      ctr.ID,
-		Name:    name,
-		Image:   ctr.Image,
-		Running: ctr.State.Running,
-		State:   ctr.State.Status,
+		ID:       ctr.ID,
+		Name:     name,
+		Image:    ctr.Image,
+		Running:  ctr.State.Running,
+		State:    ctr.State.Status,
+		Restarts: ctr.RestartCount,
 	}, nil
 }
 
@@ -277,6 +279,21 @@ func (d *Docker) Stats(ctx context.Context, name string) (Stats, error) {
 		NetRx:      rx,
 		NetTx:      tx,
 	}, nil
+}
+
+func (d *Docker) StorageUsed(ctx context.Context) (uint64, error) {
+	du, err := d.cli.DiskUsage(ctx, types.DiskUsageOptions{})
+	if err != nil {
+		return 0, fmt.Errorf("disk usage: %w", err)
+	}
+	var used uint64
+	for _, img := range du.Images {
+		used += uint64(img.Size)
+	}
+	for _, c := range du.BuildCache {
+		used += uint64(c.Size)
+	}
+	return used, nil
 }
 
 // mapNotFound converts docker's not-found errors into ErrContainerNotFound

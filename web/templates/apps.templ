@@ -20,6 +20,7 @@ templ statusDot(status string) {
 	} else {
 		<span class="status-dot status-stopped" aria-hidden="true"></span>
 	}
+	{ children... }
 }
 
 templ statusBadge(status string) {
@@ -32,12 +33,21 @@ templ statusBadge(status string) {
 	}
 }
 
+templ healthBadge(health string) {
+	if health == "unhealthy" {
+		<span class="badge badge-failed">@statusDot("failed"){ "unhealthy" }</span>
+	} else if health == "healthy" {
+		<span class="badge badge-running">@statusDot("running"){ "healthy" }</span>
+	}
+}
+
 templ appCard(app store.App) {
 	<a class="app-card" href={ "/apps/" + app.Slug }>
 		<div class="card-title">{ app.Name }</div>
 		<div class="card-meta">/{ app.Slug }</div>
 		<div class="app-card-foot">
 			@statusBadge(app.Status)
+			@healthBadge(app.Health)
 			if app.Image != "" {
 				<span class="mono app-image">{ app.Image }</span>
 			}
@@ -74,6 +84,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 		<div class="page-head">
 			<div>
 				<h1>{ app.Name }</h1>
+				@healthBadge(app.Health)
 			</div>
 			@AppHeadActions(vc, app)
 		</div>

@@ -37,6 +37,7 @@ templ Layout(vc ViewCtx, title string, appSlug string, crumbs []Crumb) {
 					<span>deploymate</span>
 				</a>
 				<div class="topbar-right">
+					<a class="topbar-link" href="/alerts">Alerts</a>
 					<span class="user-chip">{ vc.Email }</span>
 					<form method="post" action="/logout">
 						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>

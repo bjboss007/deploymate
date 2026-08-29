@@ -1,0 +1,90 @@
+package templates
+
+import (
+	"github.com/habibmuhammad/deploymate/internal/alerts"
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+templ AlertsPage(vc ViewCtx, list []store.Alert, history map[string][]store.AlertEvent, catalog []alerts.CatalogEvent) {
+	@Layout(vc, "Alerts", "", []Crumb{{Label: "Alerts"}}) {
+		<div class="page-head">
+			<div>
+				<h1>Alerts</h1>
+				<p class="muted">Get notified when deploys fail, apps go unhealthy, uptime drops, or the disk fills.</p>
+			</div>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">New webhook target</div>
+			<form method="post" action="/alerts" class="alert-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<label>Name
+					<input type="text" name="name" placeholder="Slack #deploys" maxlength="64" required/>
+				</label>
+				<label>Webhook URL
+					<input class="alert-url" type="text" name="url" placeholder="https://hooks.slack.com/services/..." required/>
+				</label>
+				<fieldset class="alert-events">
+					<legend>Notify on</legend>
+					for _, e := range catalog {
+						<label class="checkbox"><input type="checkbox" name={ "event_" + e.Event }/> { e.Label }</label>
+					}
+				</fieldset>
+				<button class="btn btn-primary" type="submit">Add target</button>
+			</form>
+			<p class="muted panel-hint">Slack-compatible JSON — works with Slack, Teams-compatible, and Discord webhooks as-is. URLs are encrypted at rest.</p>
+		</div>
+
+		if len(list) == 0 {
+			<div class="empty">
+				<p>No alert targets yet.</p>
+				<p>Add a webhook above — deploy failures and health incidents will notify it.</p>
+			</div>
+		} else {
+			for _, a := range list {
+				<div class="panel">
+					<div class="panel-title">
+						<span>{ a.Name }</span>
+						<span class="muted"> · { a.Channel }</span>
+					</div>
+					<div class="alert-chips">
+						for _, ev := range a.Events {
+							<span class="badge mono">{ ev }</span>
+						}
+					</div>
+					<table class="deploy-table">
+						<thead>
+							<tr>
+								<th>Event</th>
+								<th>When</th>
+								<th>Result</th>
+							</tr>
+						</thead>
+						<tbody>
+							if len(history[a.ID]) == 0 {
+								<tr>
+									<td colspan="3" class="muted">No deliveries yet.</td>
+								</tr>
+							}
+							for _, ev := range history[a.ID] {
+								<tr>
+									<td class="mono">{ ev.Event }</td>
+									<td class="mono muted">{ shortTime(ev.TS) }</td>
+									if ev.Delivered {
+										<td><span class="badge badge-running">delivered · { ev.ResponseCode }</span></td>
+									} else {
+										<td><span class="badge badge-failed">failed · { ev.Error }</span></td>
+									}
+								</tr>
+							}
+						</tbody>
+					</table>
+					<form method="post" action={ "/alerts/" + a.ID + "/delete" } onsubmit="return confirm('Delete this alert target?')" class="git-deploy">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost btn-sm" type="submit">Delete target</button>
+					</form>
+				</div>
+			}
+		}
+	}
+}

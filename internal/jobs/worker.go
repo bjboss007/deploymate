@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
@@ -36,12 +37,13 @@ type Worker struct {
 	leMode       string
 	railpackPath string
 	buildEnv     func(app store.App) []string // injected by the server (services + env vars)
+	alerts       *alerts.Dispatcher
 }
 
 // NewWorker builds a Worker. buildEnv supplies the app container environment
 // (shared with the manual-deploy path).
-func NewWorker(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string) *Worker {
-	return &Worker{store: st, rt: rt, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv}
+func NewWorker(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string, a *alerts.Dispatcher) *Worker {
+	return &Worker{store: st, rt: rt, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv, alerts: a}
 }
 
 // Run polls the queue until ctx is cancelled.
@@ -95,9 +97,15 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 	if err != nil {
 		w.fail(d, err)
 		w.publish(topic, "deploy", "failed: "+err.Error())
+		w.alerts.Notify(alerts.EventDeployFailed,
+			fmt.Sprintf("deploy failed: %s", app.Name),
+			fmt.Sprintf("commit %s (deployment %s): %s", shortCommit(d.CommitSHA), shortID(d.ID), err.Error()))
 		return
 	}
 	w.publish(topic, "deploy", "deployed ✓")
+	w.alerts.Notify(alerts.EventDeploySucceeded,
+		fmt.Sprintf("deploy succeeded: %s", app.Name),
+		fmt.Sprintf("commit %s is live (deployment %s)", shortCommit(d.CommitSHA), shortID(d.ID)))
 }
 
 // runGitDeploy clones, builds, and swaps in the new container.
@@ -311,6 +319,16 @@ func optionalVersion(v string) string {
 		return " (auto-detected version)"
 	}
 	return " pinned to " + v
+}
+
+func shortCommit(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	if sha == "" {
+		return "HEAD"
+	}
+	return sha
 }
 
 func removeTree(dir string) error { return os.RemoveAll(dir) }

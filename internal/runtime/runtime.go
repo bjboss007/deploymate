@@ -40,11 +40,12 @@ func PreviewPort(slug string) int {
 
 // Info is a snapshot of a container's state.
 type Info struct {
-	ID      string
-	Name    string
-	Image   string
-	Running bool
-	State   string
+	ID       string
+	Name     string
+	Image    string
+	Running  bool
+	State    string
+	Restarts int
 }
 
 // Runtime is the compute interface.
@@ -76,6 +77,10 @@ type Runtime interface {
 	Exec(ctx context.Context, name string, cmd []string) (string, error)
 	// Stats returns one resource sample for a running container.
 	Stats(ctx context.Context, name string) (Stats, error)
+	// StorageUsed reports the growable docker storage in bytes: images +
+	// build cache (volumes are user data and excluded). The daemon cannot
+	// report host-disk free space, so the alert is growth-based.
+	StorageUsed(ctx context.Context) (uint64, error)
 	Close() error
 }
 

@@ -38,6 +38,12 @@ One Go binary, one server, Docker as the compute substrate.
   resolver by default), label-driven routing with zero proxy restarts
 - **Preview URLs** — every running app gets `/preview/<slug>` on the
   dashboard instantly, before any domain exists
+- **Healthchecks** — every running app is probed every 30s; unhealthy
+  state shows on cards and app pages
+- **Alerts** — webhook notifications (Slack-compatible) for deploy
+  failures/successes, unhealthy/recovered apps, uptime transitions,
+  container restarts, and docker storage growth, with delivery history
+  in the dashboard
 - **Monitoring** — CPU/memory charts (5s sampling), live container logs over
   SSE, and 30s uptime probes per domain with history
 
