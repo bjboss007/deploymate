@@ -73,10 +73,10 @@ change.
   runtimes whose auto-detection falls short. *The VGG deploy needed its
   heroku profile + a custom DATABASE_URL — solved via env vars, but a
   start-cmd override is the cleaner general tool.*
-- [ ] **Env var aliasing / injection mapping** — today each service type
-  injects one fixed key (DATABASE_URL/MYSQL_URL/REDIS_URL). VGG needed a
-  MySQL URL under the key `DATABASE_URL` — we copied the connection
-  string manually. Let apps map any injected URL to any env key.
+- [x] **Env var aliasing** — done: env values resolve `${KEY}` references
+  against the full computed env, chained with a cycle guard (ADR 0016).
+  VGG's DATABASE_URL is now just `${MYSQL_URL}` — no copied credentials
+  (Aug 2026).
 - [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
   schedule into the data dir (or S3), with restore UI. Named volumes
   alone are not backups.

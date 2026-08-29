@@ -291,7 +291,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 				<label class="checkbox"><input type="checkbox" name="is_secret"/> secret</label>
 				<button class="btn btn-primary" type="submit">Add variable</button>
 			</form>
-			<p class="muted panel-hint">Values are encrypted at rest. Changes apply on the next deploy.</p>
+			<p class="muted panel-hint">Values are encrypted at rest and apply on the next deploy. They can reference injected connection strings — e.g. set <span class="mono">DATABASE_URL</span> to <span class="mono">{ "${MYSQL_URL}" }</span> to alias a MySQL service (also { "${REDIS_URL}" }, { "${DATABASE_URL}" }).</p>
 		</div>
 
 		<div class="panel">

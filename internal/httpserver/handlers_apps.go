@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -480,8 +481,13 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 // appEnv builds the container environment for an app: connection URLs for
 // every running service in its project, then the app's own variables (which
 // win on duplicate keys).
+// AppEnv builds the container environment: connection URLs for every
+// running service in its project, then the app's own variables (which win
+// on duplicate keys) — and finally ${KEY} references resolved against the
+// full set, so any injected URL can be aliased to any key
+// (e.g. DATABASE_URL = ${MYSQL_URL}).
 func (s *Server) AppEnv(app store.App) []string {
-	env := []string{}
+	base := map[string]string{}
 
 	project, err := s.store.GetProjectByID(app.ProjectID)
 	if err == nil {
@@ -500,7 +506,7 @@ func (s *Server) AppEnv(app store.App) []string {
 					continue
 				}
 				creds := s.decryptCreds(credsEnc)
-				env = append(env, tpl.URLEnv+"="+tpl.ConnURL(creds, dmServiceName(svc.Slug)))
+				base[tpl.URLEnv] = tpl.ConnURL(creds, dmServiceName(svc.Slug))
 			}
 		}
 	}
@@ -508,15 +514,26 @@ func (s *Server) AppEnv(app store.App) []string {
 	vars, err := s.store.ListEnvVars(app.ID)
 	if err != nil {
 		slog.Error("apps: list env vars", "err", err)
-		return env
-	}
-	for _, v := range vars {
-		val, err := crypto.Decrypt(s.encKey, v.ValueEnc)
-		if err != nil {
-			slog.Error("apps: decrypt env var", "key", v.Key, "err", err)
-			continue
+	} else {
+		for _, v := range vars {
+			val, err := crypto.Decrypt(s.encKey, v.ValueEnc)
+			if err != nil {
+				slog.Error("apps: decrypt env var", "key", v.Key, "err", err)
+				continue
+			}
+			base[v.Key] = val
 		}
-		env = append(env, v.Key+"="+val)
+	}
+
+	expanded := expandRefs(base, 5)
+	keys := make([]string, 0, len(expanded))
+	for k := range expanded {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	env := make([]string, 0, len(keys))
+	for _, k := range keys {
+		env = append(env, k+"="+expanded[k])
 	}
 	return env
 }
