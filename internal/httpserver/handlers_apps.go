@@ -506,7 +506,7 @@ func (s *Server) AppEnv(app store.App) []string {
 					continue
 				}
 				creds := s.decryptCreds(credsEnc)
-				base[tpl.URLEnv] = tpl.ConnURL(creds, dmServiceName(svc.Slug))
+				base[tpl.URLEnv] = tpl.ConnURL(creds, services.ContainerName(svc.Slug))
 			}
 		}
 	}

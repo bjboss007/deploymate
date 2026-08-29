@@ -1,0 +1,279 @@
+package services
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+// Provisioner gives services their runtime resources: credentials, image,
+// container on the shared network, and a readiness wait. It is shared by
+// the dashboard handlers and the deployment worker so provisioning is one
+// code path whether a human clicks Start or a deploymate.yml declares
+// postgres.
+type Provisioner struct {
+	st      *store.Store
+	rt      runtime.Runtime
+	encKey  [32]byte
+	network string
+}
+
+// NewProvisioner builds a Provisioner.
+func NewProvisioner(st *store.Store, rt runtime.Runtime, encKey [32]byte, network string) *Provisioner {
+	return &Provisioner{st: st, rt: rt, encKey: encKey, network: network}
+}
+
+// ContainerName is the docker container name for a service slug.
+func ContainerName(slug string) string { return "dm-svc-" + slug }
+
+// ContainerLabels marks service containers as DeployMate-owned.
+func ContainerLabels(slug, svcType string) map[string]string {
+	return map[string]string{
+		"deploymate.managed": "true",
+		"deploymate.service": slug,
+		"deploymate.type":    svcType,
+	}
+}
+
+// Resolution reports what Ensure did about one declared service type.
+type Resolution struct {
+	Type    string
+	Service store.Service
+	Action  string // ActionReused | ActionStarted | ActionProvisioned
+}
+
+// Ensure actions.
+const (
+	ActionReused      = "reused"
+	ActionStarted     = "started"
+	ActionProvisioned = "provisioned"
+)
+
+// Ensure resolves declared service types against the project's existing
+// services: a running service of the type is reused, a stopped one is
+// started, and a missing one is created and provisioned from scratch.
+// Services are never deleted here — teardown is a human decision.
+func (p *Provisioner) Ensure(ctx context.Context, projectID string, types []string) ([]Resolution, error) {
+	res := make([]Resolution, 0, len(types))
+	for _, typ := range types {
+		svc, err := p.findByType(projectID, typ)
+		if errors.Is(err, store.ErrNotFound) {
+			created, err := p.create(ctx, projectID, typ)
+			if err != nil {
+				return res, err
+			}
+			res = append(res, Resolution{Type: typ, Service: created, Action: ActionProvisioned})
+			continue
+		}
+		if err != nil {
+			return res, err
+		}
+		if svc.Status == "running" {
+			res = append(res, Resolution{Type: typ, Service: svc, Action: ActionReused})
+			continue
+		}
+		if err := p.Provision(ctx, svc); err != nil {
+			return res, fmt.Errorf("starting %s service: %w", typ, err)
+		}
+		res = append(res, Resolution{Type: typ, Service: svc, Action: ActionStarted})
+	}
+	return res, nil
+}
+
+// findByType returns a running service of the given type, else any service
+// of the type, else ErrNotFound. When a project has several services of
+// one type (e.g. two Postgres instances), declared types converge on the
+// running one.
+func (p *Provisioner) findByType(projectID, typ string) (store.Service, error) {
+	svcs, err := p.st.ListServices(projectID)
+	if err != nil {
+		return store.Service{}, err
+	}
+	var fallback store.Service
+	found := false
+	for _, svc := range svcs {
+		if svc.Type != typ {
+			continue
+		}
+		if svc.Status == "running" {
+			return svc, nil
+		}
+		if !found {
+			fallback, found = svc, true
+		}
+	}
+	if found {
+		return fallback, nil
+	}
+	return store.Service{}, store.ErrNotFound
+}
+
+// create provisions a brand-new service of the given type: metadata row,
+// then the usual provision path. The name is the type — manifest-created
+// services have no human name.
+func (p *Provisioner) create(ctx context.Context, projectID, typ string) (store.Service, error) {
+	tpl, ok := ForType(typ)
+	if !ok {
+		return store.Service{}, fmt.Errorf("unknown service type %q", typ)
+	}
+	svc, err := p.st.CreateService(store.Service{
+		ProjectID: projectID, Type: tpl.Type, Name: tpl.Type, Slug: tpl.Type,
+		Image: tpl.Image, Status: "stopped", VolumeName: VolumeName(tpl.Type), Port: tpl.Port,
+	})
+	if errors.Is(err, store.ErrSlugTaken) {
+		return store.Service{}, fmt.Errorf(
+			"creating %s service: the name %q is already taken by another service — rename or delete it first", typ, typ)
+	}
+	if err != nil {
+		return store.Service{}, err
+	}
+	if err := p.Provision(ctx, svc); err != nil {
+		return store.Service{}, err
+	}
+	return svc, nil
+}
+
+// Provision gives a service its runtime resources: credentials on first
+// run, its image, a container on the shared network, and a readiness wait
+// so "running" means "accepting connections". Idempotent: provisioning an
+// already-provisioned service re-creates its container and reuses its
+// credentials. On error the service is marked failed.
+func (p *Provisioner) Provision(ctx context.Context, svc store.Service) error {
+	tpl, ok := ForType(svc.Type)
+	if !ok {
+		return fmt.Errorf("unknown service type %q", svc.Type)
+	}
+	name := ContainerName(svc.Slug)
+	fail := func(err error) error {
+		slog.Error("services: provision", "service", svc.Slug, "err", err)
+		_ = p.st.UpdateServiceStatus(svc.ID, "failed")
+		return err
+	}
+
+	// Credentials: keep existing, generate on first run.
+	credsEnc, err := p.st.GetServiceCredentials(svc.ID)
+	if err != nil {
+		return fail(err)
+	}
+	if len(credsEnc) == 0 {
+		plain := make(map[string]string, len(tpl.CredsGen))
+		enc := make(map[string]string, len(tpl.CredsGen))
+		for k, gen := range tpl.CredsGen {
+			plain[k] = gen()
+			enc[k], err = crypto.Encrypt(p.encKey, plain[k])
+			if err != nil {
+				return fail(err)
+			}
+		}
+		if err := p.st.SetServiceCredentials(svc.ID, enc); err != nil {
+			return fail(err)
+		}
+		credsEnc = enc
+	}
+	creds := decryptCreds(p.encKey, credsEnc)
+
+	has, err := p.rt.HasImage(ctx, tpl.Image)
+	if err != nil {
+		return fail(err)
+	}
+	if !has {
+		if err := p.rt.PullImage(ctx, tpl.Image); err != nil {
+			return fail(err)
+		}
+	}
+	if err := p.rt.EnsureNetwork(ctx, p.network); err != nil {
+		return fail(err)
+	}
+	_ = p.rt.Stop(ctx, name, 5)
+	if err := p.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+		return fail(err)
+	}
+	spec := runtime.Spec{
+		Name:    name,
+		Image:   tpl.Image,
+		Env:     tpl.Env(creds),
+		Labels:  ContainerLabels(svc.Slug, svc.Type),
+		Network: p.network,
+		Binds:   []string{svc.VolumeName + ":" + tpl.Mount},
+	}
+	if _, err := p.rt.Create(ctx, spec); err != nil {
+		return fail(err)
+	}
+	if err := p.rt.Start(ctx, name); err != nil {
+		return fail(err)
+	}
+	if err := p.waitReady(ctx, name, tpl, creds); err != nil {
+		return fail(err)
+	}
+	return p.st.UpdateServiceStatus(svc.ID, "running")
+}
+
+// Restart stops and re-provisions a service in one click: stop, start,
+// and the full readiness wait. Credentials are never regenerated.
+func (p *Provisioner) Restart(ctx context.Context, svc store.Service) error {
+	tpl, ok := ForType(svc.Type)
+	if !ok {
+		return fmt.Errorf("unknown service type %q", svc.Type)
+	}
+	name := ContainerName(svc.Slug)
+	fail := func(err error) error {
+		slog.Error("services: restart", "service", svc.Slug, "err", err)
+		_ = p.st.UpdateServiceStatus(svc.ID, "failed")
+		return err
+	}
+
+	credsEnc, err := p.st.GetServiceCredentials(svc.ID)
+	if err != nil {
+		return fail(err)
+	}
+	creds := decryptCreds(p.encKey, credsEnc)
+
+	if err := p.rt.Stop(ctx, name, 10); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+		return fail(err)
+	}
+	if err := p.rt.Start(ctx, name); err != nil {
+		return fail(err)
+	}
+	if err := p.waitReady(ctx, name, tpl, creds); err != nil {
+		return fail(err)
+	}
+	return p.st.UpdateServiceStatus(svc.ID, "running")
+}
+
+// Readiness poll knobs — vars so tests can shrink the 60s window.
+var (
+	readinessAttempts = 30
+	readinessInterval = 2 * time.Second
+)
+
+// waitReady polls the service's readiness probe up to 60s.
+func (p *Provisioner) waitReady(ctx context.Context, name string, tpl Template, creds map[string]string) error {
+	for i := 0; i < readinessAttempts; i++ {
+		if _, err := p.rt.Exec(ctx, name, tpl.ReadyCmd(creds)); err == nil {
+			return nil
+		}
+		time.Sleep(readinessInterval)
+	}
+	return fmt.Errorf("service did not become ready within 60s — check its logs")
+}
+
+// decryptCreds decrypts an encrypted credential map, dropping entries that
+// fail to decrypt.
+func decryptCreds(encKey [32]byte, enc map[string]string) map[string]string {
+	out := make(map[string]string, len(enc))
+	for k, v := range enc {
+		plain, err := crypto.Decrypt(encKey, v)
+		if err != nil {
+			slog.Error("services: decrypt cred", "key", k, "err", err)
+			continue
+		}
+		out[k] = plain
+	}
+	return out
+}

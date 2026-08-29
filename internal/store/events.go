@@ -28,6 +28,9 @@ const (
 	EventServiceStopped  = "service_stopped"
 	EventAppRestarted    = "app_restarted"
 	EventServiceRestarted = "service_restarted"
+	// EventServiceAutoProvisioned: a deploy manifest created a service
+	// without any human involvement.
+	EventServiceAutoProvisioned = "service_auto_provisioned"
 )
 
 // RecordEvent appends one event.

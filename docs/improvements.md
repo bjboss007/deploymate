@@ -33,6 +33,13 @@ change.
   getmerchanttech.com with `DEPLOYMATE_PREVIEW_HOST` hostname routing
   and per-app DNS records; webhook now on a stable URL
   (spec: docs/specs/cloudflare-tunnel.md, Aug 2026).
+- [x] **Infra manifest (`deploymate.yml`)** — done: a repo declares the
+  services it needs; every git deploy reconciles the project's services
+  with the declaration (reuse a running one, start a stopped one,
+  auto-provision a missing one), then injects the URLs. Never deletes;
+  failures fail the deploy. Provisioning extracted into a shared
+  `ServiceProvisioner` used by handlers and the worker (spec:
+  docs/specs/infra-manifest.md; Aug 2026).
 - [ ] **Preview hostnames go live** — routing, DNS records, and the
   dashboard UI are all in place; the remaining piece is Cloudflare's
   free-plan edge certs for the per-app hostnames (provisioning on first

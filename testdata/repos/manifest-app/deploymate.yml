@@ -1,0 +1,5 @@
+# Declares the backing services this app needs. Every deploy reconciles
+# the project's services with this list: reuse a running one, start a
+# stopped one, or auto-provision a new one. Services are never deleted.
+services:
+  - postgres

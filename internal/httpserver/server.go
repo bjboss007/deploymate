@@ -13,6 +13,7 @@ import (
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
+	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/webhooks"
@@ -24,6 +25,7 @@ import (
 type Server struct {
 	store       *store.Store
 	rt          runtime.Runtime
+	prov        *services.Provisioner
 	events      *sse.Broker
 	encKey      [32]byte
 	deliveries  *webhooks.DeliveryCache
@@ -32,9 +34,9 @@ type Server struct {
 }
 
 // New builds a Server.
-func New(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, leMode, previewHost string) *Server {
+func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost string) *Server {
 	return &Server{
-		store: st, rt: rt, events: events, encKey: encKey, leMode: leMode, previewHost: previewHost,
+		store: st, rt: rt, prov: prov, events: events, encKey: encKey, leMode: leMode, previewHost: previewHost,
 		deliveries: webhooks.NewDeliveryCache(),
 	}
 }

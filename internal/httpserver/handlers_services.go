@@ -1,13 +1,10 @@
 package httpserver
 
 import (
-	"context"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -17,8 +14,6 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
-
-func dmServiceName(slug string) string { return "dm-svc-" + slug }
 
 // decryptCreds decrypts an encrypted credential map.
 func (s *Server) decryptCreds(enc map[string]string) map[string]string {
@@ -90,151 +85,39 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 	if svc.Status == "running" {
 		if credsEnc, err := s.store.GetServiceCredentials(svc.ID); err == nil && len(credsEnc) > 0 {
 			creds := s.decryptCreds(credsEnc)
-			connURL = tpl.ConnURL(creds, dmServiceName(svc.Slug))
+			connURL = tpl.ConnURL(creds, services.ContainerName(svc.Slug))
 		}
 	}
 	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL))
 }
 
-// handleServiceStart provisions (first run) or resumes a service: creds,
-// volume, container, and a readiness wait.
+// handleServiceStart provisions (first run) or resumes a service via the
+// shared provisioner — the same code path the deploy worker uses for
+// manifest-declared services.
 func (s *Server) handleServiceStart(w http.ResponseWriter, r *http.Request) {
 	svc, ok := s.serviceFromRequest(w, r)
 	if !ok {
 		return
 	}
-	tpl, _ := services.ForType(svc.Type)
-	ctx := r.Context()
-	name := dmServiceName(svc.Slug)
-	fail := func(err error) {
-		slog.Error("services: start", "service", svc.Slug, "err", err)
-		_ = s.store.UpdateServiceStatus(svc.ID, "failed")
+	if err := s.prov.Provision(r.Context(), svc); err != nil {
 		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Start failed: "+err.Error()), http.StatusSeeOther)
-	}
-
-	// Credentials: keep existing, generate on first run.
-	credsEnc, err := s.store.GetServiceCredentials(svc.ID)
-	if err != nil {
-		fail(err)
 		return
-	}
-	if len(credsEnc) == 0 {
-		plain := make(map[string]string, len(tpl.CredsGen))
-		enc := make(map[string]string, len(tpl.CredsGen))
-		for k, gen := range tpl.CredsGen {
-			plain[k] = gen()
-			enc[k], err = crypto.Encrypt(s.encKey, plain[k])
-			if err != nil {
-				fail(err)
-				return
-			}
-		}
-		if err := s.store.SetServiceCredentials(svc.ID, enc); err != nil {
-			fail(err)
-			return
-		}
-		credsEnc = enc
-	}
-	creds := s.decryptCreds(credsEnc)
-
-	has, err := s.rt.HasImage(ctx, tpl.Image)
-	if err != nil {
-		fail(err)
-		return
-	}
-	if !has {
-		if err := s.rt.PullImage(ctx, tpl.Image); err != nil {
-			fail(err)
-			return
-		}
-	}
-	if err := s.rt.EnsureNetwork(ctx, NetworkName); err != nil {
-		fail(err)
-		return
-	}
-	_ = s.rt.Stop(ctx, name, 5)
-	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
-		fail(err)
-		return
-	}
-	spec := runtime.Spec{
-		Name:    name,
-		Image:   tpl.Image,
-		Env:     tpl.Env(creds),
-		Labels:  dmServiceLabels(svc.Slug, svc.Type),
-		Network: NetworkName,
-		Binds:   []string{svc.VolumeName + ":" + tpl.Mount},
-	}
-	if _, err := s.rt.Create(ctx, spec); err != nil {
-		fail(err)
-		return
-	}
-	if err := s.rt.Start(ctx, name); err != nil {
-		fail(err)
-		return
-	}
-
-	// Wait for readiness so "running" means "accepting connections".
-	if err := s.waitServiceReady(ctx, name, tpl, creds); err != nil {
-		fail(err)
-		return
-	}
-
-	if err := s.store.UpdateServiceStatus(svc.ID, "running"); err != nil {
-		slog.Error("services: set running", "err", err)
 	}
 	http.Redirect(w, r, "/services/"+svc.Slug, http.StatusSeeOther)
 }
 
-// handleServiceRestart stops and re-provisions a service in one click:
-// stop, start, and the full readiness wait.
+// handleServiceRestart stops and re-provisions a service in one click.
 func (s *Server) handleServiceRestart(w http.ResponseWriter, r *http.Request) {
 	svc, ok := s.serviceFromRequest(w, r)
 	if !ok {
 		return
 	}
-	tpl, _ := services.ForType(svc.Type)
-	ctx := r.Context()
-	name := dmServiceName(svc.Slug)
-	fail := func(err error) {
-		slog.Error("services: restart", "service", svc.Slug, "err", err)
-		_ = s.store.UpdateServiceStatus(svc.ID, "failed")
+	if err := s.prov.Restart(r.Context(), svc); err != nil {
 		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Restart failed: "+err.Error()), http.StatusSeeOther)
-	}
-
-	credsEnc, err := s.store.GetServiceCredentials(svc.ID)
-	if err != nil {
-		fail(err)
 		return
 	}
-	creds := s.decryptCreds(credsEnc)
-
-	if err := s.rt.Stop(ctx, name, 10); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
-		fail(err)
-		return
-	}
-	if err := s.rt.Start(ctx, name); err != nil {
-		fail(err)
-		return
-	}
-	if err := s.waitServiceReady(ctx, name, tpl, creds); err != nil {
-		fail(err)
-		return
-	}
-	_ = s.store.UpdateServiceStatus(svc.ID, "running")
 	_ = s.store.RecordEvent("", store.EventServiceRestarted, "service "+svc.Name+" restarted and ready")
 	http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Service restarted and ready."), http.StatusSeeOther)
-}
-
-// waitServiceReady polls the service's readiness probe up to 60s.
-func (s *Server) waitServiceReady(ctx context.Context, name string, tpl services.Template, creds map[string]string) error {
-	for i := 0; i < 30; i++ {
-		if _, err := s.rt.Exec(ctx, name, tpl.ReadyCmd(creds)); err == nil {
-			return nil
-		}
-		time.Sleep(2 * time.Second)
-	}
-	return fmt.Errorf("service did not become ready within 60s — check its logs")
 }
 
 func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {
@@ -242,7 +125,7 @@ func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name := dmServiceName(svc.Slug)
+	name := services.ContainerName(svc.Slug)
 	if err := s.rt.Stop(r.Context(), name, 10); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
 		slog.Error("services: stop", "err", err)
 		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Stop failed: "+err.Error()), http.StatusSeeOther)
@@ -257,7 +140,7 @@ func (s *Server) handleServiceDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name := dmServiceName(svc.Slug)
+	name := services.ContainerName(svc.Slug)
 	_ = s.rt.Stop(r.Context(), name, 5)
 	if err := s.rt.Remove(r.Context(), name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
 		slog.Error("services: remove container", "err", err)
@@ -283,12 +166,4 @@ func (s *Server) serviceFromRequest(w http.ResponseWriter, r *http.Request) (sto
 		return svc, false
 	}
 	return svc, true
-}
-
-func dmServiceLabels(slug, svcType string) map[string]string {
-	return map[string]string{
-		"deploymate.managed": "true",
-		"deploymate.service": slug,
-		"deploymate.type":    svcType,
-	}
 }

@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
@@ -19,6 +20,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
+	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
@@ -30,6 +32,7 @@ const imageRetention = 5
 type Worker struct {
 	store        *store.Store
 	rt           runtime.Runtime
+	prov         *services.Provisioner
 	events       *sse.Broker
 	encKey       [32]byte
 	dataDir      string
@@ -42,8 +45,8 @@ type Worker struct {
 
 // NewWorker builds a Worker. buildEnv supplies the app container environment
 // (shared with the manual-deploy path).
-func NewWorker(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string, a *alerts.Dispatcher) *Worker {
-	return &Worker{store: st, rt: rt, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv, alerts: a}
+func NewWorker(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string, a *alerts.Dispatcher) *Worker {
+	return &Worker{store: st, rt: rt, prov: prov, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv, alerts: a}
 }
 
 // Run polls the queue until ctx is cancelled.
@@ -147,6 +150,21 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	w.log(d, "system", "building commit "+sha[:12]+" — "+message)
 	w.publish("deploy:"+app.Slug, "log", "building commit "+sha[:12])
 
+	// Infra manifest: reconcile deploymate.yml services before the app
+	// container is assembled, so connection URLs land in the very env
+	// assembly that injects them.
+	manifestTypes, err := services.LoadManifest(checkoutDir, app.RootDirectory)
+	if err != nil {
+		return fmt.Errorf("deploymate.yml: %w", err)
+	}
+	if len(manifestTypes) > 0 {
+		w.log(d, "system", "manifest: "+strings.Join(manifestTypes, ", "))
+		w.publish("deploy:"+app.Slug, "log", "manifest: "+strings.Join(manifestTypes, ", "))
+		if err := w.resolveManifest(ctx, app, d, manifestTypes); err != nil {
+			return err
+		}
+	}
+
 	imageTag := fmt.Sprintf("deploymate/apps/%s:%s", app.Slug, d.ID)
 	streamLog := func(line string) {
 		w.log(d, "stdout", line)
@@ -183,6 +201,32 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 		return err
 	}
 	return w.finish(d, app.ID)
+}
+
+// resolveManifest reconciles the declared service types with the
+// project's existing services and reports each action in the build log
+// and the history timeline. Errors fail the deployment.
+func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Deployment, types []string) error {
+	resolutions, err := w.prov.Ensure(ctx, app.ProjectID, types)
+	if err != nil {
+		return fmt.Errorf("manifest: %w", err)
+	}
+	for _, res := range resolutions {
+		var line string
+		switch res.Action {
+		case services.ActionReused:
+			line = fmt.Sprintf("manifest: reusing existing %s service", res.Type)
+		case services.ActionStarted:
+			line = fmt.Sprintf("manifest: starting existing %s service", res.Type)
+			_ = w.store.RecordEvent(app.ID, store.EventServiceStarted, "service "+res.Service.Name+" started by deploy manifest")
+		case services.ActionProvisioned:
+			line = fmt.Sprintf("manifest: provisioning %s (new service)", res.Type)
+			_ = w.store.RecordEvent(app.ID, store.EventServiceAutoProvisioned, "service "+res.Service.Name+" auto-provisioned by deploy manifest")
+		}
+		w.log(d, "system", line)
+		w.publish("deploy:"+app.Slug, "log", line)
+	}
+	return nil
 }
 
 // runRollback redeploys an existing image tag without building. Also

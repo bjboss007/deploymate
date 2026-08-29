@@ -28,6 +28,11 @@ One Go binary, one server, Docker as the compute substrate.
   select a **runtime** — Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno,
   Elixir, .NET, static sites — built with Railpack, no Dockerfile needed,
   optionally version-pinned
+- **Infra manifest** — a `deploymate.yml` in the repo declares the backing
+  services (`services: [postgres, redis]`); every deploy reconciles the
+  project's services with it — reuse a running one, start a stopped one, or
+  auto-provision a new one — then injects the connection URLs. Services
+  are never deleted for you.
 - **Databases & caches** — one-click Postgres 16, MySQL 8, Redis 7 with
   generated passwords (encrypted at rest), named volumes, readiness checks,
   and automatic connection-string injection (`DATABASE_URL`, `MYSQL_URL`,
