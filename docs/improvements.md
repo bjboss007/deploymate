@@ -87,6 +87,11 @@ change.
 - [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
   schedule into the data dir (or S3), with restore UI. Named volumes
   alone are not backups.
+- [ ] **Infra manifest v2** — the v1 extensions named in
+  docs/specs/infra-manifest.md: per-service image/version pins, teardown
+  of unused services (v1 never deletes — manifest-created services
+  accumulate), environment-specific manifests
+  (`deploymate.staging.yml`), seeding/backups from the manifest.
 - [ ] **App log history** — logs are live-only; add a small ring buffer
   per app (or `docker logs` snapshot) so the panel shows context before
   the stream connects.
