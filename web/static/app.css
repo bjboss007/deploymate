@@ -283,6 +283,27 @@ select { cursor: pointer; }
 .page-head .badge { margin-top: 8px; margin-right: 8px; }
 .health-reason { color: var(--red); font-size: 13px; }
 
+/* ---- history --------------------------------------------------------- */
+.stat-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+}
+.stat-value { font-family: var(--font-mono); font-size: 20px; font-weight: 500; }
+.stat-label { font-family: var(--font-mono); font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
+.timeline { display: flex; flex-direction: column; }
+.timeline-row { display: flex; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.timeline-row:last-child { border-bottom: none; }
+.timeline-dot { width: 9px; height: 9px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+.tone-good { background: var(--green); box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.15); }
+.tone-bad { background: var(--red); box-shadow: 0 0 0 3px rgba(255, 92, 92, 0.15); }
+.tone-neutral { background: var(--border-strong); }
+.timeline-body { flex: 1; min-width: 0; }
+.timeline-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.timeline-kind { font-size: 12px; }
+.timeline-ts { font-size: 12px; }
+.timeline-data { font-size: 13.5px; color: var(--muted); margin-top: 2px; word-break: break-word; }
+
 /* ---- deployments table ----------------------------------------------- */
 .deploy-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .deploy-table th {

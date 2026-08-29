@@ -34,6 +34,21 @@ func shortDeployID(id string) string {
 	return id
 }
 
+// fmtPct renders a percentage compactly (99.75 → "99.8%").
+func fmtPct(v float64) string {
+	return strconv.FormatFloat(v, 'f', 1, 64) + "%"
+}
+
+// fmtSec renders seconds as a compact duration.
+func fmtSec(v float64) string {
+	return (time.Duration(v) * time.Second).Round(time.Second).String()
+}
+
+// fmtMin renders minutes compactly.
+func fmtMin(v float64) string {
+	return (time.Duration(v) * time.Minute).Round(time.Minute).String()
+}
+
 // fmtCPU renders a float CPU core count compactly (1.5 → "1.5").
 func fmtCPU(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)

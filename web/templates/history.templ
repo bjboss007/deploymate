@@ -1,0 +1,94 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+// HistoryStats is the derived-intelligence strip for the history page.
+type HistoryStats struct {
+	Deploys       int
+	SuccessRate   float64
+	AvgBuildSec   float64
+	UptimePct     float64
+	UptimeSamples int
+	MTTRMin       float64
+	Incidents     int
+}
+
+// HistoryItem is one merged timeline entry (deployment or event).
+type HistoryItem struct {
+	TS    string
+	Kind  string
+	Label string
+	Data  string
+	Tone  string // good | bad | neutral
+}
+
+templ HistoryPage(vc ViewCtx, project store.Project, app store.App, stats HistoryStats, items []HistoryItem) {
+	@Layout(vc, "History · "+app.Name, "", []Crumb{
+		{Label: project.Name, Href: "/projects/" + project.Slug},
+		{Label: app.Name, Href: "/apps/" + app.Slug},
+		{Label: "History"},
+	}) {
+		<div class="page-head">
+			<div>
+				<h1>{ app.Name } — history</h1>
+				<p class="muted">Everything the platform has recorded for this app, last 30 days.</p>
+			</div>
+			<div class="head-actions">
+				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
+			</div>
+		</div>
+
+		<div class="stat-strip">
+			<div class="stat-card">
+				<div class="stat-value">{ stats.Deploys }</div>
+				<div class="stat-label">deploys (30d)</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ fmtPct(stats.SuccessRate) }</div>
+				<div class="stat-label">success rate</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ fmtSec(stats.AvgBuildSec) }</div>
+				<div class="stat-label">avg build time</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ fmtPct(stats.UptimePct) }</div>
+				<div class="stat-label">
+					if stats.UptimeSamples > 0 {
+						uptime · { stats.UptimeSamples } probes
+					} else {
+						uptime · no domain yet
+					}
+				</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ fmtMin(stats.MTTRMin) }</div>
+				<div class="stat-label">MTTR · { stats.Incidents } incidents</div>
+			</div>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Timeline</div>
+			if len(items) == 0 {
+				<p class="muted">Nothing recorded yet — deploy the app and the history starts accumulating.</p>
+			} else {
+				<div class="timeline">
+					for _, it := range items {
+						<div class="timeline-row">
+							<span class="timeline-dot tone-{ it.Tone }" aria-hidden="true"></span>
+							<div class="timeline-body">
+								<div class="timeline-head">
+									<span class="mono timeline-kind">{ it.Label }</span>
+									<span class="mono muted timeline-ts">{ shortTime(it.TS) }</span>
+								</div>
+								if it.Data != "" {
+									<div class="timeline-data">{ it.Data }</div>
+								}
+							</div>
+						</div>
+					}
+				</div>
+			}
+		</div>
+	}
+}

@@ -32,6 +32,7 @@ func (s *Server) handleEnvVarCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	_ = s.store.RecordEvent(app.ID, store.EventEnvChanged, "env var "+key+" set")
 	if _, err := s.store.UpsertEnvVar(store.EnvVar{
 		AppID: app.ID, Key: key, ValueEnc: valueEnc, IsSecret: isSecret,
 	}); err != nil {
@@ -47,6 +48,7 @@ func (s *Server) handleEnvVarDelete(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	_ = s.store.RecordEvent(app.ID, store.EventEnvRemoved, "env var removed")
 	if err := s.store.DeleteEnvVar(chi.URLParam(r, "id")); err != nil {
 		slog.Error("env: delete", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

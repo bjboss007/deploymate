@@ -183,6 +183,8 @@ func (m *Monitor) checkResourcePressure(ctx context.Context, app store.App) {
 		slog.Error("monitor: queue resize", "app", app.Slug, "err", err)
 		return
 	}
+	_ = m.store.RecordEvent(app.ID, store.EventResourceResized,
+		fmt.Sprintf("usage passed 80%% of limit — resized to %d MB / %g CPU, redeploying (%s)", newMem, newCPU, d.ID[:8]))
 	m.alerts.Notify(alerts.EventResourceResized,
 		fmt.Sprintf("resource resized: %s", app.Name),
 		fmt.Sprintf("usage sustained past 80%% of its limit — raised to %d MB / %g CPU and redeploying (%s)",
@@ -289,6 +291,8 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 			if m.healthFails[app.ID] >= recoveredAfterOKs {
 				_ = m.store.UpdateAppHealth(app.ID, "healthy")
 				delete(m.healthFails, app.ID)
+				_ = m.store.RecordEvent(app.ID, store.EventHealthRecovered,
+					fmt.Sprintf("%s responded to %d consecutive health probes", app.Name, recoveredAfterOKs))
 				m.alerts.Notify(alerts.EventAppRecovered,
 					fmt.Sprintf("app recovered: %s", app.Name),
 					fmt.Sprintf("%s is healthy again on port %d", app.Name, app.Port))
@@ -305,6 +309,8 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 	m.healthFails[app.ID]++
 	if m.healthFails[app.ID] >= unhealthyAfterFails && app.Health != "unhealthy" {
 		_ = m.store.UpdateAppHealth(app.ID, "unhealthy")
+		_ = m.store.RecordEvent(app.ID, store.EventHealthUnhealthy,
+			fmt.Sprintf("%d consecutive health probes failed on port %d", unhealthyAfterFails, app.Port))
 		m.alerts.Notify(alerts.EventAppUnhealthy,
 			fmt.Sprintf("app unhealthy: %s", app.Name),
 			fmt.Sprintf("%s failed %d health probes on port %d — it may be crash-looping", app.Name, unhealthyAfterFails, app.Port))
@@ -359,6 +365,8 @@ func (m *Monitor) detectResources(ctx context.Context) {
 				slog.Error("monitor: update resources", "app", app.Slug, "err", err)
 				continue
 			}
+			_ = m.store.RecordEvent(app.ID, store.EventResourceUpdate,
+				fmt.Sprintf("detected limits → %d MB / %g CPU (from %d samples over 24h)", memLimitMB, cpuLimit, samples))
 			slog.Info("monitor: detected resources",
 				"app", app.Slug, "mem_mb", memLimitMB, "cpu", cpuLimit, "samples", samples)
 		}

@@ -57,6 +57,7 @@ templ appCard(app store.App) {
 
 templ AppHeadActions(vc ViewCtx, app store.App) {
 	<div class="head-actions" id="head-actions">
+		<a class="btn btn-ghost" href={ "/apps/" + app.Slug + "/history" }>History</a>
 		if app.Status == "running" {
 			<form method="post" action={ "/apps/" + app.Slug + "/stop" }
 				hx-post={ "/apps/" + app.Slug + "/stop" }

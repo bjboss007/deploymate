@@ -303,6 +303,7 @@ func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "stopped")
+	_ = s.store.RecordEvent(app.ID, store.EventAppStopped, "app stopped from the dashboard")
 	if r.Header.Get("HX-Request") == "true" {
 		app.Status = "stopped"
 		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
@@ -326,6 +327,7 @@ func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "running")
+	_ = s.store.RecordEvent(app.ID, store.EventAppStarted, "app started from the dashboard")
 	if r.Header.Get("HX-Request") == "true" {
 		app.Status = "running"
 		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))

@@ -101,6 +101,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/projects/{slug}/apps", am.CheckCSRF(s.handleAppCreate))
 		r.Post("/projects/{slug}/services", am.CheckCSRF(s.handleServiceCreate))
 		r.Get("/apps/{slug}", s.handleAppPage)
+		r.Get("/apps/{slug}/history", s.handleAppHistory)
 		r.Get("/apps/{slug}/logs", s.handleAppLogs)
 		r.Get("/preview/{slug}", s.handlePreview)
 		r.Get("/preview/{slug}/*", s.handlePreview)

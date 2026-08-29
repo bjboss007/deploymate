@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/habibmuhammad/deploymate/internal/builder"
+	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
 // handleAppRuntime sets the app's build method: Dockerfile (empty) or a
@@ -26,6 +27,7 @@ func (s *Server) handleAppRuntime(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(err.Error()), http.StatusSeeOther)
 		return
 	}
+	_ = s.store.RecordEvent(app.ID, store.EventRuntimeChanged, "build method set to "+orDockerfile(normalized))
 	if err := s.store.UpdateAppRuntime(app.ID, normalized); err != nil {
 		slog.Error("apps: set runtime", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -45,4 +47,11 @@ func containsColon(s string) bool {
 		}
 	}
 	return false
+}
+
+func orDockerfile(s string) string {
+	if s == "" {
+		return "dockerfile"
+	}
+	return s
 }
