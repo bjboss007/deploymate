@@ -105,6 +105,19 @@ change.
 - [ ] **Deploy previews / per-branch deploys** — deploy a PR branch to a
   preview domain, cleaned up on merge. Requires multiple domains per app
   + per-deployment routing labels.
+- [ ] **Multi-environment app instances** — the bigger sibling of the
+  environment labels (ADR 0017 deferred it deliberately): one app row
+  running staging AND production containers simultaneously, each with
+  its own domains (`api-staging.example.com` vs `api.example.com`),
+  env vars, deploy targets, and rollback history. The 0017 columns and
+  naming (`staging-{type}` services) were designed to compose with it.
+  Sub-items: per-env domains, per-env preview hostnames
+  (`{slug}-staging.{previewHost}` — the preview middleware already
+  routes hyphenated subdomains), per-env env-var sets.
+- [ ] **Manual service environment selector** — hand-created services
+  are production-only by design (the manifest is the staging path); if
+  that bites, add an environment dropdown to the service create form
+  (small: the column and filtering already exist).
 - [ ] **Automatic deploy on git connect** — after linking a repo, offer
   "deploy now" in the same flow (today it's two clicks).
 - [x] **Notifications** — done via the alerts system: webhook channel
