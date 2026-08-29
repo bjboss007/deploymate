@@ -9,7 +9,11 @@ change.
 - [x] **Reap stale `building` deployments** — done: the worker fails
   in-flight rows on startup (Aug 2026).
 - [x] **Preview URLs** — done: `/preview/{slug}` on the dashboard
-  reverse-proxies to the app via loopback-published ports (Aug 2026).
+  reverse-proxies to the app via loopback-published ports, absolute
+  app redirects rewritten into the preview path (Aug 2026).
+- [x] **Runtime environments via Railpack** — done: 11 runtimes with
+  version pinning, no Dockerfile needed; node:22, python:3.12, java:21
+  verified end-to-end (Aug 2026).
 - [ ] **Preview hostnames** — the server-side sibling of preview URLs:
   `{slug}.{server-ip}.nip.io`-style auto-subdomains via Traefik with
   staging TLS, so previews work without a real domain AND without the
@@ -21,11 +25,15 @@ change.
 - [ ] **App healthchecks** — `runtime.Spec` has no healthcheck field;
   containers run without one. Add optional healthcheck (path/port) so
   "running" means healthy, and surface `unhealthy` state in the UI.
+  *Bitten us already: VGG showed "running" while Spring Boot
+  crash-looped for ten minutes (Aug 2026).*
 - [ ] **Container command override** — image deploys can't pass a
   command/args. Useful for one-off jobs and images with odd entrypoints.
 - [ ] **Disk usage panel** — `docker system df` + per-volume sizes on the
   dashboard; `images.size_bytes` is recorded but never displayed or
-  filled from the daemon.
+  filled from the daemon. *Bitten us already: Docker Desktop's disk
+  filled, MySQL init started failing ("UUID failed", ENOSPC) and it took
+  an hour to diagnose (Aug 2026) — at minimum surface a disk warning.*
 - [ ] **`build_logs` retention** — build logs accumulate forever; prune
   with the same hourly pass as metrics (e.g. keep 30 d).
 - [ ] **TLS status sync** — `domains.tls_status` stays `pending` forever;
@@ -33,9 +41,10 @@ change.
   show `active`/`failed` + expiry. Uptime probes already reveal the real
   state indirectly.
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
-  only; extend per phase (P3 env injection, P4 webhook→deploy→rollback,
-  P5 label assertions, P6 metric/uptime assertions) and wire into CI
-  with a Linux runner (Traefik works there).
+  only. Manual verification exists for P3–P6 (env injection, webhook→
+  deploy→rollback, Traefik labels, metric/uptime assertions, three
+  runtimes) but none of it is automated; wire into CI with a Linux
+  runner (Traefik works there).
 
 ## Medium-term (feature depth)
 
@@ -44,7 +53,13 @@ change.
   cold.
 - [ ] **Per-runtime build/start command overrides** — Railpack supports
   `--build-cmd`/`--start-cmd`; surface them in the Build panel for
-  runtimes whose auto-detection falls short.
+  runtimes whose auto-detection falls short. *The VGG deploy needed its
+  heroku profile + a custom DATABASE_URL — solved via env vars, but a
+  start-cmd override is the cleaner general tool.*
+- [ ] **Env var aliasing / injection mapping** — today each service type
+  injects one fixed key (DATABASE_URL/MYSQL_URL/REDIS_URL). VGG needed a
+  MySQL URL under the key `DATABASE_URL` — we copied the connection
+  string manually. Let apps map any injected URL to any env key.
 - [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
   schedule into the data dir (or S3), with restore UI. Named volumes
   alone are not backups.
