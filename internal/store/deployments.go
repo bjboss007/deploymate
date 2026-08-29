@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"time"
 )
 
 // Deployment tracks one deploy attempt: manual container runs (P2) and git
@@ -98,6 +99,34 @@ func (s *Store) FailStaleBuilding() (int64, error) {
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+// LatestDeploymentOfKind returns the newest deployment of a kind for an
+// app, or nil when none exists.
+func (s *Store) LatestDeploymentOfKind(appID, kind string) (*Deployment, error) {
+	var d Deployment
+	err := s.db.QueryRow(
+		`SELECT id, app_id, commit_sha, commit_message, kind, status, image_tag, error, started_at, finished_at, created_at
+		 FROM deployments WHERE app_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1`,
+		appID, kind,
+	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.ImageTag,
+		&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+// CreatedTime parses the RFC3339 creation timestamp.
+func (d *Deployment) CreatedTime() time.Time {
+	t, err := time.Parse(time.RFC3339Nano, d.CreatedAt)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
 }
 
 // ListDeployments returns an app's deployment history, newest first.

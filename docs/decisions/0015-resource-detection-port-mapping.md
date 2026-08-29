@@ -31,6 +31,14 @@ worked because Spring Boot silently defaulted to 8080).
    continuous, application is per-deploy — limits never change under a
    running app, and the UI states plainly when the applied limit is
    pending the next deploy.
+4. **Auto-resize trigger (the self-healing half):** when sustained usage
+   passes 80% of the *applied* limit (10-minute P90 window), the monitor
+   bumps the limit and queues a `resize` deployment — a no-build swap of
+   the current image, seconds of downtime — before the OOM happens.
+   Cooldown (30 min per app) is enforced via the deployments table so it
+   survives restarts. `resource_resized` alert fires per resize. Verified
+   live: squeezing VGG to 256MB triggered the resize; the rebuilt
+   container came up with the re-derived limit.
 
 ## Consequences
 

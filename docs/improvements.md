@@ -106,6 +106,10 @@ change.
   derived from each app's own P90 usage (24 h, 2× headroom, clamped) and
   applied as docker limits at the next deploy; port maps to the `PORT`
   env with an 8080 default (ADR 0015, Aug 2026).
+- [x] **Auto-resize under pressure** — done: sustained usage past 80%
+  of the applied limit triggers a limit bump + no-build redeploy before
+  the OOM, with a DB-backed 30-min cooldown and `resource_resized`
+  alerts (ADR 0015, Aug 2026).
 - Container runbook: view env/effective config of a running app
 - Import/export: migrate apps between DeployMate instances
 - Blue/green or canary deploys (weighted Traefik routers)

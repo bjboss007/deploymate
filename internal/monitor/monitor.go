@@ -34,6 +34,13 @@ const (
 	diskThreshold   = 20 << 30 // 20 GiB of images + build cache
 	diskAlertRepeat = 24 * time.Hour
 	restartCooldown = 5 * time.Minute
+
+	// Auto-resize: sustained usage past this fraction of the APPLIED limit
+	// triggers a limit bump + automatic redeploy (docker requires a
+	// recreate to apply new limits).
+	resizePressure = 0.80
+	resizeCooldown = 30 * time.Minute
+	pressureWindow = 10 * time.Minute
 )
 
 // Monitor runs the stats, health, uptime, restart, and disk loops.
@@ -48,6 +55,7 @@ type Monitor struct {
 	healthFails    map[string]int    // appID -> consecutive failed probes
 	restartSeen    map[string]int    // appID -> last RestartCount
 	restartAlertAt map[string]time.Time
+	lastResize     map[string]time.Time
 	lastDiskAlert  time.Time
 }
 
@@ -66,6 +74,7 @@ func New(st *store.Store, rt runtime.Runtime, a *alerts.Dispatcher) *Monitor {
 		healthFails:    make(map[string]int),
 		restartSeen:    make(map[string]int),
 		restartAlertAt: make(map[string]time.Time),
+		lastResize:     make(map[string]time.Time),
 	}
 }
 
@@ -104,7 +113,8 @@ func (m *Monitor) Run(ctx context.Context) {
 	}
 }
 
-// probeApps runs per-app health probes and restart-count checks.
+// probeApps runs per-app health probes, restart checks, and resource
+// pressure checks.
 func (m *Monitor) probeApps(ctx context.Context) {
 	apps, err := m.store.ListAllApps()
 	if err != nil {
@@ -114,7 +124,70 @@ func (m *Monitor) probeApps(ctx context.Context) {
 	for _, app := range apps {
 		m.probeAppHealth(ctx, app)
 		m.checkRestarts(ctx, app)
+		m.checkResourcePressure(ctx, app)
 	}
+}
+
+// checkResourcePressure is the self-healing half of resource detection:
+// when recent usage sustains past 80% of the APPLIED limit, bump the
+// limit and redeploy automatically (same image, no build — seconds of
+// swap). Cooldown prevents thrash loops.
+func (m *Monitor) checkResourcePressure(ctx context.Context, app store.App) {
+	if app.Status != "running" {
+		return
+	}
+	info, err := m.rt.Inspect(ctx, "dm-"+app.Slug)
+	if err != nil || info.MemLimitMB == 0 && info.CPULimit == 0 {
+		return // no applied limits — nothing to resize against
+	}
+
+	memP90, cpuP90, samples, err := m.store.P90Metrics(app.ID, time.Now().UTC().Add(-pressureWindow))
+	if err != nil || samples < 10 {
+		return
+	}
+
+	memPressure := info.MemLimitMB > 0 && float64(memP90) > resizePressure*float64(info.MemLimitMB<<20)
+	cpuPressure := info.CPULimit > 0 && cpuP90 > resizePressure*info.CPULimit*100
+	if !memPressure && !cpuPressure {
+		return
+	}
+
+	// Cooldown lives in the deployments table (not memory) so it survives
+	// restarts: skip if a resize ran for this app within the window.
+	recent, err := m.store.LatestDeploymentOfKind(app.ID, "resize")
+	if err == nil && recent != nil && time.Since(recent.CreatedTime()) < resizeCooldown {
+		return
+	}
+
+	// New limit: re-derive from recent usage with headroom, never smaller
+	// than what's applied, always clamped.
+	newMem := clamp64(int64(memP90)*2/(1<<20), 64, 4096)
+	if newMem <= info.MemLimitMB {
+		newMem = clamp64(info.MemLimitMB*2, 64, 4096)
+	}
+	newCPU := clampF(cpuP90*2/100, 0.5, 4.0)
+	if newCPU <= info.CPULimit {
+		newCPU = clampF(info.CPULimit*2, 0.5, 4.0)
+	}
+	if err := m.store.UpdateAppResources(app.ID, int(newMem), newCPU); err != nil {
+		slog.Error("monitor: resize update", "app", app.Slug, "err", err)
+		return
+	}
+
+	// Redeploy with the current image — the worker's resize path skips
+	// the build and just swaps the container with the new limits.
+	d, err := m.store.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "resize", Status: "queued", ImageTag: info.Image,
+	})
+	if err != nil {
+		slog.Error("monitor: queue resize", "app", app.Slug, "err", err)
+		return
+	}
+	m.alerts.Notify(alerts.EventResourceResized,
+		fmt.Sprintf("resource resized: %s", app.Name),
+		fmt.Sprintf("usage sustained past 80%% of its limit — raised to %d MB / %g CPU and redeploying (%s)",
+			newMem, newCPU, d.ID[:8]))
+	slog.Info("monitor: resizing app", "app", app.Slug, "mem_mb", newMem, "cpu", newCPU, "deployment", d.ID)
 }
 
 // sampleAll records one stats sample per running app.

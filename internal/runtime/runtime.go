@@ -48,6 +48,10 @@ type Info struct {
 	Running  bool
 	State    string
 	Restarts int
+	// Applied limits (HostConfig) — the values the container actually
+	// runs under, which may lag the store's detected values.
+	MemLimitMB int64
+	CPULimit   float64
 }
 
 // Runtime is the compute interface.

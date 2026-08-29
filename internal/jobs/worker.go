@@ -89,7 +89,7 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 	w.publish(topic, "deploy", fmt.Sprintf("deployment %s started (%s)", shortID(d.ID), d.Kind))
 
 	switch d.Kind {
-	case "rollback":
+	case "rollback", "resize":
 		err = w.runRollback(ctx, app, d)
 	default:
 		err = w.runGitDeploy(ctx, app, d)
@@ -103,9 +103,15 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 		return
 	}
 	w.publish(topic, "deploy", "deployed ✓")
-	w.alerts.Notify(alerts.EventDeploySucceeded,
-		fmt.Sprintf("deploy succeeded: %s", app.Name),
-		fmt.Sprintf("commit %s is live (deployment %s)", shortCommit(d.CommitSHA), shortID(d.ID)))
+	if d.CommitSHA != "" {
+		w.alerts.Notify(alerts.EventDeploySucceeded,
+			fmt.Sprintf("deploy succeeded: %s", app.Name),
+			fmt.Sprintf("commit %s is live (deployment %s)", shortCommit(d.CommitSHA), shortID(d.ID)))
+	} else {
+		w.alerts.Notify(alerts.EventDeploySucceeded,
+			fmt.Sprintf("deploy succeeded: %s", app.Name),
+			fmt.Sprintf("the current image is live (deployment %s)", shortID(d.ID)))
+	}
 }
 
 // runGitDeploy clones, builds, and swaps in the new container.
@@ -179,13 +185,18 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	return w.finish(d, app.ID)
 }
 
-// runRollback redeploys an existing image tag without building.
+// runRollback redeploys an existing image tag without building. Also
+// serves resize deployments: same swap, with the freshly detected limits.
 func (w *Worker) runRollback(ctx context.Context, app store.App, d store.Deployment) error {
 	if d.ImageTag == "" {
-		return errors.New("rollback target has no image tag")
+		return errors.New("target has no image tag")
 	}
-	w.log(d, "system", "rolling back to "+d.ImageTag)
-	w.publish("deploy:"+app.Slug, "log", "rolling back to "+d.ImageTag)
+	verb := "rolling back to"
+	if d.Kind == "resize" {
+		verb = "applying resized limits, image"
+	}
+	w.log(d, "system", verb+" "+d.ImageTag)
+	w.publish("deploy:"+app.Slug, "log", verb+" "+d.ImageTag)
 	if err := w.runContainer(ctx, app, d, d.ImageTag, nil); err != nil {
 		return err
 	}
@@ -251,6 +262,7 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 	if app.CPULimit > 0 {
 		spec.CPULimit = app.CPULimit
 	}
+	slog.Info("worker: container spec", "app", app.Slug, "mem_limit_mb", app.MemLimitMB, "cpu", app.CPULimit, "kind", d.Kind)
 	w.publish("deploy:"+app.Slug, "deploy", "starting container "+name)
 	if _, err := w.rt.Create(ctx, spec); err != nil {
 		return fmt.Errorf("create container: %w", err)

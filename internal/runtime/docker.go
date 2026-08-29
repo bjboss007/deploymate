@@ -199,12 +199,14 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		return Info{}, mapNotFound(fmt.Errorf("inspect container %s: %w", name, err))
 	}
 	return Info{
-		ID:       ctr.ID,
-		Name:     name,
-		Image:    ctr.Image,
-		Running:  ctr.State.Running,
-		State:    ctr.State.Status,
-		Restarts: ctr.RestartCount,
+		ID:         ctr.ID,
+		Name:       name,
+		Image:      ctr.Image,
+		Running:    ctr.State.Running,
+		State:      ctr.State.Status,
+		Restarts:   ctr.RestartCount,
+		MemLimitMB: ctr.HostConfig.Memory >> 20,
+		CPULimit:   float64(ctr.HostConfig.NanoCPUs) / 1e9,
 	}, nil
 }
 

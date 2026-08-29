@@ -18,6 +18,7 @@ already *produces* every event it needs; nothing notifies.
 | `uptime_recovered` | monitor, not-ok→ok transition | domain, latency |
 | `container_restart` | monitor, RestartCount increased | app, restart count |
 | `disk_almost_full` | monitor, ≥90% disk usage (once/24 h) | bytes used/total |
+| `resource_resized` | monitor, sustained usage >80% of applied limit (30-min cooldown) | old → new limits |
 
 Deliberately excluded from v1: per-domain-cert expiry (TLS status sync
 doesn't exist yet), memory/cpu thresholds (needs baselines), and

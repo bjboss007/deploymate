@@ -28,6 +28,7 @@ const (
 	EventDiskAlmostFull   = "disk_almost_full"
 	EventAppUnhealthy     = "app_unhealthy"
 	EventAppRecovered     = "app_recovered"
+	EventResourceResized  = "resource_resized"
 )
 
 // CatalogEvent pairs an event name with its UI label.
@@ -46,6 +47,7 @@ var Catalog = []CatalogEvent{
 	{EventUptimeRecovered, "Uptime recovered"},
 	{EventContainerRestart, "Container restarting"},
 	{EventDiskAlmostFull, "Disk almost full"},
+	{EventResourceResized, "Resource resized"},
 }
 
 // KnownEvent reports whether a name is in the catalog.
