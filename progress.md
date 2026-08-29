@@ -7,6 +7,36 @@
 
 ## Where we stopped
 
+**2026-08-29** — **App action feedback + status-badge bug fix** (browser-
+verified). App start/stop/restart use HTMX to swap only `#head-actions`, so
+the `?flash=` confirmation those handlers set never rendered — no page
+reload. Fixes (`web/templates/apps.templ`, `web/static/app.css`): the
+status badge now lives inside the swapped region so every action visibly
+flips it; `hx-disabled-elt="find button"` + a CSS spinner give an in-flight
+state (a stop can take ~10s). While verifying, found a **pre-existing
+bug**: `statusBadge`/`healthBadge` used `@statusDot("running"){ status }`,
+and templ read the `{ status }` as a literal children-text block — every
+badge across the app showed the word "status" (and health showed
+`"healthy"` with quotes) instead of the value. Fixed by passing the label
+as a `statusDot` parameter. Verified live via curl against the running
+server (minted+deleted a dev session): badge reads `running`; POST /stop
+returns the partial with badge `stopped` + Start button; /start restores.
+**A running server on :8090 is the freshly-built binary I restarted** (was
+PID 74778).
+
+**2026-08-29** — **Infra manifest teardown (surface-only)** shipped
+(unit-tested, not yet e2e). A manifest-created service the manifest stops
+declaring is flagged orphaned — badge on the service card, a build-log
+line, and a `service_orphaned` event — but **never deleted** (the
+manifest's "deleting infra is a human decision" rule). The human Keeps it
+(adopts → origin `manual`, `POST /services/{slug}/keep`) or Deletes it.
+Manual services are never flagged; dropping the whole manifest flags
+nothing. Migration 0010 adds `services.origin` + `services.orphaned`;
+`Provisioner.reconcileOrphans` does the diff. Spec + backlog updated.
+Next manifest item: **seeding/backups** (overlaps Database backups).
+**Not verified:** real deploy exercising the orphan path (unit tests
+cover flag/clear/manual-immunity). **Not yet committed.**
+
 **2026-08-29** — **Environments + image pins** shipped and e2e-verified
 (infra-manifest v2, ADR 0017): apps and services carry
 `staging`/`production` labels; per-env manifest overlays

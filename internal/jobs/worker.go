@@ -227,6 +227,9 @@ func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Dep
 		case services.ActionProvisioned:
 			line = fmt.Sprintf("manifest: provisioning %s (new service, %s)", res.Type, res.Service.Image)
 			_ = w.store.RecordEvent(app.ID, store.EventServiceAutoProvisioned, "service "+res.Service.Name+" auto-provisioned by deploy manifest")
+		case services.ActionOrphaned:
+			line = fmt.Sprintf("manifest: %s no longer declared → orphan candidate (delete or keep %s on its service page)", res.Type, res.Service.Name)
+			_ = w.store.RecordEvent(app.ID, store.EventServiceOrphaned, "service "+res.Service.Name+" no longer declared by manifest — flagged for review")
 		}
 		w.log(d, "system", line)
 		w.publish("deploy:"+app.Slug, "log", line)

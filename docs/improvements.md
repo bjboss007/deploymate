@@ -71,6 +71,18 @@ change.
   parse Traefik's acme.json (or enable Traefik's API on localhost) to
   show `active`/`failed` + expiry. Uptime probes already reveal the real
   state indirectly.
+- [ ] **Unhealthy badge mislabels running apps** — the app page says
+  "container is crash-looping — 0 restarts" for any running+unhealthy
+  app, even with zero restarts and clean logs (seen: db-probe, py-api,
+  web-front — all up hours, restarts=0, probe unreachable). The
+  inference should distinguish: restarts > 0 → crash-looping; running
+  but probe unreachable → "not reachable on its preview port" (Aug 2026).
+- [ ] **Start/Restart can't heal a missing port binding** — containers
+  created with `HostPort=0` publish nothing; Start/Restart are plain
+  `docker start`, so bindings never appear and the app is permanently
+  "unhealthy" (probe hits the unbound preview port). Only a redeploy
+  re-creates with bindings. All three currently-unhealthy apps share
+  empty `PortBindings` while healthy ones are bound (Aug 2026).
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
   only. Manual verification exists for P3–P6 (env injection, webhook→
   deploy→rollback, Traefik labels, metric/uptime assertions, three
@@ -94,11 +106,18 @@ change.
 - [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
   schedule into the data dir (or S3), with restore UI. Named volumes
   alone are not backups.
-- [ ] **Infra manifest teardown & seeding** — the remaining extensions
-  from docs/specs/infra-manifest.md: teardown of unused services (the
-  manifest never deletes — manifest-created services accumulate) and
-  database seeding/backups from the manifest. Pins and
-  environment-specific manifests shipped (see Near-term).
+- [x] **Infra manifest teardown (surface-only)** — done: a
+  manifest-created service the manifest stops declaring is flagged
+  orphaned (badge + build-log line + `service_orphaned` event), never
+  deleted. The human Keeps it (adopts → origin `manual`) or Deletes it.
+  Manual services are never flagged; dropping the whole manifest flags
+  nothing. Migration 0010 (`services.origin`, `services.orphaned`);
+  `reconcileOrphans` in the provisioner; `POST /services/{slug}/keep`
+  (Aug 2026). Auto-delete stays deliberately out of scope.
+- [ ] **Infra manifest seeding** — the remaining manifest extension from
+  docs/specs/infra-manifest.md: database seeding/backups declared from
+  the manifest. Overlaps with **Database backups** above. Pins,
+  environment-specific manifests, and teardown-surfacing shipped.
 - [ ] **App log history** — logs are live-only; add a small ring buffer
   per app (or `docker logs` snapshot) so the panel shows context before
   the stream connects.

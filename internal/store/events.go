@@ -33,6 +33,9 @@ const (
 	EventServiceAutoProvisioned = "service_auto_provisioned"
 	// EventEnvironmentChanged: an app moved between staging/production.
 	EventEnvironmentChanged = "environment_changed"
+	// EventServiceOrphaned: a manifest deploy stopped declaring a service
+	// it had created; it is flagged for a human to delete or keep.
+	EventServiceOrphaned = "service_orphaned"
 )
 
 // RecordEvent appends one event.

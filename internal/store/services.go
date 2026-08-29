@@ -18,6 +18,8 @@ type Service struct {
 	VolumeName  string
 	Port        int
 	Environment string // EnvProduction | EnvStaging — only apps in the same environment see this service
+	Origin      string // OriginManual | OriginManifest — who created it
+	Orphaned    bool   // manifest-created but no longer declared; surfaced for a human to delete or keep
 	CreatedAt   string
 }
 
@@ -29,10 +31,13 @@ func (s *Store) CreateService(sv Service) (Service, error) {
 	if sv.Environment == "" {
 		sv.Environment = EnvProduction
 	}
+	if sv.Origin == "" {
+		sv.Origin = OriginManual
+	}
 	_, err := s.db.Exec(
-		`INSERT INTO services (id, project_id, type, name, slug, image, status, volume_name, port, environment, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		sv.ID, sv.ProjectID, sv.Type, sv.Name, sv.Slug, sv.Image, sv.Status, sv.VolumeName, sv.Port, sv.Environment, sv.CreatedAt,
+		`INSERT INTO services (id, project_id, type, name, slug, image, status, volume_name, port, environment, origin, orphaned, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		sv.ID, sv.ProjectID, sv.Type, sv.Name, sv.Slug, sv.Image, sv.Status, sv.VolumeName, sv.Port, sv.Environment, sv.Origin, sv.Orphaned, sv.CreatedAt,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return sv, ErrSlugTaken
@@ -43,7 +48,7 @@ func (s *Store) CreateService(sv Service) (Service, error) {
 // ListServices returns all services in a project, newest first.
 func (s *Store) ListServices(projectID string) ([]Service, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, created_at
+		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, origin, orphaned, created_at
 		 FROM services WHERE project_id = ? ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -58,11 +63,11 @@ func (s *Store) ListServices(projectID string) ([]Service, error) {
 func (s *Store) GetServiceBySlug(slug string) (Service, error) {
 	var sv Service
 	err := s.db.QueryRow(
-		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, created_at
+		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, origin, orphaned, created_at
 		 FROM services WHERE slug = ?`,
 		slug,
 	).Scan(&sv.ID, &sv.ProjectID, &sv.Type, &sv.Name, &sv.Slug, &sv.Image, &sv.Status,
-		&sv.VolumeName, &sv.Port, &sv.Environment, &sv.CreatedAt)
+		&sv.VolumeName, &sv.Port, &sv.Environment, &sv.Origin, &sv.Orphaned, &sv.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return sv, ErrNotFound
 	}
@@ -72,6 +77,22 @@ func (s *Store) GetServiceBySlug(slug string) (Service, error) {
 // UpdateServiceStatus sets the service's runtime status.
 func (s *Store) UpdateServiceStatus(id, status string) error {
 	_, err := s.db.Exec(`UPDATE services SET status = ? WHERE id = ?`, status, id)
+	return err
+}
+
+// SetServiceOrphaned raises or clears a service's orphaned flag. A manifest
+// deploy raises it on a manifest-created service it no longer declares, and
+// clears it when that type is declared again.
+func (s *Store) SetServiceOrphaned(id string, orphaned bool) error {
+	_, err := s.db.Exec(`UPDATE services SET orphaned = ? WHERE id = ?`, orphaned, id)
+	return err
+}
+
+// AdoptService is the "Keep" action: a human claims an orphaned,
+// manifest-created service as their own. Origin flips to manual so future
+// deploys stop flagging it, and the orphaned flag clears.
+func (s *Store) AdoptService(id string) error {
+	_, err := s.db.Exec(`UPDATE services SET origin = ?, orphaned = 0 WHERE id = ?`, OriginManual, id)
 	return err
 }
 
@@ -87,7 +108,7 @@ func scanServices(rows *sql.Rows) ([]Service, error) {
 	for rows.Next() {
 		var sv Service
 		if err := rows.Scan(&sv.ID, &sv.ProjectID, &sv.Type, &sv.Name, &sv.Slug, &sv.Image,
-			&sv.Status, &sv.VolumeName, &sv.Port, &sv.Environment, &sv.CreatedAt); err != nil {
+			&sv.Status, &sv.VolumeName, &sv.Port, &sv.Environment, &sv.Origin, &sv.Orphaned, &sv.CreatedAt); err != nil {
 			return nil, err
 		}
 		out = append(out, sv)

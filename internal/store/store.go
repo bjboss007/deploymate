@@ -25,6 +25,14 @@ const (
 	EnvStaging    = "staging"
 )
 
+// Service origin: who created the service. A manifest deploy may flag a
+// manifest-origin service as orphaned when it stops declaring that type;
+// manual services are never flagged. See migration 0010.
+const (
+	OriginManual   = "manual"
+	OriginManifest = "manifest"
+)
+
 // Store wraps the database handle.
 type Store struct {
 	db *sql.DB

@@ -1,7 +1,8 @@
 # Infrastructure manifest (`deploymate.yml`) — specification
 
 **Status:** live (Aug 2026) · Environments + image pins shipped in the
-v2 update (ADR 0017). Implementation notes at the bottom.
+v2 update (ADR 0017); orphan surfacing (surface-only teardown) shipped
+after. Implementation notes at the bottom.
 
 ## Problem
 
@@ -68,9 +69,21 @@ services:
      name/slug `postgres`; staging gets name `Staging PostgreSQL`, slug
      `staging-postgres`, its own volume (`dm-svc-staging-postgres-data`).
      Generated credentials, volume, readiness.
-3. Services not declared are **never touched** — no auto-delete, ever.
-   Deleting infra is a human decision. Switching an app's environment
-   leaves the old environment's services running untouched.
+3. Services not declared are **never deleted** — deleting infra is a
+   human decision. A manifest-created service (origin `manifest`) that
+   the manifest stops declaring is **flagged orphaned and surfaced**, not
+   removed: a badge on the service, a build-log line, and a
+   `service_orphaned` event. The human then **Keeps** it (adopts it as a
+   manual service — origin flips to `manual`, the flag clears, future
+   deploys stop flagging it) or **Deletes** it. Manual services are
+   invisible to this reconciliation — only manifest-created ones are ever
+   flagged. Switching an app's environment leaves the old environment's
+   services running and unflagged.
+   - Orphan reconciliation runs only when the deploy resolves a
+     **non-empty** manifest for the environment. Dropping the manifest
+     entirely (or an empty overlay) is the no-op no-manifest path and
+     flags nothing — total removal is too ambiguous to auto-flag; delete
+     services by hand.
 4. Multiple apps in one environment declaring the same type converge on
    the same service (one Postgres per environment unless the user names
    more).
@@ -88,8 +101,12 @@ the shared `ServiceProvisioner` (used by handlers *and* the worker).
   `manifest (staging): postgres`), `manifest: reusing existing postgres
   service`, `manifest: provisioning postgres (new service,
   postgres:17)`.
+- Orphan surfacing: build-log line `manifest: redis no longer declared →
+  orphan candidate (delete or keep Cache on its service page)`; a badge
+  on the service card and a warning panel on the service page with Keep /
+  Delete.
 - Events (history timeline): `service_auto_provisioned`,
-  `service_started`, `environment_changed`.
+  `service_started`, `environment_changed`, `service_orphaned`.
 - Failures fail the deployment — visible in the deployment page, not a
   background surprise.
 
@@ -124,9 +141,10 @@ declaring postgres):
 
 ## Out of scope (v2+)
 
-- Auto-delete/teardown of unused services (v1/v2 never deletes —
-  manifest-created services accumulate)
-- Database seeding/backups from the manifest
+- **Auto-delete** of unused services — teardown is surface-only by
+  design (flag + Keep/Delete, above). DeployMate never deletes infra on
+  its own.
+- Database seeding/backups from the manifest.
 
 ## Implementation notes (Aug 2026)
 
@@ -145,6 +163,14 @@ declaring postgres):
   `services.environment`, default production; `AppEnv` filters injected
   URLs by the app's environment. `POST /apps/{slug}/environment` flips
   an app; `environment_changed` event records it.
+- **Orphan surfacing** (migration 0010): `services.origin`
+  (`manual` | `manifest`, existing rows → `manual`) + `services.orphaned`.
+  `Provisioner.create` stamps origin `manifest`; `Ensure` calls
+  `reconcileOrphans`, which clears the flag on re-declared types and
+  raises it (once, reported as `ActionOrphaned`) on manifest-origin
+  services no longer declared. `POST /services/{slug}/keep`
+  (`AdoptService`) flips origin to `manual` and clears the flag; the
+  existing delete path removes it.
 - **Worker hook** (`internal/jobs/worker.go`): after clone and before
   the build. Rollback/resize deployments do not resolve the manifest
   (no checkout) — they reuse whatever services already exist via env

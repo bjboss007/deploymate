@@ -130,6 +130,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/services/{slug}/start", am.CheckCSRF(s.handleServiceStart))
 		r.Post("/services/{slug}/stop", am.CheckCSRF(s.handleServiceStop))
 		r.Post("/services/{slug}/restart", am.CheckCSRF(s.handleServiceRestart))
+		r.Post("/services/{slug}/keep", am.CheckCSRF(s.handleServiceKeep))
 		r.Post("/services/{slug}/delete", am.CheckCSRF(s.handleServiceDelete))
 	})
 

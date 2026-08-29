@@ -12,32 +12,36 @@ type GitInfo struct {
 	WebhookSecret string
 }
 
-templ statusDot(status string) {
-	if status == "running" {
+// statusDot renders a colored state dot followed by its text label. The label
+// is a parameter, not a children block: `@statusDot("running"){ status }`
+// makes templ read `status` as literal children text ("status"), so the badge
+// showed the word "status" instead of the value.
+templ statusDot(state, label string) {
+	if state == "running" {
 		<span class="status-dot status-running" aria-hidden="true"></span>
-	} else if status == "failed" {
+	} else if state == "failed" {
 		<span class="status-dot status-failed" aria-hidden="true"></span>
 	} else {
 		<span class="status-dot status-stopped" aria-hidden="true"></span>
 	}
-	{ children... }
+	{ label }
 }
 
 templ statusBadge(status string) {
 	if status == "running" {
-		<span class="badge badge-running">@statusDot("running"){ status }</span>
+		<span class="badge badge-running">@statusDot("running", status)</span>
 	} else if status == "failed" {
-		<span class="badge badge-failed">@statusDot("failed"){ status }</span>
+		<span class="badge badge-failed">@statusDot("failed", status)</span>
 	} else {
-		<span class="badge">@statusDot("stopped"){ status }</span>
+		<span class="badge">@statusDot("stopped", status)</span>
 	}
 }
 
 templ healthBadge(health string) {
 	if health == "unhealthy" {
-		<span class="badge badge-failed">@statusDot("failed"){ "unhealthy" }</span>
+		<span class="badge badge-failed">@statusDot("failed", "unhealthy")</span>
 	} else if health == "healthy" {
-		<span class="badge badge-running">@statusDot("running"){ "healthy" }</span>
+		<span class="badge badge-running">@statusDot("running", "healthy")</span>
 	}
 }
 
@@ -66,13 +70,21 @@ templ appCard(app store.App) {
 	</a>
 }
 
+// AppHeadActions is swapped in whole by the start/stop/restart HTMX calls,
+// so the status badge lives inside it: every action visibly flips the badge
+// and the button set. hx-disabled-elt greys out the clicked button while the
+// container work runs (a stop can take ~10s) — that in-flight state plus the
+// updated badge are the user's feedback, since the HTMX partial swap never
+// triggers a page-reload flash.
 templ AppHeadActions(vc ViewCtx, app store.App) {
 	<div class="head-actions" id="head-actions">
+		@statusBadge(app.Status)
 		<a class="btn btn-ghost" href={ "/apps/" + app.Slug + "/history" }>History</a>
 		if app.Status == "running" {
 			<form method="post" action={ "/apps/" + app.Slug + "/restart" }
 				hx-post={ "/apps/" + app.Slug + "/restart" }
-				hx-target="#head-actions" hx-swap="outerHTML">
+				hx-target="#head-actions" hx-swap="outerHTML"
+				hx-disabled-elt="find button">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 				<button class="btn btn-ghost" type="submit">Restart</button>
 			</form>
@@ -80,14 +92,16 @@ templ AppHeadActions(vc ViewCtx, app store.App) {
 		if app.Status == "running" {
 			<form method="post" action={ "/apps/" + app.Slug + "/stop" }
 				hx-post={ "/apps/" + app.Slug + "/stop" }
-				hx-target="#head-actions" hx-swap="outerHTML">
+				hx-target="#head-actions" hx-swap="outerHTML"
+				hx-disabled-elt="find button">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 				<button class="btn btn-ghost" type="submit">Stop</button>
 			</form>
 		} else {
 			<form method="post" action={ "/apps/" + app.Slug + "/start" }
 				hx-post={ "/apps/" + app.Slug + "/start" }
-				hx-target="#head-actions" hx-swap="outerHTML">
+				hx-target="#head-actions" hx-swap="outerHTML"
+				hx-disabled-elt="find button">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 				<button class="btn btn-ghost" type="submit">Start</button>
 			</form>

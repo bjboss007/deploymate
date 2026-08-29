@@ -135,6 +135,22 @@ func (s *Server) handleServiceStop(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/services/"+svc.Slug, http.StatusSeeOther)
 }
 
+// handleServiceKeep is the "Keep" side of orphan surfacing: a human claims an
+// orphaned, manifest-created service as their own. Origin flips to manual so
+// deploys stop flagging it, and the orphaned badge clears.
+func (s *Server) handleServiceKeep(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.serviceFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if err := s.store.AdoptService(svc.ID); err != nil {
+		slog.Error("services: adopt", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Kept. This service is now managed manually and won't be flagged by deploys."), http.StatusSeeOther)
+}
+
 func (s *Server) handleServiceDelete(w http.ResponseWriter, r *http.Request) {
 	svc, ok := s.serviceFromRequest(w, r)
 	if !ok {

@@ -228,11 +228,24 @@ select { cursor: pointer; }
   margin-bottom: 14px;
 }
 .panel-hint { font-size: 13px; margin-top: 12px; }
+.panel-warn { border-color: rgba(255, 92, 92, 0.3); }
+.panel-warn .panel-title { color: var(--red); }
 .deploy-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .deploy-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .deploy-form input[type="text"] { min-width: 220px; }
 .deploy-form .port-input { min-width: 0; width: 72px; }
-.head-actions { display: flex; gap: 10px; }
+.head-actions { display: flex; gap: 10px; align-items: center; }
+/* In-flight feedback for HTMX start/stop/restart: the clicked button is
+   disabled (hx-disabled-elt) and grows a spinner, so a slow container stop
+   reads as "working" rather than an unresponsive click. The head-actions row
+   swaps whole when done, flipping the status badge and button set. */
+.btn:disabled { opacity: 0.6; cursor: progress; }
+.head-actions form.htmx-request button::after {
+  content: ""; width: 12px; height: 12px;
+  border: 2px solid currentColor; border-right-color: transparent;
+  border-radius: 50%; animation: dm-spin 0.6s linear infinite;
+}
+@keyframes dm-spin { to { transform: rotate(360deg); } }
 
 /* ---- log panel ------------------------------------------------------- */
 .log-panel {
@@ -340,4 +353,5 @@ select { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .led { animation: none; }
   .project-card, .btn { transition: none; }
+  .head-actions form.htmx-request button::after { animation-duration: 1.4s; }
 }

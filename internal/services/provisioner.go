@@ -53,6 +53,9 @@ const (
 	ActionReused      = "reused"
 	ActionStarted     = "started"
 	ActionProvisioned = "provisioned"
+	// ActionOrphaned: a manifest-created service in the app's environment
+	// is no longer declared. It is flagged and surfaced — never deleted.
+	ActionOrphaned = "orphaned"
 )
 
 // Ensure resolves declared service declarations against the project's
@@ -63,7 +66,9 @@ const (
 // decision.
 func (p *Provisioner) Ensure(ctx context.Context, projectID, env string, decls []ServiceDecl) ([]Resolution, error) {
 	res := make([]Resolution, 0, len(decls))
+	declared := make(map[string]bool, len(decls))
 	for _, decl := range decls {
+		declared[decl.Type] = true
 		svc, err := p.findByType(projectID, env, decl.Type)
 		if errors.Is(err, store.ErrNotFound) {
 			created, err := p.create(ctx, projectID, env, decl)
@@ -85,7 +90,46 @@ func (p *Provisioner) Ensure(ctx context.Context, projectID, env string, decls [
 		}
 		res = append(res, Resolution{Type: decl.Type, Service: svc, Action: ActionStarted})
 	}
+
+	orphans, err := p.reconcileOrphans(projectID, env, declared)
+	if err != nil {
+		return res, err
+	}
+	res = append(res, orphans...)
 	return res, nil
+}
+
+// reconcileOrphans walks the project's manifest-created services in the given
+// environment: a declared type has its orphaned flag cleared (it was
+// re-declared), an undeclared one is flagged and reported as an orphan
+// candidate. Manual services are never touched — teardown is a human
+// decision, so this only surfaces, never deletes.
+func (p *Provisioner) reconcileOrphans(projectID, env string, declared map[string]bool) ([]Resolution, error) {
+	svcs, err := p.st.ListServices(projectID)
+	if err != nil {
+		return nil, err
+	}
+	var out []Resolution
+	for _, svc := range svcs {
+		if svc.Environment != env || svc.Origin != store.OriginManifest {
+			continue
+		}
+		switch {
+		case declared[svc.Type]:
+			if svc.Orphaned {
+				if err := p.st.SetServiceOrphaned(svc.ID, false); err != nil {
+					return out, err
+				}
+			}
+		case !svc.Orphaned:
+			if err := p.st.SetServiceOrphaned(svc.ID, true); err != nil {
+				return out, err
+			}
+			svc.Orphaned = true
+			out = append(out, Resolution{Type: svc.Type, Service: svc, Action: ActionOrphaned})
+		}
+	}
+	return out, nil
 }
 
 // findByType returns a running service of the given type in the given
@@ -133,7 +177,7 @@ func (p *Provisioner) create(ctx context.Context, projectID, env string, decl Se
 	svc, err := p.st.CreateService(store.Service{
 		ProjectID: projectID, Type: decl.Type, Name: name, Slug: slug,
 		Image: decl.Image(), Status: "stopped", VolumeName: VolumeName(slug), Port: tpl.Port,
-		Environment: env,
+		Environment: env, Origin: store.OriginManifest,
 	})
 	if errors.Is(err, store.ErrSlugTaken) {
 		return store.Service{}, fmt.Errorf(

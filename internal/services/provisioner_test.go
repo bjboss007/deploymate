@@ -256,6 +256,83 @@ func TestEnsureNeverTouchesUndeclaredServices(t *testing.T) {
 	}
 }
 
+// A manifest-created service the manifest stops declaring is flagged
+// orphaned and reported once — but never deleted, and re-declaring clears it.
+func TestEnsureFlagsAndClearsOrphan(t *testing.T) {
+	p, st, _ := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	// First deploy declares postgres + redis: both are manifest-created.
+	ensureOnce(t, p, proj.ID, "postgres", "redis")
+	redis, err := st.GetServiceBySlug("redis")
+	if err != nil {
+		t.Fatalf("get redis: %v", err)
+	}
+	if redis.Origin != store.OriginManifest {
+		t.Fatalf("redis origin = %q, want manifest", redis.Origin)
+	}
+
+	// Next deploy drops redis → orphan candidate, reported once, not deleted.
+	res := ensureOnce(t, p, proj.ID, "postgres")
+	var orphans []Resolution
+	for _, r := range res {
+		if r.Action == ActionOrphaned {
+			orphans = append(orphans, r)
+		}
+	}
+	if len(orphans) != 1 || orphans[0].Type != "redis" {
+		t.Fatalf("orphan resolutions = %+v, want one for redis", orphans)
+	}
+	redis, _ = st.GetServiceBySlug("redis")
+	if !redis.Orphaned {
+		t.Fatal("redis not flagged orphaned")
+	}
+	svcs, _ := st.ListServices(proj.ID)
+	if len(svcs) != 2 {
+		t.Fatalf("services = %d, want 2 (orphan is flagged, never deleted)", len(svcs))
+	}
+
+	// A redeploy that still omits redis does not re-report the known orphan.
+	res = ensureOnce(t, p, proj.ID, "postgres")
+	for _, r := range res {
+		if r.Action == ActionOrphaned {
+			t.Fatalf("known orphan re-reported: %+v", r)
+		}
+	}
+
+	// Re-declaring redis clears the flag.
+	ensureOnce(t, p, proj.ID, "postgres", "redis")
+	redis, _ = st.GetServiceBySlug("redis")
+	if redis.Orphaned {
+		t.Fatal("redis still orphaned after being re-declared")
+	}
+}
+
+// A manually-created service is never flagged when the manifest drops nothing
+// it owns — origin 'manual' is invisible to orphan reconciliation.
+func TestEnsureNeverFlagsManualService(t *testing.T) {
+	p, st, _ := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	if _, err := st.CreateService(store.Service{
+		ProjectID: proj.ID, Type: "redis", Name: "Cache", Slug: "cache",
+		Image: Redis.Image, Status: "stopped", VolumeName: VolumeName("cache"), Port: Redis.Port,
+	}); err != nil {
+		t.Fatalf("create manual redis: %v", err)
+	}
+
+	res := ensureOnce(t, p, proj.ID, "postgres")
+	for _, r := range res {
+		if r.Action == ActionOrphaned {
+			t.Fatalf("manual service flagged orphaned: %+v", r)
+		}
+	}
+	cache, _ := st.GetServiceBySlug("cache")
+	if cache.Orphaned {
+		t.Fatal("manual redis flagged orphaned, want untouched")
+	}
+}
+
 func TestEnsurePrefersRunningServiceOfType(t *testing.T) {
 	p, st, rt := newTestProvisioner(t)
 	proj := testProject(t, st)

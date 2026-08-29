@@ -9,6 +9,9 @@ templ serviceCard(sv store.Service) {
 		<div class="app-card-foot">
 			@statusBadge(sv.Status)
 			@envBadge(sv.Environment)
+			if sv.Orphaned {
+				<span class="badge badge-failed">orphaned</span>
+			}
 			<span class="mono app-image">:{ sv.Port }</span>
 		</div>
 	</a>
@@ -37,12 +40,26 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 						<button class="btn btn-primary" type="submit">Start</button>
 					</form>
 				}
+				if sv.Orphaned {
+					<form method="post" action={ "/services/" + sv.Slug + "/keep" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost" type="submit">Keep</button>
+					</form>
+				}
 				<form method="post" action={ "/services/" + sv.Slug + "/delete" } onsubmit="return confirm('Delete this service? Its data volume will be kept.')">
 					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 					<button class="btn btn-danger" type="submit">Delete</button>
 				</form>
 			</div>
 		</div>
+
+		if sv.Orphaned {
+			<div class="panel panel-warn">
+				<div class="panel-title">Orphaned — no longer in the manifest</div>
+				<p class="muted">A deploy created this { sv.Type } service from a deploymate.yml declaration, but the manifest no longer declares it for the { sv.Environment } environment. DeployMate never deletes infrastructure on its own — decide below.</p>
+				<p class="muted">Keep claims it as a manually-managed service (future deploys stop flagging it). Delete removes the container and row; its data volume is kept.</p>
+			</div>
+		}
 
 		<div class="panel">
 			<div class="panel-title">Details</div>
