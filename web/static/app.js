@@ -9,22 +9,51 @@ document.body.addEventListener("htmx:afterSwap", (e) => {
 });
 
 // --- live logs via EventSource -------------------------------------------
+// Batched + capped: a crash-looping container emits a firehose of boot
+// logs — appending one DOM node per line, unbounded, is what made pages
+// hang. Lines are buffered, flushed once per frame, and the panel keeps
+// at most MAX_LOG_LINES nodes.
+const MAX_LOG_LINES = 400;
+
 function attachLogStream(panel) {
   const src = panel.dataset.logSrc;
   if (!src) return;
 
   const es = new EventSource(src);
   let gotFirst = false;
+  let pending = [];
+  let flushScheduled = false;
 
-  const appendLine = (text) => {
+  const flush = () => {
+    flushScheduled = false;
+    if (pending.length === 0) return;
     if (!gotFirst) {
       panel.replaceChildren(); // clear the "connecting…" placeholder
       gotFirst = true;
     }
-    const div = document.createElement("div");
-    div.textContent = text; // textContent: build logs are data, not HTML
-    panel.appendChild(div);
+    const frag = document.createDocumentFragment();
+    for (const text of pending) {
+      const div = document.createElement("div");
+      div.textContent = text; // textContent: build logs are data, not HTML
+      frag.appendChild(div);
+    }
+    panel.appendChild(frag);
+    while (panel.children.length > MAX_LOG_LINES) {
+      panel.removeChild(panel.firstChild);
+    }
     panel.scrollTop = panel.scrollHeight;
+    pending = [];
+  };
+
+  const scheduleFlush = () => {
+    if (flushScheduled) return;
+    flushScheduled = true;
+    requestAnimationFrame(flush);
+  };
+
+  const appendLine = (text) => {
+    pending.push(text);
+    scheduleFlush();
   };
 
   es.addEventListener("log", (e) => appendLine(e.data));

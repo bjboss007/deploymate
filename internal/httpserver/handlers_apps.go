@@ -3,6 +3,7 @@ package httpserver
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -140,7 +141,21 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 		}
 		uptime[dm.ID] = dots
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, previewURL(r, app)))
+	// Unhealthy badge must say why: the monitor knows the probe fails; the
+	// container state tells the story (crash loop count).
+	healthReason := ""
+	if app.Health == "unhealthy" {
+		if info, err := s.rt.Inspect(r.Context(), dmContainerName(app.Slug)); err == nil {
+			if info.Running {
+				healthReason = fmt.Sprintf("container is crash-looping — %d restarts, see the log panel below for the error", info.Restarts)
+			} else {
+				healthReason = "container is not running — start it or check the log panel"
+			}
+		} else {
+			healthReason = "container missing — redeploy the app"
+		}
+	}
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, previewURL(r, app), healthReason))
 }
 
 // mustDecrypt decrypts or returns "" (best-effort display helper).

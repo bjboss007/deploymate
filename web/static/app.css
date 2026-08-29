@@ -90,6 +90,8 @@ button, input { font: inherit; color: inherit; }
 .topbar-right { display: flex; align-items: center; gap: 14px; }
 .topbar-link { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
 .topbar-link:hover { color: var(--accent); }
+.topbar-icon { display: block; }
+.topbar-icon:hover { color: var(--accent); }
 .user-chip { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
 
 /* ---- layout ---------------------------------------------------------- */
@@ -279,6 +281,7 @@ select { cursor: pointer; }
 }
 .alert-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
 .page-head .badge { margin-top: 8px; margin-right: 8px; }
+.health-reason { color: var(--red); font-size: 13px; }
 
 /* ---- deployments table ----------------------------------------------- */
 .deploy-table { width: 100%; border-collapse: collapse; font-size: 14px; }

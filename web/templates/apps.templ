@@ -79,12 +79,15 @@ templ AppHeadActions(vc ViewCtx, app store.App) {
 	</div>
 }
 
-templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string) {
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ app.Name }</h1>
 				@healthBadge(app.Health)
+				if healthReason != "" {
+					<p class="muted health-reason">{ healthReason }</p>
+				}
 			</div>
 			@AppHeadActions(vc, app)
 		</div>
