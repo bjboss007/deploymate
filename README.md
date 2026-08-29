@@ -77,6 +77,12 @@ Then: point an A record at the server, attach a domain to an app, set
 certificates, and open `https://your-domain`. Webhooks live at
 `/hooks/{id}` on the same domain.
 
+**Turning an old laptop into that server?** Full guide in
+[docs/knowledge/server-setup.md](docs/knowledge/server-setup.md) — Ubuntu
+install, lid/suspend power config (`deploy/laptop-server.sh`), home
+network options (port-forward vs Cloudflare tunnel), and migrating data
+off a dev machine.
+
 ## Configuration
 
 | Env var | Default | Purpose |
