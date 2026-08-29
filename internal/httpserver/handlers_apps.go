@@ -166,7 +166,7 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, previewURL(r, app), healthReason, commitURLs))
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs))
 }
 
 // mustDecrypt decrypts or returns "" (best-effort display helper).

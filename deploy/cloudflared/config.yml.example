@@ -1,0 +1,14 @@
+# Named Cloudflare tunnel configuration for DeployMate.
+# Copy to ~/.cloudflared/config.yml and fill in the tunnel id.
+# See docs/specs/cloudflare-tunnel.md for the full setup.
+tunnel: <tunnel-id>
+credentials-file: ~/.cloudflared/<tunnel-id>.json
+
+ingress:
+  # Dashboard + webhooks + preview proxy — one origin.
+  - hostname: dm.example.com
+    service: http://127.0.0.1:8090
+  # Apps: DeployMate routes by Host header ({slug}.dm.example.com).
+  - hostname: "*.dm.example.com"
+    service: http://127.0.0.1:8090
+  - service: http_status:404

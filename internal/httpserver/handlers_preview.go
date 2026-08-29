@@ -8,20 +8,25 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
-// handlePreview reverse-proxies /preview/{slug}/* to the app's container on
-// the private network — an access URL before any real domain is attached.
-// The Go reverse proxy forwards WebSocket upgrades natively.
-func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
-	app, ok := s.appFromRequest(w, r)
-	if !ok {
+// previewForSlug reverse-proxies to the app's loopback port. Shared by the
+// dashboard's /preview/{slug} (session-protected) and the public
+// {slug}.{previewHost} subdomain route.
+func (s *Server) previewForSlug(w http.ResponseWriter, r *http.Request, slug string) {
+	app, err := s.store.GetAppBySlug(slug)
+	if err != nil {
+		http.Error(w, "no app with that name", http.StatusNotFound)
 		return
 	}
+	s.proxyToApp(w, r, app)
+}
+
+// proxyToApp reverse-proxies one request to an app's loopback port. The
+// Go reverse proxy forwards WebSocket upgrades natively.
+func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.App) {
 	if app.Status != "running" {
 		http.Error(w, "app is not running — deploy or start it first", http.StatusServiceUnavailable)
 		return
@@ -45,8 +50,13 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
 		// The app must see the path as it was requested, minus our
-		// /preview/{slug} prefix.
-		req.URL.Path = "/" + chi.URLParam(req, "*")
+		// /preview/{slug} prefix (subdomain routes have no prefix).
+		if strings.HasPrefix(req.URL.Path, "/preview/"+app.Slug) {
+			req.URL.Path = strings.TrimPrefix(req.URL.Path, "/preview/"+app.Slug)
+			if req.URL.Path == "" {
+				req.URL.Path = "/"
+			}
+		}
 		req.Host = target.Host
 	}
 	proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
@@ -66,9 +76,21 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	proxy.ServeHTTP(w, r)
 }
 
-// previewURL builds the absolute preview URL for the current request host,
-// so it stays correct behind Traefik on the server and on localhost in dev.
-func previewURL(r *http.Request, app store.App) string {
+// handlePreview reverse-proxies /preview/{slug}/* (session-protected).
+func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	s.proxyToApp(w, r, app)
+}
+
+// previewURL builds the absolute preview URL: a public subdomain when
+// PreviewHost is configured, otherwise the dashboard's /preview path.
+func (s *Server) previewURL(r *http.Request, app store.App) string {
+	if s.previewHost != "" {
+		return "https://" + app.Slug + "." + s.previewHost
+	}
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"

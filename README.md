@@ -97,6 +97,8 @@ off a dev machine.
 | `DEPLOYMATE_DATA_DIR` | `./data` | SQLite, keys, builds, repos |
 | `DEPLOYMATE_SETUP_EMAIL` / `_PASSWORD` | — | create the owner user at startup |
 | `DEPLOYMATE_LE_MODE` | `staging` | `production` for real Let's Encrypt certs |
+| `DEPLOYMATE_RAILPACK` | `railpack` | path to the railpack CLI |
+| `DEPLOYMATE_PREVIEW_HOST` | — | e.g. `dm.example.com`: every app gets a public `{slug}.{host}` subdomain routed by Host header (see docs/specs/cloudflare-tunnel.md) |
 
 ## Architecture notes
 

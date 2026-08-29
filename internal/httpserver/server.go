@@ -17,22 +17,24 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/webhooks"
 	"github.com/habibmuhammad/deploymate/web"
+	"strings"
 )
 
 // Server holds handler dependencies.
 type Server struct {
-	store      *store.Store
-	rt         runtime.Runtime
-	events     *sse.Broker
-	encKey     [32]byte
-	deliveries *webhooks.DeliveryCache
-	leMode     string
+	store       *store.Store
+	rt          runtime.Runtime
+	events      *sse.Broker
+	encKey      [32]byte
+	deliveries  *webhooks.DeliveryCache
+	leMode      string
+	previewHost string
 }
 
 // New builds a Server.
-func New(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, leMode string) *Server {
+func New(st *store.Store, rt runtime.Runtime, events *sse.Broker, encKey [32]byte, leMode, previewHost string) *Server {
 	return &Server{
-		store: st, rt: rt, events: events, encKey: encKey, leMode: leMode,
+		store: st, rt: rt, events: events, encKey: encKey, leMode: leMode, previewHost: previewHost,
 		deliveries: webhooks.NewDeliveryCache(),
 	}
 }
@@ -44,6 +46,21 @@ func (s *Server) Handler() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.Recoverer)
 	r.Use(requestLog)
+	// Public app subdomains: {slug}.{previewHost} routes straight to the
+	// app, no session (that's the point of a public preview URL). The
+	// reverse proxy must preserve the Host header (cloudflared does).
+	if s.previewHost != "" {
+		r.Use(func(next http.Handler) http.Handler {
+			return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+				sub, ok := strings.CutSuffix(req.Host, "."+s.previewHost)
+				if ok && sub != "" && !strings.Contains(sub, ".") {
+					s.previewForSlug(w, req, sub)
+					return
+				}
+				next.ServeHTTP(w, req)
+			})
+		})
+	}
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)

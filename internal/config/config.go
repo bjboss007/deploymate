@@ -28,6 +28,10 @@ type Config struct {
 	// Defaults to "railpack" (resolved via PATH); set it explicitly in dev
 	// where go/bin etc. is not on the server's PATH.
 	RailpackPath string
+	// PreviewHost, when set (e.g. "dm.example.com"), gives every app a
+	// public subdomain: {slug}.{PreviewHost} routes straight to the app
+	// through the Host header (the reverse proxy must forward it).
+	PreviewHost string
 }
 
 // Load reads configuration from the environment, applying defaults suitable
@@ -40,6 +44,7 @@ func Load() (*Config, error) {
 		SetupPassword: os.Getenv("DEPLOYMATE_SETUP_PASSWORD"),
 		LEMode:        getenv("DEPLOYMATE_LE_MODE", "staging"),
 		RailpackPath:  getenv("DEPLOYMATE_RAILPACK", "railpack"),
+		PreviewHost:   getenv("DEPLOYMATE_PREVIEW_HOST", ""),
 	}
 	cfg.KeyPath = filepath.Join(cfg.DataDir, "keys", "root.key")
 
