@@ -23,11 +23,24 @@ change.
   badges on cards + app pages, `app_unhealthy`/`app_recovered` alerts
   (Aug 2026). The VGG crash-loop incident is now a notification instead
   of a silent "running".
-- [ ] **Preview hostnames** — the server-side sibling of preview URLs:
-  `{slug}.{server-ip}.nip.io`-style auto-subdomains via Traefik with
-  staging TLS, so previews work without a real domain AND without the
-  dashboard in the URL path. Requires Traefik, so server-only (see
-  `deploy/traefik/`).
+- [x] **Event history & insights** — done: append-only events table
+  (health transitions, resource updates/resizes, start/stops, env and
+  runtime changes) + per-app History page with derived stats — deploys,
+  success rate, avg build time, uptime %, MTTR, incidents (Aug 2026).
+- [x] **One-click Restart** — done: apps (hx swap) and services
+  (stop→start→readiness in one POST), events recorded (Aug 2026).
+- [x] **Stable Cloudflare tunnel** — done: named tunnel on
+  getmerchanttech.com with `DEPLOYMATE_PREVIEW_HOST` hostname routing
+  and per-app DNS records; webhook now on a stable URL
+  (spec: docs/specs/cloudflare-tunnel.md, Aug 2026).
+- [ ] **Preview hostnames go live** — routing, DNS records, and the
+  dashboard UI are all in place; the remaining piece is Cloudflare's
+  free-plan edge certs for the per-app hostnames (provisioning on first
+  use, can take up to a day) and **auto-DNS**: new apps should get their
+  CNAME automatically via the Cloudflare API instead of a manual
+  `cloudflared tunnel route dns` per app. Also worth deciding: preview
+  subdomains are public by design — a per-app private toggle + Cloudflare
+  Access is the lock-down path.
 - [ ] **Deployment command/timeout** — manual deploys run in the HTTP
   handler with no timeout; a hung pull blocks the request. Move manual
   deploys onto the worker queue (they already create deployment rows).
@@ -75,9 +88,12 @@ change.
   + per-deployment routing labels.
 - [ ] **Automatic deploy on git connect** — after linking a repo, offer
   "deploy now" in the same flow (today it's two clicks).
-- [ ] **Notifications** — deploy success/failure to a webhook (Slack,
-  Telegram, email). Natural fit: the worker already publishes events to
-  the broker.
+- [x] **Notifications** — done via the alerts system: webhook channel
+  with per-event subscriptions (Slack-compatible). Email/Telegram remain
+  as additive channels (the `channel` column is the seam, Aug 2026).
+- [ ] **Webhook secret rotation UI** — regenerating a webhook secret
+  required a DB hack this session (the newline bug made it worse). A
+  "rotate secret" button on the Git panel is the proper fix.
 - [ ] **Prometheus `/metrics` endpoint** — additive to the SQLite
   sampling; enables Grafana if it's ever wanted.
 - [ ] **Key rotation** — `v1:` envelope versioning exists precisely for
