@@ -34,6 +34,11 @@ func shortDeployID(id string) string {
 	return id
 }
 
+// fmtCPU renders a float CPU core count compactly (1.5 → "1.5").
+func fmtCPU(v float64) string {
+	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
 // runtimeKey splits "node:22" → "node".
 func runtimeKey(spec string) string {
 	if i := strings.Index(spec, ":"); i >= 0 {

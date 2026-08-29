@@ -102,7 +102,10 @@ change.
 
 ## Ideas (unscoped)
 
-- Resource limits per app (CPU/memory) in the UI
+- [x] **Resource limits per app** — done, automatically: limits are
+  derived from each app's own P90 usage (24 h, 2× headroom, clamped) and
+  applied as docker limits at the next deploy; port maps to the `PORT`
+  env with an 8080 default (ADR 0015, Aug 2026).
 - Container runbook: view env/effective config of a running app
 - Import/export: migrate apps between DeployMate instances
 - Blue/green or canary deploys (weighted Traefik routers)

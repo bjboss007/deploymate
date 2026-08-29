@@ -28,9 +28,11 @@ type Spec struct {
 	Env      []string          // KEY=VALUE pairs
 	Labels   map[string]string // docker labels (Traefik routing, ownership)
 	Network  string            // docker network to attach
-	Binds    []string          // volume mounts, e.g. "vol-name:/data"
-	Port     int               // the container's listening port (0 = none)
-	HostPort int               // loopback-published host port for Port (0 = no publish)
+	Binds      []string          // volume mounts, e.g. "vol-name:/data"
+	Port       int               // the container's listening port (0 = none)
+	HostPort   int               // loopback-published host port for Port (0 = no publish)
+	MemLimitMB int64             // memory limit in MB (0 = unlimited)
+	CPULimit   float64           // cpu limit in cores (0 = unlimited)
 }
 
 // PreviewPort derives a stable loopback port for an app's preview URL.

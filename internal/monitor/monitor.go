@@ -84,6 +84,7 @@ func (m *Monitor) Run(ctx context.Context) {
 	m.probeAll(ctx)
 	m.probeApps(ctx)
 	m.checkDisk(ctx)
+	m.detectResources(ctx)
 
 	for {
 		select {
@@ -98,6 +99,7 @@ func (m *Monitor) Run(ctx context.Context) {
 			m.checkDisk(ctx)
 		case <-pruneT.C:
 			m.prune()
+			m.detectResources(ctx)
 		}
 	}
 }
@@ -254,6 +256,60 @@ func (m *Monitor) checkRestarts(ctx context.Context, app store.App) {
 		}
 	}
 	m.restartSeen[app.ID] = restarts
+}
+
+// detectResources derives per-app resource limits from observed usage:
+// P90 memory and CPU over the last 24h, doubled for headroom, floored and
+// capped to sane bounds. Limits apply at the NEXT deploy (docker requires
+// a recreate to change them) — detection is continuous, application is
+// per-deploy.
+func (m *Monitor) detectResources(ctx context.Context) {
+	apps, err := m.store.ListAllApps()
+	if err != nil {
+		slog.Error("monitor: list apps for resources", "err", err)
+		return
+	}
+	since := time.Now().UTC().Add(-24 * time.Hour)
+	for _, app := range apps {
+		memP90, cpuP90, samples, err := m.store.P90Metrics(app.ID, since)
+		if err != nil {
+			slog.Error("monitor: p90 metrics", "app", app.Slug, "err", err)
+			continue
+		}
+		if samples < 10 {
+			continue // not enough history yet
+		}
+		memLimitMB := clamp64(int64(memP90)*2/(1<<20), 64, 4096)
+		cpuLimit := clampF(cpuP90*2/100, 0.5, 4.0)
+		if memLimitMB != int64(app.MemLimitMB) || cpuLimit != app.CPULimit {
+			if err := m.store.UpdateAppResources(app.ID, int(memLimitMB), cpuLimit); err != nil {
+				slog.Error("monitor: update resources", "app", app.Slug, "err", err)
+				continue
+			}
+			slog.Info("monitor: detected resources",
+				"app", app.Slug, "mem_mb", memLimitMB, "cpu", cpuLimit, "samples", samples)
+		}
+	}
+}
+
+func clamp64(v, lo, hi int64) int64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+func clampF(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }
 
 // checkDisk alerts once per day when docker's growable storage (images +

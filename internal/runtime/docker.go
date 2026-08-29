@@ -137,6 +137,13 @@ func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 			nat.Port(fmt.Sprintf("%d/tcp", spec.Port)): {{HostIP: "127.0.0.1", HostPort: fmt.Sprintf("%d", spec.HostPort)}},
 		}
 	}
+	if spec.MemLimitMB > 0 {
+		hostCfg.Memory = spec.MemLimitMB << 20
+		hostCfg.MemorySwap = hostCfg.Memory * 2 // swap doubles the limit; OOM kills otherwise-fast
+	}
+	if spec.CPULimit > 0 {
+		hostCfg.NanoCPUs = int64(spec.CPULimit * 1e9)
+	}
 	// ExposedPorts must include the published port: Docker Desktop's image
 	// store only materializes PortBindings for ports present here (the CLI
 	// always adds them from -p, masking the requirement).

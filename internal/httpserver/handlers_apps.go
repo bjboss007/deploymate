@@ -60,7 +60,7 @@ func (s *Server) handleAppCreate(w http.ResponseWriter, r *http.Request) {
 	}
 	app, err := s.store.CreateApp(store.App{
 		ProjectID: project.ID, Name: name, Slug: slug,
-		Status: "stopped", BuildType: "dockerfile",
+		Status: "stopped", BuildType: "dockerfile", Port: 8080,
 	})
 	if errors.Is(err, store.ErrSlugTaken) {
 		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("That name is already taken."), http.StatusSeeOther)
@@ -250,10 +250,13 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		fail(err)
 		return
 	}
+	// PORT env + limits, same conventions as the worker's runContainer.
+	env := s.AppEnv(app)
+	env = append(env, fmt.Sprintf("PORT=%d", effectivePort(port)))
 	spec := runtime.Spec{
 		Name:    name,
 		Image:   image,
-		Env:     s.AppEnv(app),
+		Env:     env,
 		Labels:  dmLabels(app.Slug),
 		Network: NetworkName,
 	}
@@ -261,6 +264,12 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		spec.Labels["deploymate.port"] = strconv.Itoa(port)
 		spec.Port = port
 		spec.HostPort = runtime.PreviewPort(app.Slug)
+	}
+	if app.MemLimitMB > 0 {
+		spec.MemLimitMB = int64(app.MemLimitMB)
+	}
+	if app.CPULimit > 0 {
+		spec.CPULimit = app.CPULimit
 	}
 	for k, v := range s.domainLabels(app) {
 		spec.Labels[k] = v
@@ -514,3 +523,13 @@ func (s *Server) appFromRequest(w http.ResponseWriter, r *http.Request) (store.A
 }
 
 func flashURL(msg string) string { return url.QueryEscape(msg) }
+
+// effectivePort is the platform port convention: apps read $PORT at
+// runtime, and when none is set the default is 8080 (Spring Boot/Heroku
+// convention).
+func effectivePort(port int) int {
+	if port <= 0 {
+		return 8080
+	}
+	return port
+}

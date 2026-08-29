@@ -317,7 +317,14 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					<canvas id="mem-chart" height="90"></canvas>
 				</div>
 			</div>
-			<p class="muted panel-hint">Sampled every 5 seconds from the running container. Uptime dots show the last 30 probes (15 minutes).</p>
+			<p class="muted panel-hint">
+				Sampled every 5 seconds from the running container. Uptime dots show the last 30 probes (15 minutes).
+				if app.MemLimitMB > 0 {
+					<br/>Resource limits: <span class="mono">{ app.MemLimitMB } MB · { fmtCPU(app.CPULimit) } CPU</span> — auto-detected from usage, applied on the next deploy.
+				} else {
+					<br/>Resource limits: not yet detected — they are derived from 24h of usage and applied on the next deploy.
+				}
+			</p>
 		</div>
 
 		<div class="panel">

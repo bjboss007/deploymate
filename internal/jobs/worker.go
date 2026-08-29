@@ -204,6 +204,15 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		return fmt.Errorf("remove old container: %w", err)
 	}
 	env := w.buildEnv(app)
+	port := app.Port
+	if port == 0 {
+		port = 8080 // platform convention; railpack apps read $PORT
+		_ = w.store.UpdateAppPort(app.ID, port)
+	}
+	// The platform's routing port maps to the app's $PORT env — railpack
+	// start commands (java -Dserver.port=$PORT, node server.js, …) all
+	// honor it.
+	env = append(env, fmt.Sprintf("PORT=%d", port))
 	for k, v := range extraEnv {
 		env = append(env, k+"="+v)
 	}
@@ -212,8 +221,8 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		"deploymate.app":     app.Slug,
 		"deploymate.deploy":  d.ID,
 	}
-	if app.Port > 0 {
-		labels["deploymate.port"] = fmt.Sprintf("%d", app.Port)
+	if port > 0 {
+		labels["deploymate.port"] = fmt.Sprintf("%d", port)
 	}
 	// Traefik routing labels for the app's domains.
 	if domains, err := w.store.ListDomains(app.ID); err == nil {
@@ -232,9 +241,15 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		Labels:  labels,
 		Network: w.network,
 	}
-	if app.Port > 0 {
-		spec.Port = app.Port
+	if port > 0 {
+		spec.Port = port
 		spec.HostPort = runtime.PreviewPort(app.Slug)
+	}
+	if app.MemLimitMB > 0 {
+		spec.MemLimitMB = int64(app.MemLimitMB)
+	}
+	if app.CPULimit > 0 {
+		spec.CPULimit = app.CPULimit
 	}
 	w.publish("deploy:"+app.Slug, "deploy", "starting container "+name)
 	if _, err := w.rt.Create(ctx, spec); err != nil {
