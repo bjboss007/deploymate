@@ -7,6 +7,37 @@
 
 ## Where we stopped
 
+**2026-08-30 (dev-environment round)** — **Added `dev` as a third app
+environment** alongside staging/production, and made it the **default for
+newly-created apps** (was production). Dev behaves exactly like staging:
+its own env-prefixed services (`dev-postgres`, name "Dev PostgreSQL",
+volume `dm-svc-dev-postgres-data`), its own `deploymate.dev.yml` overlay,
+full isolation. Changes: `EnvDev` constant (`store/store.go`); default
+flip in `store.CreateApp` (`store/apps.go`); validation gate + message in
+`handlers_environment.go`; the provisioner's hardcoded "Staging "
+service-label generalized to a capitalized env name
+(`services/provisioner.go`) so any non-prod env names itself; UI selector
++ new blue `.badge-dev` tint (`web/templates/apps.templ`,
+`web/static/app.css`, `make gen` run). No migration needed — the
+`environment` column has no CHECK constraint (0009 default stays
+`production`, a fallback the store overrides). New tests: dev cases in
+provisioner/manifest/handler env-filter tests + a new
+`handlers_environment_test.go` (accepts dev, rejects unknown). `go build`,
+full `go test ./...`, and `make gen` all green. Docs updated (ADR 0017
+addendum, infra-manifest.md). **E2e-verified** on a throwaway server
+(:18099, scratch data dir, local bare repo of `manifest-app` with a
+`deploymate.dev.yml` overlay): a new app defaulted to `dev` (UI
+`badge-dev` + selector, DB `web|dev`); the git deploy logged
+`manifest (dev): postgres` and auto-provisioned **Dev PostgreSQL /
+`dev-postgres`** (origin manifest, volume `dm-svc-dev-postgres-data`,
+image `postgres:16-alpine` from the overlay replacing the base's
+unpinned postgres); after selecting the Node runtime the app built +
+ran with `DATABASE_URL=…@dm-svc-dev-postgres:5432/app` injected; a second
+deploy logged `manifest: reusing existing postgres service` (idempotent —
+one service, no duplicate). Throwaway server + containers + volume +
+build images all cleaned up; the user's :8090 server and apps untouched.
+**NOT committed.**
+
 **2026-08-30 (auto-DNS round)** — **Auto-DNS shipped and live-verified**.
 New `internal/dns` package: `Creator` interface + Cloudflare API client
 (`POST /zones/{id}/dns_records`, proxied CNAME to

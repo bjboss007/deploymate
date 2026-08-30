@@ -1,6 +1,6 @@
-# 0017 — Environment scoping: staging/production labels on apps and services
+# 0017 — Environment scoping: dev/staging/production labels on apps and services
 
-- **Date:** 2026-08-29
+- **Date:** 2026-08-29 (dev environment added 2026-08-30)
 - **Status:** accepted
 
 ## Context
@@ -23,18 +23,32 @@ environment to select *which services and manifest apply*.
   **replaces** the base's entirely when present (docker-compose list
   semantics; an empty overlay means no declared services).
 - **Per-env services**: resolution (`Ensure`) and URL injection
-  (`AppEnv`) filter by environment. Auto-provisioned staging services get
-  the env-prefixed slug `staging-{type}` (global slug uniqueness makes
-  collisions impossible with production's `{type}`), name
-  `Staging {Label}`, and their own volume
-  (`dm-svc-staging-postgres-data`).
+  (`AppEnv`) filter by environment. Auto-provisioned non-production
+  services get the env-prefixed slug `{env}-{type}` (global slug
+  uniqueness makes collisions impossible with production's `{type}`),
+  name `{Env} {Label}` (e.g. `Dev PostgreSQL`, `Staging PostgreSQL`),
+  and their own volume (`dm-svc-dev-postgres-data`).
 - **Image pins with latest default**: manifest entries are `type` or
   `type:tag`; no tag means `{type}:latest`. The service row's `image`
   column (previously write-only metadata) is now what `Provision` runs.
 - Manual services default to production (the create form has no env
-  selector); the manifest is the way to obtain staging services.
+  selector); the manifest is the way to obtain dev/staging services.
 - Existing rows migrate to production — zero behavior change for
   existing deployments.
+
+### Addendum (2026-08-30): the `dev` environment
+
+A third label, `dev`, was added alongside staging and production, and it
+is now the **default environment for newly-created apps** (`store.EnvDev`
+in `store.CreateApp`). It behaves exactly like staging — its own
+env-prefixed services (`dev-postgres`, name `Dev PostgreSQL`, volume
+`dm-svc-dev-postgres-data`), its own `deploymate.dev.yml` overlay, and
+full isolation from the other environments. The service-naming label was
+generalized from the hardcoded `Staging ` prefix to a capitalized env
+name (`strings.ToUpper(env[:1]) + env[1:]`) so any non-production
+environment names itself. Migration `0009`'s column
+default stays `'production'` (only a fallback the store overrides); no new
+migration was needed since the column carries no CHECK constraint.
 
 ## Consequences
 

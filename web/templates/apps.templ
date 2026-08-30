@@ -45,10 +45,13 @@ templ healthBadge(health string) {
 	}
 }
 
-// envBadge marks the environment an app or service belongs to. Staging
-// gets an accent tint; production stays plain to keep noise low.
+// envBadge marks the environment an app or service belongs to. Dev and
+// staging each get their own tint; production stays plain to keep noise
+// low.
 templ envBadge(env string) {
-	if env == "staging" {
+	if env == "dev" {
+		<span class="badge badge-dev">{ env }</span>
+	} else if env == "staging" {
 		<span class="badge badge-accent">{ env }</span>
 	} else {
 		<span class="badge">{ env }</span>
@@ -238,13 +241,14 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 				<label>Environment
 					<select name="environment">
-						<option value="production" selected?={ app.Environment != "staging" }>production</option>
+						<option value="dev" selected?={ app.Environment == "dev" }>dev</option>
 						<option value="staging" selected?={ app.Environment == "staging" }>staging</option>
+						<option value="production" selected?={ app.Environment == "production" }>production</option>
 					</select>
 				</label>
 				<button class="btn btn-primary" type="submit">Save environment</button>
 			</form>
-			<p class="muted panel-hint">Which environment this app runs in. Each environment resolves its own services (staging apps get staging-postgres, production apps get postgres) and can use a { "deploymate.{env}.yml" } overlay in the repo. One container per app — switching is instant, the next deploy applies it.</p>
+			<p class="muted panel-hint">Which environment this app runs in (new apps start in dev). Each environment resolves its own services (dev apps get dev-postgres, staging apps get staging-postgres, production apps get postgres) and can use a { "deploymate.{env}.yml" } overlay in the repo. One container per app — switching is instant, the next deploy applies it.</p>
 		</div>
 
 		<div class="panel">

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/crypto"
@@ -162,9 +163,10 @@ func (p *Provisioner) findByType(projectID, env, typ string) (store.Service, err
 
 // create provisions a brand-new service of the given declaration:
 // metadata row, then the usual provision path. Production services keep
-// the plain type name; staging services get an environment-prefixed slug
-// ("staging-postgres") so they never collide with production (slugs are
-// globally unique).
+// the plain type name; every other environment gets an environment-
+// prefixed name and slug ("Dev PostgreSQL"/"dev-postgres", "Staging
+// PostgreSQL"/"staging-postgres") so they never collide across
+// environments (slugs are globally unique).
 func (p *Provisioner) create(ctx context.Context, projectID, env string, decl ServiceDecl) (store.Service, error) {
 	tpl, ok := ForType(decl.Type)
 	if !ok {
@@ -172,7 +174,8 @@ func (p *Provisioner) create(ctx context.Context, projectID, env string, decl Se
 	}
 	name, slug := decl.Type, decl.Type
 	if env != store.EnvProduction {
-		name, slug = "Staging "+tpl.Label, env+"-"+decl.Type
+		name = strings.ToUpper(env[:1]) + env[1:] + " " + tpl.Label
+		slug = env + "-" + decl.Type
 	}
 	svc, err := p.st.CreateService(store.Service{
 		ProjectID: projectID, Type: decl.Type, Name: name, Slug: slug,

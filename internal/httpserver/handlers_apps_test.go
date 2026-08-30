@@ -47,8 +47,8 @@ func (f *fakeRuntime) StorageUsed(context.Context) (uint64, error)            { 
 func (f *fakeRuntime) Close() error                                           { return nil }
 
 // TestAppEnvFiltersByEnvironment proves URL injection is environment-scoped:
-// a production app sees only production services and a staging app only
-// staging ones.
+// a production app sees only production services, a staging app only staging
+// ones, and a dev app only dev ones.
 func TestAppEnvFiltersByEnvironment(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "dm.db"))
 	if err != nil {
@@ -73,6 +73,10 @@ func TestAppEnvFiltersByEnvironment(t *testing.T) {
 	stagingApp, err := st.CreateApp(store.App{ProjectID: proj.ID, Name: "Web", Slug: "web-staging", Environment: store.EnvStaging})
 	if err != nil {
 		t.Fatalf("create staging app: %v", err)
+	}
+	devApp, err := st.CreateApp(store.App{ProjectID: proj.ID, Name: "Web", Slug: "web-dev", Environment: store.EnvDev})
+	if err != nil {
+		t.Fatalf("create dev app: %v", err)
 	}
 
 	mkService := func(slug, env string) {
@@ -99,6 +103,7 @@ func TestAppEnvFiltersByEnvironment(t *testing.T) {
 	}
 	mkService("postgres", store.EnvProduction)
 	mkService("staging-postgres", store.EnvStaging)
+	mkService("dev-postgres", store.EnvDev)
 
 	prodEnv := strings.Join(s.AppEnv(prodApp), "\n")
 	if !strings.Contains(prodEnv, "DATABASE_URL=postgres://dm:pw@dm-svc-postgres:5432/app") {
@@ -114,6 +119,14 @@ func TestAppEnvFiltersByEnvironment(t *testing.T) {
 	}
 	if strings.Contains(stagingEnv, "dm-svc-postgres:5432") {
 		t.Fatalf("staging app env leaked a production URL:\n%s", stagingEnv)
+	}
+
+	devEnv := strings.Join(s.AppEnv(devApp), "\n")
+	if !strings.Contains(devEnv, "DATABASE_URL=postgres://dm:pw@dm-svc-dev-postgres:5432/app") {
+		t.Fatalf("dev app env missing dev URL:\n%s", devEnv)
+	}
+	if strings.Contains(devEnv, "dm-svc-postgres:5432") || strings.Contains(devEnv, "dm-svc-staging-postgres") {
+		t.Fatalf("dev app env leaked another environment's URL:\n%s", devEnv)
 	}
 }
 

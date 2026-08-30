@@ -430,6 +430,26 @@ func TestEnsureCreatesStagingService(t *testing.T) {
 	}
 }
 
+func TestEnsureCreatesDevService(t *testing.T) {
+	p, st, rt := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	res, err := p.Ensure(context.Background(), proj.ID, store.EnvDev, []ServiceDecl{{Type: "postgres"}})
+	if err != nil {
+		t.Fatalf("Ensure(dev) error = %v", err)
+	}
+	if len(res) != 1 || res[0].Action != ActionProvisioned {
+		t.Fatalf("resolutions = %+v, want one provisioned", res)
+	}
+	svc := res[0].Service
+	if svc.Name != "Dev PostgreSQL" || svc.Slug != "dev-postgres" || svc.Environment != store.EnvDev {
+		t.Fatalf("dev service = %+v, want name %q slug %q env %q", svc, "Dev PostgreSQL", "dev-postgres", store.EnvDev)
+	}
+	if len(rt.created) != 1 || rt.created[0].Name != "dm-svc-dev-postgres" {
+		t.Fatalf("created specs = %+v, want one dm-svc-dev-postgres", rt.created)
+	}
+}
+
 func TestEnsureSeparatesEnvironments(t *testing.T) {
 	p, st, rt := newTestProvisioner(t)
 	proj := testProject(t, st)

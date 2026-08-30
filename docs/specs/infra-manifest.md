@@ -41,8 +41,9 @@ services:
 
 ### Environment-specific manifests
 
-An app has an `environment` (production | staging, set on the app page).
-Besides the base file, the repo may carry an overlay per environment:
+An app has an `environment` (dev | staging | production, set on the app
+page; new apps default to **dev**). Besides the base file, the repo may
+carry an overlay per environment:
 
 ```yaml
 # deploymate.staging.yml — REPLACES the base services list for staging
@@ -66,9 +67,11 @@ services:
    - Found and running → reuse (URLs inject as usual).
    - Found but stopped → start it (full readiness wait).
    - Not found → **create + provision automatically**: production gets
-     name/slug `postgres`; staging gets name `Staging PostgreSQL`, slug
-     `staging-postgres`, its own volume (`dm-svc-staging-postgres-data`).
-     Generated credentials, volume, readiness.
+     name/slug `postgres`; every other environment gets an env-prefixed
+     name/slug (`Dev PostgreSQL`/`dev-postgres`, `Staging PostgreSQL`/
+     `staging-postgres`) and its own volume
+     (`dm-svc-{env}-postgres-data`). Generated credentials, volume,
+     readiness.
 3. Services not declared are **never deleted** — deleting infra is a
    human decision. A manifest-created service (origin `manifest`) that
    the manifest stops declaring is **flagged orphaned and surfaced**, not
@@ -160,9 +163,12 @@ declaring postgres):
   malformed YAML are errors; unknown top-level keys are ignored (forward
   compat).
 - **Schema** (migration 0009): `apps.environment` +
-  `services.environment`, default production; `AppEnv` filters injected
-  URLs by the app's environment. `POST /apps/{slug}/environment` flips
-  an app; `environment_changed` event records it.
+  `services.environment`, column default production (no CHECK
+  constraint); `AppEnv` filters injected URLs by the app's environment.
+  New apps default to **dev** in `store.CreateApp` (`store.EnvDev`); the
+  three valid values are dev | staging | production.
+  `POST /apps/{slug}/environment` flips an app (validates the value);
+  `environment_changed` event records it.
 - **Orphan surfacing** (migration 0010): `services.origin`
   (`manual` | `manifest`, existing rows → `manual`) + `services.orphaned`.
   `Provisioner.create` stamps origin `manifest`; `Ensure` calls

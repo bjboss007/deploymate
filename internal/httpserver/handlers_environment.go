@@ -8,17 +8,18 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
-// handleAppEnvironment sets the app's environment: production or staging.
-// The environment selects which manifest overlay (deploymate.{env}.yml)
-// and which services apply; the next deploy picks them up.
+// handleAppEnvironment sets the app's environment: dev, staging, or
+// production. The environment selects which manifest overlay
+// (deploymate.{env}.yml) and which services apply; the next deploy picks
+// them up.
 func (s *Server) handleAppEnvironment(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
 		return
 	}
 	env := strings.TrimSpace(r.FormValue("environment"))
-	if env != store.EnvStaging && env != store.EnvProduction {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Environment must be staging or production."), http.StatusSeeOther)
+	if env != store.EnvDev && env != store.EnvStaging && env != store.EnvProduction {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Environment must be dev, staging, or production."), http.StatusSeeOther)
 		return
 	}
 	_ = s.store.RecordEvent(app.ID, store.EventEnvironmentChanged, "environment set to "+env)

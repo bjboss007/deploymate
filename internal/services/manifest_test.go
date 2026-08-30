@@ -166,6 +166,15 @@ func TestLoadManifest(t *testing.T) {
 			t.Fatalf("LoadManifest(staging) = %v, %v; want [redis] only (replacement)", got, err)
 		}
 	})
+	t.Run("dev overlay replaces base list", func(t *testing.T) {
+		dir := t.TempDir()
+		write(filepath.Join(dir, "deploymate.yml"), "services:\n  - postgres\n  - redis\n")
+		write(filepath.Join(dir, "deploymate.dev.yml"), "services:\n  - postgres:16-alpine\n")
+		got, err := LoadManifest(dir, "", "dev")
+		if err != nil || len(got) != 1 || got[0] != (ServiceDecl{Type: "postgres", Pin: "16-alpine"}) {
+			t.Fatalf("LoadManifest(dev) = %v, %v; want [postgres:16-alpine] only (replacement)", got, err)
+		}
+	})
 	t.Run("overlay alone is valid", func(t *testing.T) {
 		dir := t.TempDir()
 		write(filepath.Join(dir, "deploymate.production.yml"), "services:\n  - postgres:17\n")

@@ -18,11 +18,13 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/migrations"
 )
 
-// Environment values for apps and services. Production is the default
-// everywhere; staging apps and services are scoped to each other.
+// Environment values for apps and services. New apps default to dev;
+// each environment's apps and services are scoped to each other (a dev
+// app sees only dev services, staging only staging, and so on).
 const (
 	EnvProduction = "production"
 	EnvStaging    = "staging"
+	EnvDev        = "dev"
 )
 
 // Service origin: who created the service. A manifest deploy may flag a

@@ -37,7 +37,7 @@ func (s *Store) CreateApp(a App) (App, error) {
 	a.ID = NewID()
 	a.CreatedAt = Now()
 	if a.Environment == "" {
-		a.Environment = EnvProduction
+		a.Environment = EnvDev
 	}
 	// Empty strings violate the git_sources foreign key; NULL is correct.
 	var gitSourceID any

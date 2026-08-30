@@ -16,6 +16,7 @@
   --accent-dim: rgba(255, 178, 36, 0.12);
   --green: #3ecf8e;
   --red: #ff5c5c;
+  --blue: #5b9dff;
   --radius: 10px;
   --font-sans: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -205,6 +206,7 @@ select { cursor: pointer; }
 .badge-running { color: var(--green); border-color: rgba(62, 207, 142, 0.3); }
 .badge-failed { color: var(--red); border-color: rgba(255, 92, 92, 0.3); }
 .badge-accent { color: var(--accent); border-color: rgba(255, 178, 36, 0.35); }
+.badge-dev { color: var(--blue); border-color: rgba(91, 157, 255, 0.35); }
 
 /* ---- app cards ------------------------------------------------------- */
 .app-card {
