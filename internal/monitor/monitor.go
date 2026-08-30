@@ -34,6 +34,7 @@ const (
 	diskThreshold   = 20 << 30 // 20 GiB of images + build cache
 	diskAlertRepeat = 24 * time.Hour
 	restartCooldown = 5 * time.Minute
+	healCooldown    = 5 * time.Minute // between auto-heal attempts per app
 
 	// Auto-resize: sustained usage past this fraction of the APPLIED limit
 	// triggers a limit bump + automatic redeploy (docker requires a
@@ -49,10 +50,14 @@ type Monitor struct {
 	rt     runtime.Runtime
 	alerts *alerts.Dispatcher
 	http   *http.Client
+	// heal recreates a bindingless app container from its spec; wired by
+	// the server via SetHealer so the recreate matches a deploy exactly.
+	heal func(ctx context.Context, app store.App) (bool, error)
 
 	mu             sync.Mutex
 	uptimeState    map[string]bool   // domainID -> last probe ok
 	healthFails    map[string]int    // appID -> consecutive failed probes
+	lastHeal       map[string]time.Time // appID -> last auto-heal attempt
 	restartSeen    map[string]int    // appID -> last RestartCount
 	restartAlertAt map[string]time.Time
 	lastResize     map[string]time.Time
@@ -72,9 +77,47 @@ func New(st *store.Store, rt runtime.Runtime, a *alerts.Dispatcher) *Monitor {
 		},
 		uptimeState:    make(map[string]bool),
 		healthFails:    make(map[string]int),
+		lastHeal:       make(map[string]time.Time),
 		restartSeen:    make(map[string]int),
 		restartAlertAt: make(map[string]time.Time),
 		lastResize:     make(map[string]time.Time),
+	}
+}
+
+// SetHealer wires the app heal callback used to recreate bindingless
+// containers; called once at startup before Run.
+func (m *Monitor) SetHealer(fn func(ctx context.Context, app store.App) (bool, error)) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.heal = fn
+}
+
+// healDue reports whether an auto-heal attempt is allowed and reserves
+// one: attempts are stamped so a heal that cannot succeed (e.g. docker is
+// mid-restart) retries at most once per healCooldown instead of every
+// probe tick.
+func (m *Monitor) healDue(appID string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if last, ok := m.lastHeal[appID]; ok && time.Since(last) < healCooldown {
+		return false
+	}
+	m.lastHeal[appID] = time.Now()
+	return true
+}
+
+// setHealth updates apps.health, logging (not swallowing) store errors so
+// the health trail cannot silently desync from the alert trail.
+func (m *Monitor) setHealth(id, health string) {
+	if err := m.store.UpdateAppHealth(id, health); err != nil {
+		slog.Error("monitor: update app health", "app", id, "health", health, "err", err)
+	}
+}
+
+// recordEvent logs (not swallows) a failed event write.
+func (m *Monitor) recordEvent(appID, kind, data string) {
+	if err := m.store.RecordEvent(appID, kind, data); err != nil {
+		slog.Error("monitor: record event", "kind", kind, "err", err)
 	}
 }
 
@@ -283,15 +326,35 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 		resp.Body.Close()
 	}
 
+	// Auto-heal: a running app whose container lost its preview port
+	// binding (leftovers from old binaries, manual docker runs) fails
+	// every probe until the container is recreated. Delegate to the
+	// server's spec builder so the recreate matches a deploy exactly;
+	// the heal reports whether a recreation actually happened.
+	if !ok && m.heal != nil && m.healDue(app.ID) {
+		healed, healErr := m.heal(ctx, app)
+		if healErr != nil {
+			slog.Warn("monitor: auto-heal failed", "app", app.Slug, "err", healErr)
+		} else if healed {
+			m.setHealth(app.ID, "healthy")
+			m.recordEvent(app.ID, store.EventAppHealed,
+				"recreated container missing its preview port binding")
+			m.alerts.Notify(alerts.EventAppRecovered,
+				fmt.Sprintf("app auto-healed: %s", app.Name),
+				fmt.Sprintf("recreated %s's container to restore its preview port binding", app.Name))
+			return
+		}
+	}
+
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if ok {
 		if app.Health == "unhealthy" {
 			m.healthFails[app.ID]++
 			if m.healthFails[app.ID] >= recoveredAfterOKs {
-				_ = m.store.UpdateAppHealth(app.ID, "healthy")
+				m.setHealth(app.ID, "healthy")
 				delete(m.healthFails, app.ID)
-				_ = m.store.RecordEvent(app.ID, store.EventHealthRecovered,
+				m.recordEvent(app.ID, store.EventHealthRecovered,
 					fmt.Sprintf("%s responded to %d consecutive health probes", app.Name, recoveredAfterOKs))
 				m.alerts.Notify(alerts.EventAppRecovered,
 					fmt.Sprintf("app recovered: %s", app.Name),
@@ -301,15 +364,15 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 		}
 		delete(m.healthFails, app.ID)
 		if app.Health != "healthy" {
-			_ = m.store.UpdateAppHealth(app.ID, "healthy")
+			m.setHealth(app.ID, "healthy")
 		}
 		return
 	}
 
 	m.healthFails[app.ID]++
 	if m.healthFails[app.ID] >= unhealthyAfterFails && app.Health != "unhealthy" {
-		_ = m.store.UpdateAppHealth(app.ID, "unhealthy")
-		_ = m.store.RecordEvent(app.ID, store.EventHealthUnhealthy,
+		m.setHealth(app.ID, "unhealthy")
+		m.recordEvent(app.ID, store.EventHealthUnhealthy,
 			fmt.Sprintf("%d consecutive health probes failed on port %d", unhealthyAfterFails, app.Port))
 		m.alerts.Notify(alerts.EventAppUnhealthy,
 			fmt.Sprintf("app unhealthy: %s", app.Name),

@@ -89,6 +89,30 @@ change.
   is empty, so a port-less deploy persists the port and keeps the
   preview binding. Unit-tested + e2e-verified (portless deploy kept
   port 8080 and bound the preview port) (Aug 2026).
+- [x] **Stale bindingless containers need a human restart — no auto-heal**
+  — done: the monitor auto-heals. On a failed probe it delegates to
+  `Server.HealApp` (same `ensureBinding` heal as `startApp`), which
+  recreates the container from the shared `appSpec` when it has no
+  published ports — image apps from `app.Image`, git-source apps from
+  the container's own worker-built image (their `app.Image` is empty;
+  the old "worker always binds them" exclusion left old-binary leftovers
+  like py-api permanently broken). 5-min `healCooldown` rate-limits
+  retries; a heal records an `app_healed` event + `app auto-healed`
+  alert. `healthReasonFor` copy now says "restart, or redeploy".
+  Unit-tested + e2e-verified live: py-api (unbound, up 14h) healed
+  itself ~5s after the new binary started, no human click (Aug 2026).
+- [x] **Restart/start doesn't reset `apps.health`** — done: start,
+  restart, and deploy handlers set health `healthy` after success (the
+  monitor corrects within 90s if the app actually fails to serve);
+  stop clears it so a stale "unhealthy" badge can't sit next to
+  "stopped". Unit-tested (Aug 2026).
+- [x] **Health event trail has gaps** — done (partially): the monitor no
+  longer swallows store errors — `setHealth`/`recordEvent` log
+  failures, so a desync between the event trail and `apps.health` is
+  visible in the server log. The in-memory `healthFails` map is still
+  lost on server restart (a stale `unhealthy` corrects itself within 2
+  OK probes, so it's benign); the remaining audit waits for the real
+  e2e suite (Aug 2026).
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
   only. Manual verification exists for P3–P6 (env injection, webhook→
   deploy→rollback, Traefik labels, metric/uptime assertions, three

@@ -7,23 +7,38 @@
 
 ## Where we stopped
 
-**2026-08-30** — **Health/port bugfix wave** shipped (unit-tested +
-e2e-verified on a throwaway server: fresh port + scratch data dir).
-Three backlog entries closed: (1) the unhealthy badge no longer claims
-"crash-looping" for a running container with 0 restarts —
-`healthReasonFor` distinguishes crash loops (restarts > 0) from
-"failing health probes on its preview port"; (2) Start/Restart now
-**heal** a container created without its preview port binding —
-`startApp` inspects after starting and recreates from the shared
-`appSpec` builder (image apps only; git-source containers are excluded
-because the worker always binds them); (3) the deploy handler falls
-back to the stored `app.Port` when the form's port field is empty
-(`deployPort`), so a port-less deploy can no longer persist port 0 and
-strand the app as permanently "unhealthy". E2e proved: portless deploy
-kept port + binding, and a manually-created bindingless container was
-healed by one restart click (health back to healthy). **Not yet
-committed.** Note: the server on :8090 still runs the pre-fix binary —
-restart it to pick up these fixes.
+**2026-08-30 (evening)** — **Auto-heal wave** shipped and e2e-verified
+live on the running :8090 server (all 5 apps healthy). Follow-up to the
+morning's health/port bugfix wave (`5d3ffec`, already committed) which
+closed three backlog entries but left the bindingless-container problem
+human-dependent: old-binary leftovers (py-api: up 14h, zero port
+bindings, unhealthy) stayed broken until a human clicked Restart.
+Three more backlog entries closed:
+1. **Monitor auto-heal** — on a failed probe the monitor delegates to
+   `Server.HealApp`, which recreates the container from the shared
+   `appSpec` when it has no published ports (same `ensureBinding` heal
+   as `startApp`, extracted as a shared helper). Image apps recreate
+   from `app.Image`; **git-source apps from the container's own
+   worker-built image** (their `app.Image` is empty — the old "worker
+   always binds them" exclusion was wrong for old-binary leftovers and
+   is gone). 5-min `healCooldown` rate-limits retries; a heal records
+   an `app_healed` event + `app auto-healed` alert. **E2e-verified
+   live**: py-api healed itself ~5s after the new binary started, no
+   human click — event id 26, alert delivered, probe 200.
+2. **Health reset on start/restart/deploy** — handlers set
+   `apps.health` `healthy` on success (monitor corrects within 90s if
+   the app fails to serve); stop clears it so a stale "unhealthy"
+   badge can't sit next to "stopped". Kills the ~60s stale-badge window
+   after a healing restart. `healthReasonFor` copy now says "restart,
+   or redeploy".
+3. **No more swallowed store errors in the monitor** — `setHealth` /
+   `recordEvent` log failures so the event trail can't silently desync
+   from `apps.health`.
+New unit tests: `TestHealApp` (image/git/no-image cases),
+`TestAutoHeal*` in `internal/monitor/monitor_test.go` (first test file
+for that package). `make test` + `make vet` green. Committed +
+pushed this session (bjboss007 rule). The :8090 server runs this
+binary.
 
 **2026-08-29** — **App action feedback + status-badge bug fix** (browser-
 verified). App start/stop/restart use HTMX to swap only `#head-actions`, so
@@ -70,8 +85,8 @@ Spec: `docs/specs/infra-manifest.md`. Also earlier the same day: infra
 manifest v1 (commit `58ae4ec`, pushed) and the progress/CLAUDE.md
 handoff files (`abcbbb2`).
 
-**Commits not yet pushed:** `da76b0b`, `abcbbb2`, plus the environments
-commit. Push with the bjboss007 rule below.
+**Commits:** the morning fix wave (`5d3ffec`, `e23291b`) and this
+session's auto-heal wave were all pushed with the bjboss007 rule.
 
 **Verified state:** everything shipped so far is e2e-verified on macOS/
 Docker Desktop. **NOT verified:** real Ubuntu server `bootstrap.sh` run,
@@ -79,19 +94,22 @@ real Let's Encrypt issuance, auto-DNS for preview hostnames (needs a server).
 
 ## Next up (ordered)
 
-1. **Push the local commits** (`gh auth switch --user bjboss007` first).
-2. **Real e2e suite** — `testdata/e2e.sh` covers only the P2 smoke path;
+1. **Real e2e suite** — `testdata/e2e.sh` covers only the P2 smoke path;
    everything else is manually verified per feature. Entry: `testdata/e2e.sh`,
    the verification sections in `docs/specs/*.md`, backlog item in
    `docs/improvements.md` (Near-term).
-3. **Preview hostnames go live** — per-app Cloudflare DNS records are
+2. **Preview hostnames go live** — per-app Cloudflare DNS records are
    manual today; auto-DNS via the Cloudflare API is the missing piece.
    Entry: `docs/specs/cloudflare-tunnel.md`, `internal/httpserver/server.go`
    (previewHost routing), backlog item (Near-term).
-4. **Deployment command/timeout** — manual deploys run in the HTTP handler
+3. **Deployment command/timeout** — manual deploys run in the HTTP handler
    with no timeout; move them onto the worker queue. Entry:
    `internal/httpserver/handlers_apps.go` (`handleAppDeploy`),
    `internal/jobs/worker.go`, backlog item (Near-term).
+4. **Recurring bindingless containers** — the auto-heal is reactive (on
+   probe failure); the root cause (pre-fix binaries starting containers
+   without bindings) is gone now that the fix binary is deployed, but if
+   it recurs, investigate why starts produce unbound containers.
 5. Anything else: the full ordered backlog is `docs/improvements.md`.
 
 **Bigger milestone on the horizon:** first real-server run
@@ -135,6 +153,11 @@ real Let's Encrypt issuance, auto-DNS for preview hostnames (needs a server).
 - **templ literals:** templ treats `{...}` as expressions — literal
   braces in text need a string expression (`{ "deploymate.{env}.yml" }`),
   and `\{` is illegal. `make gen` regenerates; commit `_templ.go` too.
+- **Git-source apps have no `app.Image`** — the row is empty; the
+  container's own image (worker-built `deploymate/apps/{slug}:{hash}`,
+  readable via `runtime.Info.Image`) is the ground truth for any
+  recreate. Note: the docker SDK's `ContainerJSON.Image` can come back
+  as a bare `sha256:` digest instead of the tag.
 - Docs live in `docs/` — ADRs, knowledge, specs, improvements. Update them
   with the code, not later.
 - Never silently fix a gap in scope — backlog it first (see above).

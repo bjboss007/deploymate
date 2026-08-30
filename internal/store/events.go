@@ -18,6 +18,7 @@ const (
 	EventAppDeleted     = "app_deleted"
 	EventHealthUnhealthy = "health_unhealthy"
 	EventHealthRecovered = "health_recovered"
+	EventAppHealed       = "app_healed"
 	EventResourceUpdate  = "resource_update"
 	EventResourceResized = "resource_resized"
 	EventEnvChanged      = "env_changed"

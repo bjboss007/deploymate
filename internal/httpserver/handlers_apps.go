@@ -98,38 +98,70 @@ func healthReasonFor(info runtime.Info) string {
 	if info.Restarts > 0 {
 		return fmt.Sprintf("container is crash-looping — %d restarts, see the log panel below for the error", info.Restarts)
 	}
-	return "container is running but failing health probes on its preview port — check the log panel or redeploy"
+	return "container is running but failing health probes on its preview port — check the log panel, restart, or redeploy"
 }
 
 // startApp starts the app's container, healing a container that was
 // created without its preview port binding (older deploys, manual docker
 // runs) by recreating it from the current spec so the health probe can
-// reach it. Image apps only: git-source containers are always created by
-// the worker with their binding in place.
+// reach it.
 func (s *Server) startApp(ctx context.Context, app store.App) error {
 	name := dmContainerName(app.Slug)
 	if err := s.rt.Start(ctx, name); err != nil {
 		return err
 	}
-	if app.Port <= 0 || app.GitSourceID != "" {
+	if app.Port <= 0 {
 		return nil
 	}
+	_, err := s.ensureBinding(ctx, app, name)
+	return err
+}
+
+// HealApp is the monitor's auto-heal entrypoint: it ensures a running
+// app's container has its preview port binding, recreating it from the
+// shared spec when missing — the same heal a manual restart performs,
+// minus the human. It reports whether a recreation happened so the
+// monitor can record the heal. Image apps recreate from app.Image;
+// git-source apps have none, so their container's own (worker-built)
+// image is used — the ground truth of what is deployed.
+func (s *Server) HealApp(ctx context.Context, app store.App) (bool, error) {
+	if app.Port <= 0 {
+		return false, nil
+	}
+	name := dmContainerName(app.Slug)
+	if err := s.rt.Start(ctx, name); err != nil {
+		return false, err
+	}
+	return s.ensureBinding(ctx, app, name)
+}
+
+// ensureBinding inspects the app's container and, when it is running
+// without any published port, recreates it from the spec. Returns whether
+// a recreation happened.
+func (s *Server) ensureBinding(ctx context.Context, app store.App, name string) (bool, error) {
 	info, err := s.rt.Inspect(ctx, name)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if len(info.PublishedPorts) > 0 {
-		return nil
+		return false, nil
 	}
-	slog.Warn("apps: container has no published port; recreating from spec", "app", app.Slug, "port", app.Port)
+	image := app.Image
+	if image == "" {
+		image = info.Image // git-source apps: the worker-built image
+	}
+	if image == "" {
+		return false, fmt.Errorf("no image to recreate %s from", name)
+	}
+	slog.Warn("apps: container has no published port; recreating from spec", "app", app.Slug, "port", app.Port, "image", image)
 	_ = s.rt.Stop(ctx, name, 5)
 	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
-		return err
+		return false, err
 	}
-	if _, err := s.rt.Create(ctx, s.appSpec(app, app.Image, app.Port)); err != nil {
-		return err
+	if _, err := s.rt.Create(ctx, s.appSpec(app, image, app.Port)); err != nil {
+		return false, err
 	}
-	return s.rt.Start(ctx, name)
+	return true, s.rt.Start(ctx, name)
 }
 
 func (s *Server) handleAppCreate(w http.ResponseWriter, r *http.Request) {
@@ -346,6 +378,9 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.UpdateAppStatus(app.ID, "running"); err != nil {
 		slog.Error("apps: set running", "err", err)
 	}
+	// Fresh container with its binding — declare healthy now (the monitor
+	// corrects within 90s if the new build actually fails to serve).
+	_ = s.store.UpdateAppHealth(app.ID, "healthy")
 	s.events.Publish("app:"+app.Slug, sse.Event{Name: "deploy", Data: "deployed " + image})
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
@@ -361,6 +396,9 @@ func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "stopped")
+	// Health is meaningless while stopped; clear it so a stale
+	// "unhealthy" badge can't sit next to the stopped status.
+	_ = s.store.UpdateAppHealth(app.ID, "")
 	_ = s.store.RecordEvent(app.ID, store.EventAppStopped, "app stopped from the dashboard")
 	if r.Header.Get("HX-Request") == "true" {
 		app.Status = "stopped"
@@ -385,6 +423,11 @@ func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "running")
+	// The container is up and (re)bound — declare it healthy now rather
+	// than leaving a stale "unhealthy" badge until the monitor's first
+	// two OK probes land (~60s). The monitor corrects within 90s if the
+	// app actually fails to serve.
+	_ = s.store.UpdateAppHealth(app.ID, "healthy")
 	_ = s.store.RecordEvent(app.ID, store.EventAppStarted, "app started from the dashboard")
 	if r.Header.Get("HX-Request") == "true" {
 		app.Status = "running"
@@ -413,6 +456,7 @@ func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "running")
+	_ = s.store.UpdateAppHealth(app.ID, "healthy")
 	_ = s.store.RecordEvent(app.ID, store.EventAppRestarted, "app restarted from the dashboard")
 	if r.Header.Get("HX-Request") == "true" {
 		app.Status = "running"

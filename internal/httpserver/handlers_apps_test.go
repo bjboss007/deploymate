@@ -153,6 +153,9 @@ func TestHealthReasonFor(t *testing.T) {
 	if !strings.Contains(up, "preview port") {
 		t.Errorf("0-restart reason should point at the probe: %q", up)
 	}
+	if !strings.Contains(up, "restart") {
+		t.Errorf("0-restart reason should offer restart (it heals the binding): %q", up)
+	}
 	down := healthReasonFor(runtime.Info{Running: false})
 	if !strings.Contains(down, "not running") {
 		t.Errorf("stopped reason wrong: %q", down)
@@ -177,11 +180,11 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 		t.Fatalf("create project: %v", err)
 	}
 
-	mkApp := func(slug string, port int, gitSourceID string) store.App {
+	mkApp := func(slug string, port int, gitSourceID, image string) store.App {
 		t.Helper()
 		app, err := st.CreateApp(store.App{
 			ProjectID: proj.ID, Name: slug, Slug: slug,
-			Status: "running", Port: port, Image: "example.com/app:1",
+			Status: "running", Port: port, Image: image,
 			GitSourceID: gitSourceID,
 		})
 		if err != nil {
@@ -191,7 +194,7 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 	}
 
 	t.Run("unbound image app is recreated with the preview binding", func(t *testing.T) {
-		app := mkApp("img-app", 8080, "")
+		app := mkApp("img-app", 8080, "", "example.com/app:1")
 		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
 		s := &Server{store: st, rt: fake}
 
@@ -207,7 +210,7 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 	})
 
 	t.Run("bound container is left alone", func(t *testing.T) {
-		app := mkApp("bound-app", 8080, "")
+		app := mkApp("bound-app", 8080, "", "example.com/app:1")
 		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: []string{"8080/tcp"}}}
 		s := &Server{store: st, rt: fake}
 
@@ -219,7 +222,7 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 		}
 	})
 
-	t.Run("git-source container is never recreated from app.Image", func(t *testing.T) {
+	t.Run("git-source container is recreated from its own image", func(t *testing.T) {
 		gs, err := st.CreateGitSource(store.GitSource{
 			Provider: "github", RepoURL: "https://github.com/x/y",
 			CloneMethod: "ssh", DefaultBranch: "main",
@@ -227,15 +230,126 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 		if err != nil {
 			t.Fatalf("create git source: %v", err)
 		}
-		app := mkApp("git-app", 8080, gs.ID)
-		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
+		app := mkApp("git-app", 8080, gs.ID, "")
+		fake := &fakeRuntime{info: runtime.Info{
+			Running: true, Restarts: 0, PublishedPorts: nil,
+			Image: "deploymate/apps/git-app:abc123",
+		}}
 		s := &Server{store: st, rt: fake}
 
 		if err := s.startApp(context.Background(), app); err != nil {
 			t.Fatalf("startApp: %v", err)
 		}
+		if fake.created != 1 {
+			t.Fatalf("bindingless git container must be recreated, created=%d", fake.created)
+		}
+		if fake.lastSpec.Image != "deploymate/apps/git-app:abc123" {
+			t.Errorf("recreate used image %q, want the container's own image", fake.lastSpec.Image)
+		}
+	})
+}
+
+// TestHealApp proves the monitor's auto-heal entrypoint: it recreates a
+// bindingless image-app container and reports the recreation, and reports
+// no-op for bound containers, git-source apps, and apps without an image.
+func TestHealApp(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "dm.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+	owner, err := st.CreateUser(store.User{Email: "owner@test.dev", PasswordHash: "x", Role: "owner"})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	proj, err := st.CreateProject(store.Project{UserID: owner.ID, Name: "Test", Slug: "test"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	mkApp := func(slug string, port int, gitSourceID, image string) store.App {
+		t.Helper()
+		app, err := st.CreateApp(store.App{
+			ProjectID: proj.ID, Name: slug, Slug: slug,
+			Status: "running", Port: port, Image: image,
+			GitSourceID: gitSourceID,
+		})
+		if err != nil {
+			t.Fatalf("create app %s: %v", slug, err)
+		}
+		return app
+	}
+
+	t.Run("bindingless image app is recreated and reported", func(t *testing.T) {
+		app := mkApp("heal-me", 8080, "", "example.com/app:1")
+		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
+		s := &Server{store: st, rt: fake}
+
+		healed, err := s.HealApp(context.Background(), app)
+		if err != nil {
+			t.Fatalf("HealApp: %v", err)
+		}
+		if !healed {
+			t.Error("bindingless container must be reported as healed")
+		}
+		if fake.created != 1 {
+			t.Fatalf("expected one recreate, got %d", fake.created)
+		}
+		if fake.lastSpec.Port != 8080 || fake.lastSpec.HostPort != runtime.PreviewPort("heal-me") {
+			t.Errorf("recreated spec missing preview binding: port=%d hostport=%d", fake.lastSpec.Port, fake.lastSpec.HostPort)
+		}
+	})
+
+	t.Run("bound container is a no-op", func(t *testing.T) {
+		app := mkApp("bound-ok", 8080, "", "example.com/app:1")
+		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: []string{"8080/tcp"}}}
+		s := &Server{store: st, rt: fake}
+
+		healed, err := s.HealApp(context.Background(), app)
+		if err != nil {
+			t.Fatalf("HealApp: %v", err)
+		}
+		if healed || fake.created != 0 {
+			t.Errorf("bound container must not be recreated (healed=%v created=%d)", healed, fake.created)
+		}
+	})
+
+	t.Run("git-source app is recreated from its own image", func(t *testing.T) {
+		gs, err := st.CreateGitSource(store.GitSource{
+			Provider: "github", RepoURL: "https://github.com/x/y",
+			CloneMethod: "ssh", DefaultBranch: "main",
+		})
+		if err != nil {
+			t.Fatalf("create git source: %v", err)
+		}
+		app := mkApp("git-heal", 8080, gs.ID, "")
+		fake := &fakeRuntime{info: runtime.Info{
+			Running: true, Restarts: 0, PublishedPorts: nil,
+			Image: "deploymate/apps/git-heal:abc123",
+		}}
+		s := &Server{store: st, rt: fake}
+
+		healed, err := s.HealApp(context.Background(), app)
+		if err != nil {
+			t.Fatalf("HealApp: %v", err)
+		}
+		if !healed || fake.created != 1 {
+			t.Fatalf("bindingless git container must be recreated (healed=%v created=%d)", healed, fake.created)
+		}
+		if fake.lastSpec.Image != "deploymate/apps/git-heal:abc123" {
+			t.Errorf("recreate used image %q, want the container's own image", fake.lastSpec.Image)
+		}
+	})
+
+	t.Run("container with no resolvable image is an error, not a recreate", func(t *testing.T) {
+		app := mkApp("no-image", 8080, "", "")
+		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
+		s := &Server{store: st, rt: fake}
+
+		if _, err := s.HealApp(context.Background(), app); err == nil {
+			t.Error("HealApp must fail when neither app.Image nor the container image is known")
+		}
 		if fake.created != 0 {
-			t.Errorf("git-source container must not be recreated, created=%d", fake.created)
+			t.Errorf("no recreate allowed without an image, created=%d", fake.created)
 		}
 	})
 }
