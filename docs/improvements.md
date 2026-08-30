@@ -66,7 +66,17 @@ change.
 - [ ] **Preview https** — `previewURL` (`internal/httpserver/
   handlers_preview.go`) still emits `http://` because edge cert issuance
   lags app creation (first issuance can take minutes to hours); flip to
-  `https://` once issuance is confirmed reliable.
+  `https://` once issuance is confirmed reliable. **Decision (Aug 2026):
+  move previews to a dedicated DeployMate domain** — free Universal SSL
+  covers `*.domain` only one level deep, so the current
+  `{slug}.dm.getmerchanttech.com` hostnames (two levels) can never get
+  edge certs on the free plan (verified: cert SANs are
+  `getmerchanttech.com` + `*.getmerchanttech.com` only; edge returns
+  alert 40 for `*.dm.…`). Once the dedicated domain is registered:
+  previews live at `{slug}.newdomain` (first level → wildcard cert
+  covers them), tunnel ingress + `DEPLOYMATE_PREVIEW_HOST` +
+  `DEPLOYMATE_CLOUDFLARE_ZONE_ID` switch over, then flip `previewURL`
+  to `https://`.
 - [ ] **Preview DNS cleanup** — deleting an app leaves its preview CNAME
   (and edge cert) behind; remove the record via the API on app delete.
 - [ ] **Preview privacy** — preview subdomains are public by design; a

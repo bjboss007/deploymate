@@ -235,12 +235,18 @@ real Let's Encrypt issuance.
    everything else is manually verified per feature. Entry: `testdata/e2e.sh`,
    the verification sections in `docs/specs/*.md`, backlog item in
    `docs/improvements.md` (Near-term).
-2. **Preview DNS lifecycle** — auto-DNS now *creates* per-app CNAMEs, but
-   two gaps remain: deleting an app leaves its CNAME + edge cert behind
-   (add API-side cleanup on delete), and `previewURL` still emits `http://`
-   because edge-cert issuance lags creation — flip to `https://` once
-   issuance is confirmed reliable. Entry: `internal/dns`,
-   `internal/httpserver/handlers_preview.go`, backlog items (Near-term).
+2. **Preview DNS lifecycle / dedicated domain** — auto-DNS *creates*
+   per-app CNAMEs, but deleting an app leaves its CNAME behind (add
+   API-side cleanup on delete). And **preview https is blocked on the
+   current hostnames**: free Universal SSL only covers one wildcard level
+   (`*.getmerchanttech.com`; verified via cert SANs + edge alert 40 on
+   `*.dm.…`), so `{slug}.dm.getmerchanttech.com` can never get edge certs.
+   **Owner's decision (Aug 2026): register a dedicated DeployMate domain**;
+   previews move to `{slug}.newdomain` (first level → wildcard cert covers
+   them), switch tunnel ingress + `DEPLOYMATE_PREVIEW_HOST` +
+   `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
+   Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
+   `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
 3. **Deployment command/timeout** — manual deploys run in the HTTP handler
    with no timeout; move them onto the worker queue. Entry:
    `internal/httpserver/handlers_apps.go` (`handleAppDeploy`),
