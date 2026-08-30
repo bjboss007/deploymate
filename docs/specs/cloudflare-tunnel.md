@@ -58,27 +58,37 @@ ingress:
 
 ## DNS records
 
-Created per hostname with `cloudflared tunnel route dns deploymate <hostname>`:
-
 - `dm.getmerchanttech.com` → tunnel CNAME
 - `*.dm.getmerchanttech.com` → tunnel CNAME
-- **Per-app records** (`vgg-app.`, `node-site.`, `py-api.`…) — required
-  because **Cloudflare's free plan does not issue edge certificates for
-  wildcard hostnames**. A wildcard record routes traffic, but TLS
-  handshakes fail until each individual hostname has its own record
-  (universal SSL covers single-level subdomains). New apps therefore
-  need a DNS record — automating this via the Cloudflare API is backlog
-  (see improvements.md).
+- **Per-app records** — required because **Cloudflare's free plan does
+  not issue edge certificates for wildcard hostnames**. A wildcard
+  record routes traffic, but TLS handshakes fail until each individual
+  hostname has its own record (universal SSL covers single-level
+  subdomains).
+
+Per-app records are created **automatically** when an app is created:
+the DeployMate server POSTs a proxied CNAME
+(`{slug}.{previewHost}` → `{tunnel-id}.cfargotunnel.com`) to the
+Cloudflare API (`internal/dns`, `NewCloudflare`). Error 81053 ("record
+already exists") is treated as success, so manual records and
+delete-and-recreate both work. The manual fallback remains
+`cloudflared tunnel route dns deploymate <hostname>`.
 
 ## DeployMate side
 
 - `DEPLOYMATE_PREVIEW_HOST=dm.getmerchanttech.com` — enables Host-header
   routing and switches the app page's Access panel to show
   `http://{slug}.dm.getmerchanttech.com` as the preview URL (the
-  `/preview/{slug}` dashboard path keeps working). The scheme is plain
-  http because of the wildcard-cert gap above; `previewURL`
-  (`internal/httpserver/handlers_preview.go`) flips to `https://` once
-  the per-app records exist (auto-DNS backlog item).
+  `/preview/{slug}` dashboard path keeps working). The scheme stays
+  plain http because edge cert issuance lags app creation; browsers
+  auto-upgrade to https, which works once the cert lands.
+- `DEPLOYMATE_CLOUDFLARE_API_TOKEN` + `DEPLOYMATE_CLOUDFLARE_ZONE_ID` +
+  `DEPLOYMATE_CLOUDFLARE_TUNNEL_ID` — enable **auto-DNS** (all three
+  must be set): each new app's preview CNAME is created via the
+  Cloudflare API on app creation. Token scope: `Zone.DNS:Edit` on the
+  preview zone. Best-effort: failures never block app creation; they
+  are logged, recorded as a `dns_record_failed` event, and surfaced as
+  a warning flash on the redirect.
 - The Host-route middleware is **public by design** (no session) — that
   is the point of a preview URL. Apps without a port, or not running,
   return 404/503.

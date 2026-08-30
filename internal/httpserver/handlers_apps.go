@@ -192,6 +192,22 @@ func (s *Server) handleAppCreate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Best-effort auto-DNS: the preview CNAME lets Cloudflare's free plan
+	// issue a per-app edge cert. Single attempt, 5s bound (unlike alerts,
+	// a retry buys little — the record can be created manually), and it
+	// never fails app creation.
+	if s.dns != nil && s.previewHost != "" {
+		host := app.Slug + "." + s.previewHost
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		err := s.dns.EnsurePreviewRecord(ctx, host)
+		cancel()
+		if err != nil {
+			slog.Warn("apps: preview dns", "app", app.Slug, "host", host, "err", err)
+			_ = s.store.RecordEvent(app.ID, store.EventDNSRecordFailed, host+": "+err.Error())
+			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("App created — but its preview DNS record could not be created automatically; the preview URL will not get a certificate until the record exists."), http.StatusSeeOther)
+			return
+		}
+	}
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
 

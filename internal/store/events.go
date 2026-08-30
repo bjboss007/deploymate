@@ -37,6 +37,9 @@ const (
 	// EventServiceOrphaned: a manifest deploy stopped declaring a service
 	// it had created; it is flagged for a human to delete or keep.
 	EventServiceOrphaned = "service_orphaned"
+	// EventDNSRecordFailed: auto-DNS could not create the app's preview
+	// record; the preview URL stays without an edge cert until fixed.
+	EventDNSRecordFailed = "dns_record_failed"
 )
 
 // RecordEvent appends one event.

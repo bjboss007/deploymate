@@ -12,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/dns"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
@@ -31,13 +32,15 @@ type Server struct {
 	deliveries  *webhooks.DeliveryCache
 	leMode      string
 	previewHost string
+	dns         dns.Creator // nil disables auto-DNS
 }
 
 // New builds a Server.
-func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost string) *Server {
+func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost string, dnsCreator dns.Creator) *Server {
 	return &Server{
 		store: st, rt: rt, prov: prov, events: events, encKey: encKey, leMode: leMode, previewHost: previewHost,
 		deliveries: webhooks.NewDeliveryCache(),
+		dns:        dnsCreator,
 	}
 }
 

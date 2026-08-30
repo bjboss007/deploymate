@@ -7,6 +7,27 @@
 
 ## Where we stopped
 
+**2026-08-30 (auto-DNS round)** — **Auto-DNS shipped** (unit-tested; live
+verification pending a Cloudflare API token from the user). New
+`internal/dns` package: `Creator` interface + Cloudflare API client
+(`POST /zones/{id}/dns_records`, proxied CNAME to
+`{tunnel-id}.cfargotunnel.com`, error 81053 = already-exists = success,
+5s timeout, no retry). Config: `DEPLOYMATE_CLOUDFLARE_API_TOKEN` /
+`_ZONE_ID` / `_TUNNEL_ID` + `CloudflareEnabled()`; `handleAppCreate` now
+best-effort-creates the record (warning flash + `dns_record_failed`
+event on failure; never fails creation; nil creator = today's behavior).
+`previewURL` stays `http://` — cert issuance lags creation. Also fixed:
+the auto-heal unit tests probed the deterministic preview port for slug
+`py-api`, which the **running** py-api container now occupies → probes
+succeeded and heal never ran; added `probeURLFn` override, tests pin to
+`127.0.0.1:1`. `make test` + `make vet` green. Committed + pushed
+(bjboss007 rule). **Not yet live-verified** — needs the CF token
+(`Zone.DNS:Edit`) + zone ID, then restart :8090 with the three
+`DEPLOYMATE_CLOUDFLARE_*` vars and create a test app.
+Earlier in the session: all 6 running apps got manual per-app DNS
+records (`cloudflared tunnel route dns`) to restore https previews —
+edge certs still provisioning (monitor watches `https://{slug}.dm…`).
+
 **2026-08-30 (preview-url round)** — **Subdomain previews back, over plain
 http**. The Access panel's preview URL was hardcoded `https://{slug}.
 {previewHost}` (`previewURL`, `handlers_preview.go`), but Cloudflare's

@@ -32,19 +32,31 @@ type Config struct {
 	// public subdomain: {slug}.{PreviewHost} routes straight to the app
 	// through the Host header (the reverse proxy must forward it).
 	PreviewHost string
+	// CloudflareAPIToken authenticates auto-DNS for preview hostnames
+	// (scope Zone.DNS:Edit on the preview zone). Auto-DNS is disabled
+	// when any of the three Cloudflare settings is empty.
+	CloudflareAPIToken string
+	// CloudflareZoneID is the zone that owns the preview host.
+	CloudflareZoneID string
+	// CloudflareTunnelID is the named tunnel every preview CNAME targets
+	// ({tunnelID}.cfargotunnel.com).
+	CloudflareTunnelID string
 }
 
 // Load reads configuration from the environment, applying defaults suitable
 // for local development.
 func Load() (*Config, error) {
 	cfg := &Config{
-		Addr:          getenv("DEPLOYMATE_ADDR", "127.0.0.1:8080"),
-		DataDir:       getenv("DEPLOYMATE_DATA_DIR", "./data"),
-		SetupEmail:    os.Getenv("DEPLOYMATE_SETUP_EMAIL"),
-		SetupPassword: os.Getenv("DEPLOYMATE_SETUP_PASSWORD"),
-		LEMode:        getenv("DEPLOYMATE_LE_MODE", "staging"),
-		RailpackPath:  getenv("DEPLOYMATE_RAILPACK", "railpack"),
-		PreviewHost:   getenv("DEPLOYMATE_PREVIEW_HOST", ""),
+		Addr:               getenv("DEPLOYMATE_ADDR", "127.0.0.1:8080"),
+		DataDir:            getenv("DEPLOYMATE_DATA_DIR", "./data"),
+		SetupEmail:         os.Getenv("DEPLOYMATE_SETUP_EMAIL"),
+		SetupPassword:      os.Getenv("DEPLOYMATE_SETUP_PASSWORD"),
+		LEMode:             getenv("DEPLOYMATE_LE_MODE", "staging"),
+		RailpackPath:       getenv("DEPLOYMATE_RAILPACK", "railpack"),
+		PreviewHost:        getenv("DEPLOYMATE_PREVIEW_HOST", ""),
+		CloudflareAPIToken: os.Getenv("DEPLOYMATE_CLOUDFLARE_API_TOKEN"),
+		CloudflareZoneID:   os.Getenv("DEPLOYMATE_CLOUDFLARE_ZONE_ID"),
+		CloudflareTunnelID: os.Getenv("DEPLOYMATE_CLOUDFLARE_TUNNEL_ID"),
 	}
 	cfg.KeyPath = filepath.Join(cfg.DataDir, "keys", "root.key")
 
@@ -61,6 +73,12 @@ func Load() (*Config, error) {
 
 // DBPath returns the path to the SQLite database file.
 func (c *Config) DBPath() string { return filepath.Join(c.DataDir, "data.db") }
+
+// CloudflareEnabled reports whether auto-DNS is configured: all three
+// Cloudflare settings present.
+func (c *Config) CloudflareEnabled() bool {
+	return c.CloudflareAPIToken != "" && c.CloudflareZoneID != "" && c.CloudflareTunnelID != ""
+}
 
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {

@@ -47,16 +47,19 @@ change.
   URL injection (`staging-postgres` vs `postgres`), and pinned manifest
   entries (`postgres:17`; no tag → `latest`) — the service row's image
   is now what runs. ADR 0017; verified e2e (Aug 2026).
-- [ ] **Preview hostnames go live** — routing, DNS records, and the
-  dashboard UI are all in place; the remaining piece is Cloudflare's
-  free-plan edge certs for the per-app hostnames (provisioning on first
-  use, can take up to a day) and **auto-DNS**: new apps should get their
-  CNAME automatically via the Cloudflare API instead of a manual
-  `cloudflared tunnel route dns` per app. Meanwhile `previewURL`
-  (`internal/httpserver/handlers_preview.go`) emits `http://` for
-  preview subdomains — flip it back to `https://` when the records
-  exist. Also worth deciding: preview subdomains are public by design —
-  a per-app private toggle + Cloudflare Access is the lock-down path.
+- [x] **Auto-DNS for preview hostnames** — new apps get their preview
+  CNAME created automatically via the Cloudflare API (`internal/dns`,
+  `DEPLOYMATE_CLOUDFLARE_*` env). Best-effort: failures never block app
+  creation and surface as a `dns_record_failed` event + warning flash
+  (Aug 2026).
+- [ ] **Preview https** — `previewURL` (`internal/httpserver/
+  handlers_preview.go`) still emits `http://` because edge cert issuance
+  lags app creation (first issuance can take minutes to hours); flip to
+  `https://` once issuance is confirmed reliable.
+- [ ] **Preview DNS cleanup** — deleting an app leaves its preview CNAME
+  (and edge cert) behind; remove the record via the API on app delete.
+- [ ] **Preview privacy** — preview subdomains are public by design; a
+  per-app private toggle + Cloudflare Access is the lock-down path.
 - [ ] **Deployment command/timeout** — manual deploys run in the HTTP
   handler with no timeout; a hung pull blocks the request. Move manual
   deploys onto the worker queue (they already create deployment rows).

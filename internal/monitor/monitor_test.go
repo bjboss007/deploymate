@@ -59,7 +59,13 @@ func newTestMonitor(t *testing.T) (*Monitor, *store.Store, store.App) {
 	if err := st.UpdateAppHealth(app.ID, "unhealthy"); err != nil {
 		t.Fatalf("mark unhealthy: %v", err)
 	}
-	return New(st, stubRuntime{}, alerts.New(st, [32]byte{7})), st, app
+	m := New(st, stubRuntime{}, alerts.New(st, [32]byte{7}))
+	// Point the probe at a port that is always closed: the default
+	// preview port for the test slug could be occupied by a real
+	// container on this host, which would make the probe succeed and
+	// the heal path never run.
+	m.probeURLFn = func(string) string { return "http://127.0.0.1:1/" }
+	return m, st, app
 }
 
 func TestAutoHealBindinglessContainer(t *testing.T) {

@@ -53,6 +53,10 @@ type Monitor struct {
 	// heal recreates a bindingless app container from its spec; wired by
 	// the server via SetHealer so the recreate matches a deploy exactly.
 	heal func(ctx context.Context, app store.App) (bool, error)
+	// probeURLFn overrides the loopback probe target per slug; tests use
+	// it to point at a port that is always closed (the default preview
+	// port can be occupied by a real container on the host).
+	probeURLFn func(slug string) string
 
 	mu             sync.Mutex
 	uptimeState    map[string]bool   // domainID -> last probe ok
@@ -320,6 +324,9 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 		return
 	}
 	url := fmt.Sprintf("http://127.0.0.1:%d/", runtime.PreviewPort(app.Slug))
+	if m.probeURLFn != nil {
+		url = m.probeURLFn(app.Slug)
+	}
 	resp, err := m.http.Get(url)
 	ok := err == nil && resp != nil && resp.StatusCode < 500
 	if resp != nil {
