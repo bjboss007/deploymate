@@ -113,6 +113,19 @@ change.
   lost on server restart (a stale `unhealthy` corrects itself within 2
   OK probes, so it's benign); the remaining audit waits for the real
   e2e suite (Aug 2026).
+- [x] **Worker deploys don't reset `apps.health`** — done: the webhook/
+  worker path (`finish` in `internal/jobs/worker.go`) left health empty
+  until the monitor's next probe (~30s), while the dashboard deploy set
+  it immediately. `finish` now sets `healthy` on success, matching the
+  handlers (Aug 2026).
+- [x] **Frontend frameworks deployable?** — proven: a React 18 + Vite 6
+  SPA (vite build + node http server reading `$PORT`, `.mise.toml`
+  node 22) deployed end-to-end via the git pipeline: Railpack detected
+  node, ran `npm run build`, started `node server.js` on `$PORT`; SPA +
+  `/api/ping` verified over the preview port, health green. Pure-static
+  SPAs without a server still need a Dockerfile or a serving start
+  command; per-runtime `--build-cmd`/`--start-cmd` overrides remain
+  open as a Medium-term item (Aug 2026).
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
   only. Manual verification exists for P3–P6 (env injection, webhook→
   deploy→rollback, Traefik labels, metric/uptime assertions, three

@@ -7,6 +7,23 @@
 
 ## Where we stopped
 
+**2026-08-30 (late)** — **Frontend-framework proof + worker health fix**.
+Deployed a React 18 + Vite 6 SPA (`react-spa`, production) through the
+full git pipeline as proof that frontend frameworks work: fixture at
+`/tmp/dm-react-spa.git` (bare) + `/tmp/dm-react-spa/` (source), app +
+git_source rows in SQLite with an encrypted webhook secret + deploy key
+(mirrors the UI connect flow — the worker decrypts the key even when a
+local-path clone doesn't use it), deploy triggered by a signed GitHub
+push payload to `/hooks/{id}`. Railpack detected node (`.mise.toml`
+node 22), ran `npm run build` (vite, 144 kB bundle), started
+`node server.js` on `$PORT=3000`; verified over the preview port
+`127.0.0.1:27002`: SPA HTML + bundle 200, `/api/ping` →
+`{"pong":"pong","port":3000}`, health green, idempotent redeploy via a
+second webhook. Found + fixed en route: the worker's `finish` didn't
+reset `apps.health` (dashboard deploys do) — now sets `healthy` on
+success. The `react-spa` app stays in the dev DB as a demo; source
+lives at `/tmp/dm-react-spa/`.
+
 **2026-08-30 (evening)** — **Auto-heal wave** shipped and e2e-verified
 live on the running :8090 server (all 5 apps healthy). Follow-up to the
 morning's health/port bugfix wave (`5d3ffec`, already committed) which

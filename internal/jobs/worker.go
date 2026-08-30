@@ -336,6 +336,12 @@ func (w *Worker) finish(d store.Deployment, appID string) error {
 	if err := w.store.UpdateAppStatus(appID, "running"); err != nil {
 		return err
 	}
+	// Fresh container with its binding — declare healthy now, matching the
+	// dashboard deploy handler; the monitor corrects within 90s if the new
+	// build actually fails to serve.
+	if err := w.store.UpdateAppHealth(appID, "healthy"); err != nil {
+		return err
+	}
 	if err := w.store.SetAppCurrentDeployment(appID, d.ID); err != nil {
 		return err
 	}
