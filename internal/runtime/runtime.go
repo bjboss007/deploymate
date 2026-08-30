@@ -48,6 +48,10 @@ type Info struct {
 	Running  bool
 	State    string
 	Restarts int
+	// PublishedPorts lists the container's host-published ports
+	// ("8080/tcp" → loopback binding); empty means nothing is reachable
+	// from the host, so the health probe can never connect.
+	PublishedPorts []string
 	// Applied limits (HostConfig) — the values the container actually
 	// runs under, which may lag the store's detected values.
 	MemLimitMB int64

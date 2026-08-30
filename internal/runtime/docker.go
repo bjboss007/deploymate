@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -198,15 +199,21 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 	if err != nil {
 		return Info{}, mapNotFound(fmt.Errorf("inspect container %s: %w", name, err))
 	}
+	ports := make([]string, 0, len(ctr.HostConfig.PortBindings))
+	for p := range ctr.HostConfig.PortBindings {
+		ports = append(ports, string(p))
+	}
+	sort.Strings(ports)
 	return Info{
-		ID:         ctr.ID,
-		Name:       name,
-		Image:      ctr.Image,
-		Running:    ctr.State.Running,
-		State:      ctr.State.Status,
-		Restarts:   ctr.RestartCount,
-		MemLimitMB: ctr.HostConfig.Memory >> 20,
-		CPULimit:   float64(ctr.HostConfig.NanoCPUs) / 1e9,
+		ID:             ctr.ID,
+		Name:           name,
+		Image:          ctr.Image,
+		Running:        ctr.State.Running,
+		State:          ctr.State.Status,
+		Restarts:       ctr.RestartCount,
+		PublishedPorts: ports,
+		MemLimitMB:     ctr.HostConfig.Memory >> 20,
+		CPULimit:       float64(ctr.HostConfig.NanoCPUs) / 1e9,
 	}, nil
 }
 

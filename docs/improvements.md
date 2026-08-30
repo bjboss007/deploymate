@@ -71,18 +71,24 @@ change.
   parse Traefik's acme.json (or enable Traefik's API on localhost) to
   show `active`/`failed` + expiry. Uptime probes already reveal the real
   state indirectly.
-- [ ] **Unhealthy badge mislabels running apps** — the app page says
-  "container is crash-looping — 0 restarts" for any running+unhealthy
-  app, even with zero restarts and clean logs (seen: db-probe, py-api,
-  web-front — all up hours, restarts=0, probe unreachable). The
-  inference should distinguish: restarts > 0 → crash-looping; running
-  but probe unreachable → "not reachable on its preview port" (Aug 2026).
-- [ ] **Start/Restart can't heal a missing port binding** — containers
-  created with `HostPort=0` publish nothing; Start/Restart are plain
-  `docker start`, so bindings never appear and the app is permanently
-  "unhealthy" (probe hits the unbound preview port). Only a redeploy
-  re-creates with bindings. All three currently-unhealthy apps share
-  empty `PortBindings` while healthy ones are bound (Aug 2026).
+- [x] **Unhealthy badge mislabels running apps** — done: the app page
+  now distinguishes crash loops (restarts > 0) from "container is
+  running but failing health probes on its preview port" (0 restarts);
+  `healthReasonFor` in `handlers_apps.go` is unit-tested. Seen on
+  db-probe/py-api/web-front: up for hours, 0 restarts, probe unreachable
+  (Aug 2026).
+- [x] **Start/Restart can't heal a missing port binding** — done:
+  `startApp` inspects after starting and, when an image app's container
+  has no published ports, recreates it from the current spec (shared
+  `appSpec` builder) so the probe becomes reachable. Git-source
+  containers are excluded (the worker always binds them). Unit-tested +
+  e2e-verified: a bindingless container healed by one restart click
+  (Aug 2026).
+- [x] **Deploy handler clobbers the port on empty form field** — done:
+  `deployPort` falls back to the stored `app.Port` when the form field
+  is empty, so a port-less deploy persists the port and keeps the
+  preview binding. Unit-tested + e2e-verified (portless deploy kept
+  port 8080 and bound the preview port) (Aug 2026).
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
   only. Manual verification exists for P3–P6 (env injection, webhook→
   deploy→rollback, Traefik labels, metric/uptime assertions, three

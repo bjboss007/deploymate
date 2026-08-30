@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"bufio"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -42,6 +43,93 @@ func dmLabels(slug string) map[string]string {
 		"deploymate.managed": "true",
 		"deploymate.app":     slug,
 	}
+}
+
+// deployPort resolves the deploy form's port field: an empty field keeps
+// the app's stored port (a bare 0 would persist a portless app and drop
+// the preview binding); a submitted value wins.
+func deployPort(form string, stored int) int {
+	if p := strings.TrimSpace(form); p != "" {
+		if n, err := strconv.Atoi(p); err == nil {
+			return n
+		}
+	}
+	return stored
+}
+
+// appSpec assembles the container spec for an image app: full env, labels,
+// preview port binding, limits, and domain routing labels — the single
+// source of truth shared by deploys and the start-time binding heal.
+func (s *Server) appSpec(app store.App, image string, port int) runtime.Spec {
+	// PORT env + limits, same conventions as the worker's runContainer.
+	env := s.AppEnv(app)
+	env = append(env, fmt.Sprintf("PORT=%d", effectivePort(port)))
+	spec := runtime.Spec{
+		Name:    dmContainerName(app.Slug),
+		Image:   image,
+		Env:     env,
+		Labels:  dmLabels(app.Slug),
+		Network: NetworkName,
+	}
+	if port > 0 {
+		spec.Labels["deploymate.port"] = strconv.Itoa(port)
+		spec.Port = port
+		spec.HostPort = runtime.PreviewPort(app.Slug)
+	}
+	if app.MemLimitMB > 0 {
+		spec.MemLimitMB = int64(app.MemLimitMB)
+	}
+	if app.CPULimit > 0 {
+		spec.CPULimit = app.CPULimit
+	}
+	for k, v := range s.domainLabels(app) {
+		spec.Labels[k] = v
+	}
+	return spec
+}
+
+// healthReasonFor explains an unhealthy badge: the monitor's probe fails,
+// and the container state tells whether that looks like a crash loop
+// (restarts) or an up-but-unreachable container.
+func healthReasonFor(info runtime.Info) string {
+	if !info.Running {
+		return "container is not running — start it or check the log panel"
+	}
+	if info.Restarts > 0 {
+		return fmt.Sprintf("container is crash-looping — %d restarts, see the log panel below for the error", info.Restarts)
+	}
+	return "container is running but failing health probes on its preview port — check the log panel or redeploy"
+}
+
+// startApp starts the app's container, healing a container that was
+// created without its preview port binding (older deploys, manual docker
+// runs) by recreating it from the current spec so the health probe can
+// reach it. Image apps only: git-source containers are always created by
+// the worker with their binding in place.
+func (s *Server) startApp(ctx context.Context, app store.App) error {
+	name := dmContainerName(app.Slug)
+	if err := s.rt.Start(ctx, name); err != nil {
+		return err
+	}
+	if app.Port <= 0 || app.GitSourceID != "" {
+		return nil
+	}
+	info, err := s.rt.Inspect(ctx, name)
+	if err != nil {
+		return err
+	}
+	if len(info.PublishedPorts) > 0 {
+		return nil
+	}
+	slog.Warn("apps: container has no published port; recreating from spec", "app", app.Slug, "port", app.Port)
+	_ = s.rt.Stop(ctx, name, 5)
+	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+		return err
+	}
+	if _, err := s.rt.Create(ctx, s.appSpec(app, app.Image, app.Port)); err != nil {
+		return err
+	}
+	return s.rt.Start(ctx, name)
 }
 
 func (s *Server) handleAppCreate(w http.ResponseWriter, r *http.Request) {
@@ -143,15 +231,11 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 		uptime[dm.ID] = dots
 	}
 	// Unhealthy badge must say why: the monitor knows the probe fails; the
-	// container state tells the story (crash loop count).
+	// container state tells the story (crash loop count vs unreachable).
 	healthReason := ""
 	if app.Health == "unhealthy" {
 		if info, err := s.rt.Inspect(r.Context(), dmContainerName(app.Slug)); err == nil {
-			if info.Running {
-				healthReason = fmt.Sprintf("container is crash-looping — %d restarts, see the log panel below for the error", info.Restarts)
-			} else {
-				healthReason = "container is not running — start it or check the log panel"
-			}
+			healthReason = healthReasonFor(info)
 		} else {
 			healthReason = "container missing — redeploy the app"
 		}
@@ -195,10 +279,7 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	if image == "" {
 		image = app.Image
 	}
-	port := 0
-	if p := strings.TrimSpace(r.FormValue("port")); p != "" {
-		port, _ = strconv.Atoi(p)
-	}
+	port := deployPort(r.FormValue("port"), app.Port)
 	if image == "" {
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Choose an image to deploy."), http.StatusSeeOther)
 		return
@@ -251,31 +332,7 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		fail(err)
 		return
 	}
-	// PORT env + limits, same conventions as the worker's runContainer.
-	env := s.AppEnv(app)
-	env = append(env, fmt.Sprintf("PORT=%d", effectivePort(port)))
-	spec := runtime.Spec{
-		Name:    name,
-		Image:   image,
-		Env:     env,
-		Labels:  dmLabels(app.Slug),
-		Network: NetworkName,
-	}
-	if port > 0 {
-		spec.Labels["deploymate.port"] = strconv.Itoa(port)
-		spec.Port = port
-		spec.HostPort = runtime.PreviewPort(app.Slug)
-	}
-	if app.MemLimitMB > 0 {
-		spec.MemLimitMB = int64(app.MemLimitMB)
-	}
-	if app.CPULimit > 0 {
-		spec.CPULimit = app.CPULimit
-	}
-	for k, v := range s.domainLabels(app) {
-		spec.Labels[k] = v
-	}
-	if _, err := s.rt.Create(ctx, spec); err != nil {
+	if _, err := s.rt.Create(ctx, s.appSpec(app, image, port)); err != nil {
 		fail(err)
 		return
 	}
@@ -318,7 +375,7 @@ func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.rt.Start(r.Context(), dmContainerName(app.Slug)); err != nil {
+	if err := s.startApp(r.Context(), app); err != nil {
 		if errors.Is(err, runtime.ErrContainerNotFound) {
 			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."), http.StatusSeeOther)
 			return
@@ -343,10 +400,10 @@ func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name := dmContainerName(app.Slug)
 	ctx := r.Context()
+	name := dmContainerName(app.Slug)
 	_ = s.rt.Stop(ctx, name, 10)
-	if err := s.rt.Start(ctx, name); err != nil {
+	if err := s.startApp(ctx, app); err != nil {
 		if errors.Is(err, runtime.ErrContainerNotFound) {
 			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."), http.StatusSeeOther)
 			return

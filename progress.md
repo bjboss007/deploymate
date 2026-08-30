@@ -7,6 +7,24 @@
 
 ## Where we stopped
 
+**2026-08-30** — **Health/port bugfix wave** shipped (unit-tested +
+e2e-verified on a throwaway server: fresh port + scratch data dir).
+Three backlog entries closed: (1) the unhealthy badge no longer claims
+"crash-looping" for a running container with 0 restarts —
+`healthReasonFor` distinguishes crash loops (restarts > 0) from
+"failing health probes on its preview port"; (2) Start/Restart now
+**heal** a container created without its preview port binding —
+`startApp` inspects after starting and recreates from the shared
+`appSpec` builder (image apps only; git-source containers are excluded
+because the worker always binds them); (3) the deploy handler falls
+back to the stored `app.Port` when the form's port field is empty
+(`deployPort`), so a port-less deploy can no longer persist port 0 and
+strand the app as permanently "unhealthy". E2e proved: portless deploy
+kept port + binding, and a manually-created bindingless container was
+healed by one restart click (health back to healthy). **Not yet
+committed.** Note: the server on :8090 still runs the pre-fix binary —
+restart it to pick up these fixes.
+
 **2026-08-29** — **App action feedback + status-badge bug fix** (browser-
 verified). App start/stop/restart use HTMX to swap only `#head-actions`, so
 the `?flash=` confirmation those handlers set never rendered — no page
