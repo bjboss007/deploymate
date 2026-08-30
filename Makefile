@@ -17,6 +17,7 @@ gen:
 dev: gen
 	DEPLOYMATE_ADDR=127.0.0.1:8090 DEPLOYMATE_DATA_DIR=./data \
 	DEPLOYMATE_RAILPACK="$(shell go env GOPATH)/bin/railpack" \
+	DEPLOYMATE_PREVIEW_HOST=dm.getmerchanttech.com \
 	go run ./cmd/deploymate serve
 
 test: gen

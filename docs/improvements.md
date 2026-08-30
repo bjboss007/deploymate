@@ -52,9 +52,11 @@ change.
   free-plan edge certs for the per-app hostnames (provisioning on first
   use, can take up to a day) and **auto-DNS**: new apps should get their
   CNAME automatically via the Cloudflare API instead of a manual
-  `cloudflared tunnel route dns` per app. Also worth deciding: preview
-  subdomains are public by design — a per-app private toggle + Cloudflare
-  Access is the lock-down path.
+  `cloudflared tunnel route dns` per app. Meanwhile `previewURL`
+  (`internal/httpserver/handlers_preview.go`) emits `http://` for
+  preview subdomains — flip it back to `https://` when the records
+  exist. Also worth deciding: preview subdomains are public by design —
+  a per-app private toggle + Cloudflare Access is the lock-down path.
 - [ ] **Deployment command/timeout** — manual deploys run in the HTTP
   handler with no timeout; a hung pull blocks the request. Move manual
   deploys onto the worker queue (they already create deployment rows).

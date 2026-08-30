@@ -74,8 +74,11 @@ Created per hostname with `cloudflared tunnel route dns deploymate <hostname>`:
 
 - `DEPLOYMATE_PREVIEW_HOST=dm.getmerchanttech.com` — enables Host-header
   routing and switches the app page's Access panel to show
-  `https://{slug}.dm.getmerchanttech.com` as the preview URL (the
-  `/preview/{slug}` dashboard path keeps working).
+  `http://{slug}.dm.getmerchanttech.com` as the preview URL (the
+  `/preview/{slug}` dashboard path keeps working). The scheme is plain
+  http because of the wildcard-cert gap above; `previewURL`
+  (`internal/httpserver/handlers_preview.go`) flips to `https://` once
+  the per-app records exist (auto-DNS backlog item).
 - The Host-route middleware is **public by design** (no session) — that
   is the point of a preview URL. Apps without a port, or not running,
   return 404/503.

@@ -143,7 +143,11 @@ func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 // PreviewHost is configured, otherwise the dashboard's /preview path.
 func (s *Server) previewURL(r *http.Request, app store.App) string {
 	if s.previewHost != "" {
-		return "https://" + app.Slug + "." + s.previewHost
+		// Plain http for now: Cloudflare's free plan issues no edge cert for
+		// the wildcard, so https fails until each {slug} has its own DNS
+		// record (docs/specs/cloudflare-tunnel.md). Flip back to https://
+		// when per-app records exist (auto-DNS, docs/improvements.md).
+		return "http://" + app.Slug + "." + s.previewHost
 	}
 	scheme := "http"
 	if r.TLS != nil {

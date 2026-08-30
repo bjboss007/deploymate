@@ -7,6 +7,22 @@
 
 ## Where we stopped
 
+**2026-08-30 (preview-url round)** — **Subdomain previews back, over plain
+http**. The Access panel's preview URL was hardcoded `https://{slug}.
+{previewHost}` (`previewURL`, `handlers_preview.go`), but Cloudflare's
+free plan issues no edge cert for the `*.dm.getmerchanttech.com` wildcard
+— TLS handshakes fail until each slug has its own DNS record
+(cloudflare-tunnel.md documents this), so previews had fallen back to
+`http://localhost:8090/preview/{slug}` (env var unset). Plain http on
+the subdomain always worked. Now: `previewURL` emits `http://` for
+preview subdomains (comment + spec + backlog note to flip back to https
+once auto-DNS adds per-app records); `make dev` sets
+`DEPLOYMATE_PREVIEW_HOST=dm.getmerchanttech.com`; restarted :8090 (pid
+26626) with the var set. E2e-verified through the live tunnel:
+`http://react-spa.dm.getmerchanttech.com` → 200 serving the React app,
+dashboard 303 (login), `/preview/{slug}` still works. `make test` +
+`make vet` green. Committed + pushed (bjboss007 rule).
+
 **2026-08-30 (late)** — **Preview proxy fixes** (SPAs rendered blank
 under `/preview/{slug}`). Round 1 (base-tag injection) was wrong —
 absolute-path URLs replace a `<base>`'s path, proven by a real Chrome
