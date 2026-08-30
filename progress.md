@@ -7,9 +7,8 @@
 
 ## Where we stopped
 
-**2026-08-30 (auto-DNS round)** — **Auto-DNS shipped** (unit-tested; live
-verification pending a Cloudflare API token from the user). New
-`internal/dns` package: `Creator` interface + Cloudflare API client
+**2026-08-30 (auto-DNS round)** — **Auto-DNS shipped and live-verified**.
+New `internal/dns` package: `Creator` interface + Cloudflare API client
 (`POST /zones/{id}/dns_records`, proxied CNAME to
 `{tunnel-id}.cfargotunnel.com`, error 81053 = already-exists = success,
 5s timeout, no retry). Config: `DEPLOYMATE_CLOUDFLARE_API_TOKEN` /
@@ -21,9 +20,13 @@ the auto-heal unit tests probed the deterministic preview port for slug
 `py-api`, which the **running** py-api container now occupies → probes
 succeeded and heal never ran; added `probeURLFn` override, tests pin to
 `127.0.0.1:1`. `make test` + `make vet` green. Committed + pushed
-(bjboss007 rule). **Not yet live-verified** — needs the CF token
-(`Zone.DNS:Edit`) + zone ID, then restart :8090 with the three
-`DEPLOYMATE_CLOUDFLARE_*` vars and create a test app.
+(bjboss007 rule). **E2e-verified live** on :8090 (server restarted with
+the three `DEPLOYMATE_CLOUDFLARE_*` vars — token/zone live in the
+user's ~/.zshrc as `CLOUD_FLARE_TOKEN`/`CLOUD_FLARE_ZONE_ID`): created
+test app "AutoDNS Check" through the real router → clean 303, no flash,
+record `autodns-check.dm.getmerchanttech.com → {tunnel}.cfargotunnel.com
+proxied=true` confirmed via the CF API; delete + recreate same name →
+clean 303 (81053 idempotency live); test app + session cleaned up.
 Earlier in the session: all 6 running apps got manual per-app DNS
 records (`cloudflared tunnel route dns`) to restore https previews —
 edge certs still provisioning (monitor watches `https://{slug}.dm…`).
