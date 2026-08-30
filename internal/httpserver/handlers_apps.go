@@ -531,6 +531,19 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		info, err := s.rt.Inspect(ctx, name)
 		if err != nil || !info.Running {
 			if !emitted {
+				// The container is stopped or gone. If it still exists
+				// (stopped, not removed), snapshot its last output — docker
+				// logs works on a stopped container — so the panel shows why
+				// the app went down instead of a blank "waiting". A removed
+				// container (err != nil, e.g. between deploys) has none. This
+				// tail may overlap the follow tail below if the same
+				// container is then started while the panel stays open.
+				if err == nil {
+					if snap, serr := s.rt.Logs(ctx, name, false, 200); serr == nil {
+						writeContainerLogs(w, snap)
+						snap.Close()
+					}
+				}
 				_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: "waiting for the container — deploy or start the app to see logs"})
 				emitted = true
 			}
@@ -558,33 +571,7 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 			rc.Close()
 		}()
 
-		stdoutR, stdoutW := io.Pipe()
-		stderrR, stderrW := io.Pipe()
-		go func() {
-			_, _ = stdcopy.StdCopy(stdoutW, stderrW, rc)
-			stdoutW.Close()
-			stderrW.Close()
-		}()
-
-		var wg sync.WaitGroup
-		var mu sync.Mutex
-		emit := func(line string) {
-			mu.Lock()
-			defer mu.Unlock()
-			_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: line})
-		}
-		scan := func(rd io.Reader, prefix string) {
-			defer wg.Done()
-			sc := bufio.NewScanner(rd)
-			sc.Buffer(make([]byte, 64*1024), 1024*1024)
-			for sc.Scan() {
-				emit(prefix + sc.Text())
-			}
-		}
-		wg.Add(2)
-		go scan(stdoutR, "")
-		go scan(stderrR, "[stderr] ")
-		wg.Wait()
+		writeContainerLogs(w, rc)
 		rc.Close()
 
 		// The container exited or was recreated; loop back and re-inspect.
@@ -593,6 +580,37 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		}
 		emitted = false
 	}
+}
+
+// writeContainerLogs demuxes a docker log stream (stdout/stderr multiplexed
+// by stdcopy) and writes each line to the SSE response, tagging stderr. It
+// blocks until the reader is exhausted: a follow stream ends when its reader
+// is closed (on disconnect), a snapshot ends at EOF.
+func writeContainerLogs(w http.ResponseWriter, rc io.Reader) {
+	stdoutR, stdoutW := io.Pipe()
+	stderrR, stderrW := io.Pipe()
+	go func() {
+		_, _ = stdcopy.StdCopy(stdoutW, stderrW, rc)
+		stdoutW.Close()
+		stderrW.Close()
+	}()
+
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+	scan := func(rd io.Reader, prefix string) {
+		defer wg.Done()
+		sc := bufio.NewScanner(rd)
+		sc.Buffer(make([]byte, 64*1024), 1024*1024)
+		for sc.Scan() {
+			mu.Lock()
+			_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: prefix + sc.Text()})
+			mu.Unlock()
+		}
+	}
+	wg.Add(2)
+	go scan(stdoutR, "")
+	go scan(stderrR, "[stderr] ")
+	wg.Wait()
 }
 
 // appEnv builds the container environment for an app: connection URLs for

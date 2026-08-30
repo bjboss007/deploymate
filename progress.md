@@ -7,6 +7,39 @@
 
 ## Where we stopped
 
+**2026-08-30 (logs round)** — **`build_logs` retention + app-log history
+(stateless snapshot)**. Two backlog items:
+1. **`build_logs` retention** — build logs (one row per output line, every
+   deployment) accumulated forever. `Store.PruneBuildLogsBefore(before)`
+   deletes lines older than 30 d; wired into the monitor's hourly `prune()`
+   next to metrics/uptime (`buildLogsRetain = 30*24h`,
+   `internal/monitor/monitor.go`). Deployment rows stay — only their verbose
+   output is pruned. Unit-tested (`internal/store/build_logs_test.go`,
+   future/past cutoff boundaries).
+2. **App log history** — the log panel was live-only: a stopped app showed
+   just "waiting for the container". The user chose the **stateless docker
+   tail** over a DB ring buffer ("the db thing is overkill" for one
+   maintainer). `handleAppLogs` now, when the container is **stopped but
+   not removed**, emits a non-follow `docker logs` tail (200 lines) so you
+   see *why* it went down. The stdcopy demux is extracted into a shared
+   `writeContainerLogs` helper (unit-tested via a synthetic stdcopy stream).
+   **Limitation by design:** a *removed* container (between deploys) has no
+   docker logs, so pre-recreate history isn't shown — persisting across
+   recreation would need the DB ring, backlogged as "App log persistence
+   across recreation".
+`go build`, full `make test`, and `make vet` all green. Docs updated
+(both backlog items). **E2e-verified** on a throwaway server (:18097,
+scratch data dir): deployed `nginx:alpine`, stopped it (container →
+`exited`, not removed), hit `/apps/web/logs` → the SSE stream replayed the
+container's nginx startup lines (correctly demuxed, stderr tagged
+`[stderr]`) followed by the "waiting" message — before this change a
+stopped app showed only "waiting". Then `docker rm -f dm-web` and re-hit
+`/logs` → clean "waiting" only (no snapshot, no error), confirming the
+removed-container degrade path. Throwaway server + container cleaned up;
+the user's :8090 server + 9 apps untouched. `build_logs` retention is
+unit-tested only (a 30 d window isn't practical to e2e). **Committed +
+pushed** (bjboss007 rule).
+
 **2026-08-30 (dev-environment round)** — **Added `dev` as a third app
 environment** alongside staging/production, and made it the **default for
 newly-created apps** (was production). Dev behaves exactly like staging:

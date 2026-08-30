@@ -81,8 +81,11 @@ change.
   filled from the daemon. *Bitten us already: Docker Desktop's disk
   filled, MySQL init started failing ("UUID failed", ENOSPC) and it took
   an hour to diagnose (Aug 2026) — at minimum surface a disk warning.*
-- [ ] **`build_logs` retention** — build logs accumulate forever; prune
-  with the same hourly pass as metrics (e.g. keep 30 d).
+- [x] **`build_logs` retention** — done: `Store.PruneBuildLogsBefore`
+  deletes lines older than 30 d, called from the monitor's hourly
+  `prune()` pass alongside metrics/uptime (`buildLogsRetain` in
+  `internal/monitor/monitor.go`). Deployment rows stay; only their verbose
+  line-by-line output is pruned. Unit-tested (Aug 2026).
 - [ ] **TLS status sync** — `domains.tls_status` stays `pending` forever;
   parse Traefik's acme.json (or enable Traefik's API on localhost) to
   show `active`/`failed` + expiry. Uptime probes already reveal the real
@@ -192,9 +195,23 @@ change.
   docs/specs/infra-manifest.md: database seeding/backups declared from
   the manifest. Overlaps with **Database backups** above. Pins,
   environment-specific manifests, and teardown-surfacing shipped.
-- [ ] **App log history** — logs are live-only; add a small ring buffer
-  per app (or `docker logs` snapshot) so the panel shows context before
-  the stream connects.
+- [x] **App log history** — done (stateless snapshot; the DB ring buffer
+  was deliberately judged overkill for one maintainer): when the log panel
+  opens on a **stopped but not-removed** container, `handleAppLogs` now
+  emits a non-follow `docker logs` tail (last 200 lines) so you see *why*
+  the app went down instead of a blank "waiting". The running path already
+  tails 200 for context. Demux extracted into a shared `writeContainerLogs`
+  helper (unit-tested). Limitation by design: a **removed** container
+  (between deploys) has no docker logs, so pre-recreate history is not
+  shown — persisting across recreation would need the DB ring (see below).
+  Unit-tested (Aug 2026).
+- [ ] **App log persistence across recreation** — the stateless snapshot
+  above cannot show a container's logs once it's removed (every deploy/heal
+  recreates). If pre-deploy runtime output becomes worth keeping, add a
+  DB-backed per-app ring: the monitor snapshots each running app's new
+  lines (deduped by docker's per-line timestamp) into an `app_logs` table,
+  capped per app by the hourly prune pass; the panel loads it on connect,
+  then follows live. Deferred as overkill for now.
 - [ ] **Deploy previews / per-branch deploys** — deploy a PR branch to a
   preview domain, cleaned up on merge. Requires multiple domains per app
   + per-deployment routing labels.

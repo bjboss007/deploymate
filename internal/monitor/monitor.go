@@ -19,12 +19,13 @@ import (
 )
 
 const (
-	statsInterval = 5 * time.Second
-	probeInterval = 30 * time.Second
-	pruneInterval = time.Hour
-	metricsRetain = 7 * 24 * time.Hour
-	uptimeRetain  = 30 * 24 * time.Hour
-	probeTimeout  = 5 * time.Second
+	statsInterval   = 5 * time.Second
+	probeInterval   = 30 * time.Second
+	pruneInterval   = time.Hour
+	metricsRetain   = 7 * 24 * time.Hour
+	uptimeRetain    = 30 * 24 * time.Hour
+	buildLogsRetain = 30 * 24 * time.Hour
+	probeTimeout    = 5 * time.Second
 
 	// Health hysteresis: 3 consecutive failed probes = unhealthy,
 	// 2 consecutive successes = recovered. Prevents flap spam.
@@ -494,6 +495,11 @@ func (m *Monitor) prune() {
 		slog.Error("monitor: prune uptime", "err", err)
 	} else if n > 0 {
 		slog.Info("monitor: pruned uptime checks", "count", n)
+	}
+	if n, err := m.store.PruneBuildLogsBefore(now.Add(-buildLogsRetain)); err != nil {
+		slog.Error("monitor: prune build logs", "err", err)
+	} else if n > 0 {
+		slog.Info("monitor: pruned build logs", "count", n)
 	}
 	if n, err := m.store.PruneAlertEventsBefore(now.Add(-uptimeRetain).Format(time.RFC3339Nano)); err != nil {
 		slog.Error("monitor: prune alert events", "err", err)

@@ -1,5 +1,7 @@
 package store
 
+import "time"
+
 // AppendBuildLog adds one build output line to a deployment's log, assigning
 // the next sequence number. Returns the assigned seq.
 func (s *Store) AppendBuildLog(deploymentID, stream, line string) error {
@@ -36,4 +38,17 @@ func (s *Store) ListBuildLogs(deploymentID string, afterSeq int) ([]string, erro
 		out = append(out, line)
 	}
 	return out, rows.Err()
+}
+
+// PruneBuildLogsBefore deletes build-log lines older than the given time.
+// Build logs accumulate forever otherwise — one row per output line across
+// every deployment. The monitor calls this in its hourly pass (same as
+// metrics/uptime), keeping a bounded window. The deployment rows themselves
+// are small and stay; only their verbose line-by-line output is pruned.
+func (s *Store) PruneBuildLogsBefore(before time.Time) (int64, error) {
+	res, err := s.db.Exec(`DELETE FROM build_logs WHERE ts < ?`, before.UTC().Format(time.RFC3339Nano))
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
