@@ -1,6 +1,8 @@
 package httpserver
 
 import (
+	"bytes"
+	"io"
 	"log/slog"
 	"net/http"
 	"net/http/httputil"
@@ -70,6 +72,25 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, loopbackPrefix) {
 			resp.Header.Set("Location", "/preview/"+app.Slug+strings.TrimPrefix(loc, loopbackPrefix))
+		}
+		// SPAs emit absolute asset URLs (src="/assets/…", fetch("/api/…"))
+		// that resolve to the dashboard root and 404 outside the preview
+		// prefix. A <base> tag points every absolute URL at the app's own
+		// root, which the proxy strips and forwards. Subdomain routes
+		// already reach the app at "/" and need no base.
+		if strings.HasPrefix(r.URL.Path, "/preview/"+app.Slug) &&
+			strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				resp.Body.Close()
+				return err
+			}
+			resp.Body.Close()
+			body = bytes.Replace(body, []byte("<head>"),
+				[]byte(`<head><base href="/preview/`+app.Slug+`/">`), 1)
+			resp.Body = io.NopCloser(bytes.NewReader(body))
+			resp.ContentLength = int64(len(body))
+			resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
 		}
 		return nil
 	}

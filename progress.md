@@ -7,6 +7,15 @@
 
 ## Where we stopped
 
+**2026-08-30 (late)** — **Preview proxy base-tag fix** (SPAs rendered
+blank under `/preview/{slug}`): vite HTML's absolute asset URLs hit the
+dashboard root and 404'd, so React never mounted. The proxy now injects
+`<base href="/preview/{slug}/">` into proxied HTML — all absolute URLs
+resolve under the app's prefix (subdomain routes untouched). Unit test
+`TestPreviewProxyBaseTag` (real backend on the deterministic preview
+port) + live-verified logged-in: page + bundle + `/api/ping` all 200
+through the prefix. Caught by the react-spa demo the user opened.
+
 **2026-08-30 (late)** — **Frontend-framework proof + worker health fix**.
 Deployed a React 18 + Vite 6 SPA (`react-spa`, production) through the
 full git pipeline as proof that frontend frameworks work: fixture at
