@@ -52,6 +52,17 @@ change.
   `DEPLOYMATE_CLOUDFLARE_*` env). Best-effort: failures never block app
   creation and surface as a `dns_record_failed` event + warning flash
   (Aug 2026).
+- [x] **`dev` environment (infra manifest v2.1)** — done: `dev` is a
+  third app/service environment alongside staging/production and the
+  **default for newly-created apps** (was production). Behaves exactly
+  like staging — env-prefixed services (`dev-postgres` / "Dev
+  PostgreSQL", volume `dm-svc-dev-postgres-data`), a `deploymate.dev.yml`
+  overlay, full isolation. `EnvDev` constant + `CreateApp` default flip;
+  `handleAppEnvironment` accepts it; the provisioner's service label
+  generalized from a hardcoded "Staging " prefix to a capitalized env
+  name; UI selector option + blue `.badge-dev` tint. No migration (the
+  `environment` column has no CHECK constraint). ADR 0017 addendum;
+  verified e2e (commit `a48665c`, Aug 2026).
 - [ ] **Preview https** — `previewURL` (`internal/httpserver/
   handlers_preview.go`) still emits `http://` because edge cert issuance
   lags app creation (first issuance can take minutes to hours); flip to

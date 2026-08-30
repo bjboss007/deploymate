@@ -36,7 +36,7 @@ ran with `DATABASE_URL=…@dm-svc-dev-postgres:5432/app` injected; a second
 deploy logged `manifest: reusing existing postgres service` (idempotent —
 one service, no duplicate). Throwaway server + containers + volume +
 build images all cleaned up; the user's :8090 server and apps untouched.
-**NOT committed.**
+**Committed + pushed** as `a48665c` (bjboss007 rule); working tree clean.
 
 **2026-08-30 (auto-DNS round)** — **Auto-DNS shipped and live-verified**.
 New `internal/dns` package: `Creator` interface + Cloudflare API client
@@ -192,8 +192,9 @@ handoff files (`abcbbb2`).
 session's auto-heal wave were all pushed with the bjboss007 rule.
 
 **Verified state:** everything shipped so far is e2e-verified on macOS/
-Docker Desktop. **NOT verified:** real Ubuntu server `bootstrap.sh` run,
-real Let's Encrypt issuance, auto-DNS for preview hostnames (needs a server).
+Docker Desktop (auto-DNS was verified live on :8090 against the real
+Cloudflare API). **NOT verified:** real Ubuntu server `bootstrap.sh` run,
+real Let's Encrypt issuance.
 
 ## Next up (ordered)
 
@@ -201,10 +202,12 @@ real Let's Encrypt issuance, auto-DNS for preview hostnames (needs a server).
    everything else is manually verified per feature. Entry: `testdata/e2e.sh`,
    the verification sections in `docs/specs/*.md`, backlog item in
    `docs/improvements.md` (Near-term).
-2. **Preview hostnames go live** — per-app Cloudflare DNS records are
-   manual today; auto-DNS via the Cloudflare API is the missing piece.
-   Entry: `docs/specs/cloudflare-tunnel.md`, `internal/httpserver/server.go`
-   (previewHost routing), backlog item (Near-term).
+2. **Preview DNS lifecycle** — auto-DNS now *creates* per-app CNAMEs, but
+   two gaps remain: deleting an app leaves its CNAME + edge cert behind
+   (add API-side cleanup on delete), and `previewURL` still emits `http://`
+   because edge-cert issuance lags creation — flip to `https://` once
+   issuance is confirmed reliable. Entry: `internal/dns`,
+   `internal/httpserver/handlers_preview.go`, backlog items (Near-term).
 3. **Deployment command/timeout** — manual deploys run in the HTTP handler
    with no timeout; move them onto the worker queue. Entry:
    `internal/httpserver/handlers_apps.go` (`handleAppDeploy`),
