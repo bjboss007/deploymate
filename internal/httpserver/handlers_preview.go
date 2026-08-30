@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -73,11 +74,13 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, loopbackPrefix) {
 			resp.Header.Set("Location", "/preview/"+app.Slug+strings.TrimPrefix(loc, loopbackPrefix))
 		}
-		// SPAs emit absolute asset URLs (src="/assets/…", fetch("/api/…"))
+		// SPAs emit absolute-path asset URLs (src="/assets/…", href="/…")
 		// that resolve to the dashboard root and 404 outside the preview
-		// prefix. A <base> tag points every absolute URL at the app's own
-		// root, which the proxy strips and forwards. Subdomain routes
-		// already reach the app at "/" and need no base.
+		// prefix (a <base> tag cannot help — absolute paths replace the
+		// base's path). Rewrite them to carry the prefix; the proxy strips
+		// it on the way in. Subdomain routes already reach the app at "/"
+		// and need no rewriting. (fetch("/api/…") inside JS bundles can't
+		// be rewritten here — apps should use relative URLs or a domain.)
 		if strings.HasPrefix(r.URL.Path, "/preview/"+app.Slug) &&
 			strings.Contains(resp.Header.Get("Content-Type"), "text/html") {
 			body, err := io.ReadAll(resp.Body)
@@ -86,8 +89,7 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 				return err
 			}
 			resp.Body.Close()
-			body = bytes.Replace(body, []byte("<head>"),
-				[]byte(`<head><base href="/preview/`+app.Slug+`/">`), 1)
+			body = rewritePreviewURLs(body, app.Slug)
 			resp.Body = io.NopCloser(bytes.NewReader(body))
 			resp.ContentLength = int64(len(body))
 			resp.Header.Set("Content-Length", strconv.Itoa(len(body)))
@@ -97,10 +99,41 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 	proxy.ServeHTTP(w, r)
 }
 
+// rewritePreviewURLs prefixes absolute-path src/href values with the
+// app's preview path so assets resolve through the dashboard proxy:
+// src="/assets/app.js" → src="/preview/{slug}/assets/app.js". Protocol-
+// relative (//host), fragment-only, and already-prefixed URLs are left
+// alone. Both quote styles are handled; srcset and inline CSS url() are
+// not (out of scope for now).
+func rewritePreviewURLs(body []byte, slug string) []byte {
+	prefix := "/preview/" + slug + "/"
+	re := regexp.MustCompile(`(src|href)=(["'])/([^"']*)`)
+	return re.ReplaceAllFunc(body, func(m []byte) []byte {
+		p := re.FindSubmatch(m)
+		attr, quote, rest := p[1], p[2], p[3]
+		if bytes.HasPrefix(rest, []byte("/")) || // protocol-relative //host
+			bytes.HasPrefix(rest, []byte("preview/"+slug+"/")) { // already prefixed
+			return m
+		}
+		out := append([]byte{}, attr...)
+		out = append(out, '=')
+		out = append(out, quote...)
+		out = append(out, prefix...)
+		return append(out, rest...)
+	})
+}
+
 // handlePreview reverse-proxies /preview/{slug}/* (session-protected).
 func (s *Server) handlePreview(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
+		return
+	}
+	// Canonicalize to a trailing slash: the document URL's directory is
+	// the app's root, so relative asset URLs (./assets/…) must resolve
+	// under /preview/{slug}/, not /preview/.
+	if r.URL.Path == "/preview/"+app.Slug {
+		http.Redirect(w, r, "/preview/"+app.Slug+"/", http.StatusTemporaryRedirect)
 		return
 	}
 	s.proxyToApp(w, r, app)

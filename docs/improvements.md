@@ -126,17 +126,21 @@ change.
   SPAs without a server still need a Dockerfile or a serving start
   command; per-runtime `--build-cmd`/`--start-cmd` overrides remain
   open as a Medium-term item (Aug 2026).
-- [x] **SPAs render blank under the dashboard preview** — done: vite-built
-  HTML uses absolute asset URLs (`/assets/…`, `fetch("/api/…")`) that
-  resolve to the dashboard root and 404 outside the `/preview/{slug}`
-  prefix — the page HTML loads, React never mounts, white page. The
-  preview proxy now injects `<base href="/preview/{slug}/">` into
-  proxied text/html responses so every absolute URL resolves under the
-  app's prefix (stripped on the way in); subdomain routes are untouched.
-  Unit-tested (`TestPreviewProxyBaseTag`, real backend on the
-  deterministic preview port) + live-verified with a logged-in session:
-  page HTML carries the base, the 144 kB bundle and `/api/ping` both
-  200 through the prefix (Aug 2026).
+- [x] **SPAs render blank under the dashboard preview** — done (two
+  rounds; the first fix was wrong). Round 1: a `<base>` tag injection —
+  useless, because absolute-path URLs (`/assets/…`) *replace* the base's
+  path; a real-browser reproduction proved the script still 404'd.
+  Round 2 (the actual fix): the proxy rewrites `src="/…"`/`href="/…"`
+  values in proxied text/html to carry the `/preview/{slug}/` prefix
+  (protocol-relative and already-prefixed URLs untouched), and
+  `handlePreview` 307-canonicalizes `/preview/{slug}` →
+  `/preview/{slug}/` so relative asset URLs resolve inside the app's own
+  directory. Apps should additionally emit relative URLs (`base: "./"`
+  in vite; relative `fetch("api/ping")`) — then they work standalone
+  under any subpath. Unit-tested (`TestPreviewProxyRewritesURLs`, real
+  backend on the deterministic preview port) and verified in a real
+  headless Chrome: login → `/preview/react-spa/` renders the React app,
+  body text + `api/ping` → pong (Aug 2026).
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
   only. Manual verification exists for P3–P6 (env injection, webhook→
   deploy→rollback, Traefik labels, metric/uptime assertions, three

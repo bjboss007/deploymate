@@ -13,11 +13,13 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
-// TestPreviewProxyBaseTag proves SPAs served under /preview/{slug} get a
-// <base> tag so absolute asset URLs resolve to the app instead of the
-// dashboard root (where they 404), and that the prefix is stripped on
-// the way in. Root-path (subdomain-style) requests must not get a base.
-func TestPreviewProxyBaseTag(t *testing.T) {
+// TestPreviewProxyRewritesURLs proves SPAs served under /preview/{slug}
+// get their absolute-path src/href URLs rewritten to carry the prefix
+// (a <base> tag can't help — absolute paths replace the base's path),
+// and that the prefix is stripped on the way in. Protocol-relative,
+// already-prefixed, and root-path (subdomain-style) requests are left
+// alone.
+func TestPreviewProxyRewritesURLs(t *testing.T) {
 	st, err := store.Open(filepath.Join(t.TempDir(), "dm.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
@@ -40,12 +42,17 @@ func TestPreviewProxyBaseTag(t *testing.T) {
 	}
 
 	// Backend on the app's deterministic preview port, serving a
-	// vite-like SPA with absolute asset URLs.
+	// vite-like SPA with absolute, relative, and already-prefixed URLs.
 	backend := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/":
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
-			fmt.Fprint(w, "<!doctype html><html><head><title>spa</title></head><body><script type=\"module\" src=\"/assets/app.js\"></script></body></html>")
+			fmt.Fprint(w, `<!doctype html><html><head><title>spa</title>`+
+				`<link href="/assets/style.css">`+
+				`<link href="/preview/spa-app/keep.css">`+
+				`<a href="//cdn.example.com/x">cdn</a>`+
+				`<a href="/about">app route</a>`+
+				`</head><body><script type="module" src="/assets/app.js"></script></body></html>`)
 		case "/assets/app.js":
 			w.Header().Set("Content-Type", "text/javascript")
 			fmt.Fprint(w, "console.log('spa loaded')")
@@ -66,14 +73,27 @@ func TestPreviewProxyBaseTag(t *testing.T) {
 
 	s := &Server{store: st}
 
-	// Page through the preview prefix: base tag injected.
+	// Page through the preview prefix: absolute URLs rewritten, the rest
+	// untouched.
 	rec := httptest.NewRecorder()
 	s.proxyToApp(rec, httptest.NewRequest("GET", "/preview/spa-app", nil), app)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("page status = %d, want 200", rec.Code)
 	}
-	if body := rec.Body.String(); !strings.Contains(body, `<base href="/preview/spa-app/">`) {
-		t.Errorf("page missing base tag:\n%s", body)
+	body := rec.Body.String()
+	for _, want := range []string{
+		`src="/preview/spa-app/assets/app.js"`,
+		`href="/preview/spa-app/assets/style.css"`,
+		`href="/preview/spa-app/about"`,
+		`href="/preview/spa-app/keep.css"`, // already prefixed: unchanged
+		`href="//cdn.example.com/x"`,        // protocol-relative: unchanged
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing %q:\n%s", want, body)
+		}
+	}
+	if strings.Contains(body, `src="/assets/app.js"`) {
+		t.Errorf("absolute src not rewritten:\n%s", body)
 	}
 
 	// Asset through the prefix: prefix stripped, app serves it.
@@ -90,10 +110,11 @@ func TestPreviewProxyBaseTag(t *testing.T) {
 		t.Errorf("api via prefix: status=%d body=%q", rec.Code, rec.Body.String())
 	}
 
-	// Root-path (subdomain-style) request must NOT get a base tag.
+	// Root-path (subdomain-style) request must not be rewritten (the
+	// fixture's own already-prefixed keep.css link is expected to remain).
 	rec = httptest.NewRecorder()
 	s.proxyToApp(rec, httptest.NewRequest("GET", "/", nil), app)
-	if body := rec.Body.String(); strings.Contains(body, "<base ") {
-		t.Errorf("root-path page must not get a base tag:\n%s", body)
+	if body := rec.Body.String(); strings.Contains(body, `src="/preview/spa-app/assets/app.js"`) {
+		t.Errorf("root-path page must not be rewritten:\n%s", body)
 	}
 }

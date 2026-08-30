@@ -7,14 +7,20 @@
 
 ## Where we stopped
 
-**2026-08-30 (late)** — **Preview proxy base-tag fix** (SPAs rendered
-blank under `/preview/{slug}`): vite HTML's absolute asset URLs hit the
-dashboard root and 404'd, so React never mounted. The proxy now injects
-`<base href="/preview/{slug}/">` into proxied HTML — all absolute URLs
-resolve under the app's prefix (subdomain routes untouched). Unit test
-`TestPreviewProxyBaseTag` (real backend on the deterministic preview
-port) + live-verified logged-in: page + bundle + `/api/ping` all 200
-through the prefix. Caught by the react-spa demo the user opened.
+**2026-08-30 (late)** — **Preview proxy fixes** (SPAs rendered blank
+under `/preview/{slug}`). Round 1 (base-tag injection) was wrong —
+absolute-path URLs replace a `<base>`'s path, proven by a real Chrome
+reproduction (script still 404'd). Round 2, the real fix: the proxy
+rewrites `src="/…"`/`href="/…"` in proxied HTML to carry the
+`/preview/{slug}/` prefix, and `/preview/{slug}` 307-redirects to the
+trailing-slash form so relative URLs resolve inside the app's own
+directory. The demo app was updated to the canonical subpath pattern
+(vite `base: "./"` + relative `fetch`). Verified in real headless
+Chrome: login → `/preview/react-spa/` renders the React SPA, body text
+present, `api/ping` → pong. `TestPreviewProxyRewritesURLs` covers the
+rewrite (absolutes rewritten; protocol-relative, already-prefixed, and
+root-path requests untouched). Caught by the react-spa demo the user
+opened.
 
 **2026-08-30 (late)** — **Frontend-framework proof + worker health fix**.
 Deployed a React 18 + Vite 6 SPA (`react-spa`, production) through the
@@ -184,6 +190,14 @@ real Let's Encrypt issuance, auto-DNS for preview hostnames (needs a server).
   readable via `runtime.Info.Image`) is the ground truth for any
   recreate. Note: the docker SDK's `ContainerJSON.Image` can come back
   as a bare `sha256:` digest instead of the tag.
+- **Subpath-hosted apps and URL resolution** — a `<base href>` tag does
+  NOT fix absolute-path URLs (`/assets/x` replaces the base's path);
+  only relative URLs (`./assets/x`) respect it. Relative URLs resolve
+  against the DOCUMENT URL's directory — so a subpath host must
+  canonicalize to a trailing slash (`/preview/{slug}/`), and apps
+  should emit relative URLs (`vite base: "./"`, relative `fetch`) to
+  work under any prefix. `fetch("/api/…")` inside JS bundles can't be
+  rewritten by a proxy — app-side relative URLs are the only fix.
 - Docs live in `docs/` — ADRs, knowledge, specs, improvements. Update them
   with the code, not later.
 - Never silently fix a gap in scope — backlog it first (see above).
