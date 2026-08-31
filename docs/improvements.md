@@ -84,6 +84,37 @@ change.
 - [ ] **Deployment command/timeout** — manual deploys run in the HTTP
   handler with no timeout; a hung pull blocks the request. Move manual
   deploys onto the worker queue (they already create deployment rows).
+- [ ] **Server-side dashboard routing (Traefik file provider)** — bootstrap
+  installs Traefik with the docker provider only, but the dashboard runs
+  as a host systemd service on `127.0.0.1:8080` (not a container), so on a
+  real server nothing routes `dm.example.com` or preview subdomains to it
+  — in dev this was always cloudflared → localhost. Add a file-provider
+  router (dashboard hostname + preview wildcard → `http://127.0.0.1:8080`)
+  with **explicit router priority** so the preview catch-all can't swallow
+  app-domain routers (Traefik's default priority = rule length, which the
+  `HostRegexp` catch-all would win — exact `Host()` rules on apps would
+  lose). **Blocker for the first real-server run (shape A)**. Found Aug
+  2026 during deployment planning.
+- [ ] **Deploy-time diff review** — before a git deploy, show what's about
+  to ship: changed files with +/- line counts and the commit list vs the
+  currently deployed commit. The repo is already cloned in `builds/`, so
+  the diff is a local `git diff` — no extra API calls. deploymate.io's
+  signature feature (approve/block on diff review); the lightweight
+  version is a "deploying N commits, M files, K+/L-" line in the deploy
+  confirmation, the full version a diff page. Aug 2026 competitive review.
+- [x] **Fleet-wide build statistics** — done: `GET /stats` with 30 d
+  totals, success rate, avg build time, a per-app table, and a deploys-per-
+  day chart (store: `DeploymentStatsAll`/`DeploymentStatsPerApp`/
+  `DeploysPerDay`; `stats.templ` + topbar link). Also fixed: manual image
+  deploys (kind `manual`) were excluded from `DeploymentStatsFor` (History
+  page) — now counted fleet-wide and per-app. E2e-verified (Aug 2026).
+- [ ] **Per-app releases list** — a browsable deployments page per app
+  (deploymate.io's "release management"): every deploy with status badge,
+  commit + message, duration, trigger (webhook/manual), filterable by
+  status/environment, and one-click rollback (rollback-last-5 exists in
+  the worker but isn't surfaced as a list). The per-deployment page
+  (`deployments.templ`) exists; this is the list view + actions around it.
+  Aug 2026 competitive review.
 - [ ] **Container command override** — image deploys can't pass a
   command/args. Useful for one-off jobs and images with odd entrypoints.
 - [ ] **Disk usage panel** — `docker system df` + per-volume sizes on the
@@ -240,6 +271,14 @@ change.
   (small: the column and filtering already exist).
 - [ ] **Automatic deploy on git connect** — after linking a repo, offer
   "deploy now" in the same flow (today it's two clicks).
+- [ ] **Zero-downtime deploys** — today a deploy recreates the app's
+  container in place (brief outage window; the deployer swaps the
+  container with the new image). deploymate.io's headline deploy feature
+  is zero-downtime rollout. Blue/green-lite: start the new container
+  beside the old on a spare port, gate on the same health probe the
+  monitor uses, then flip the published port mapping and drop the old
+  container. Adds a second container per app during deploys — worth
+  checking resource headroom first. Aug 2026 competitive review.
 - [x] **Notifications** — done via the alerts system: webhook channel
   with per-event subscriptions (Slack-compatible). Email/Telegram remain
   as additive channels (the `channel` column is the seam, Aug 2026).
@@ -280,7 +319,9 @@ change.
   alerts (ADR 0015, Aug 2026).
 - Container runbook: view env/effective config of a running app
 - Import/export: migrate apps between DeployMate instances
-- Blue/green or canary deploys (weighted Traefik routers)
+- Blue/green or canary deploys (weighted Traefik routers) — the
+  zero-downtime deploy item (Medium-term) is this family's immediate,
+  simpler sibling; true canary weighting stays here
 - Scheduled/cron deploys and jobs
 - Per-app build cache settings (`--cache-from` registry or local dir)
 - Dark-mode polish pass on charts + log panel (the theme system exists)

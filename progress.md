@@ -7,6 +7,35 @@
 
 ## Where we stopped
 
+**2026-08-30 (e2e-git round)** — **Automated the git-deploy path** (Next-up
+item 1, first slice). `make e2e-git` (`testdata/e2e_git.sh`) runs the real
+product flow end to end against a **throwaway** server (port 18091, scratch
+data dir, own owner) so it never touches the live :8090 apps: builds a local
+bare repo from a new `testdata/repos/e2e-web` fixture (nginx Dockerfile on
+the platform port 8080), links it, fires a **signed GitHub webhook**, waits
+for the worker to clone→build→swap, then HTTP-probes the app through
+`/preview/{slug}/`. Two enablers: a new **`seed-git-source` subcommand**
+(`cmd/deploymate/seed.go`, git twin of `setup-admin`) that links an app to
+any repo URL — including a local bare path the HTTP connect handler rejects —
+and prints `source_id=`/`webhook_secret=` so the script can sign the hook;
+and a **timestamped app slug** (`e2eweb<epoch>`) so the shared Docker daemon
+never collides with the user's real `dm-*` containers. Passes no Cloudflare
+vars (no real DNS records), uses the Dockerfile engine (no buildkit/railpack
+dep). **E2e-verified**: full run PASSED (webhook→build→run→proxy served
+"deploymate e2e git fixture"); teardown clean (no leftover server, container,
+image, or temp repos; :8090 untouched). `make test` + `make vet` green. Docs
+updated (dev-environment.md new section, improvements.md, Makefile).
+**Gotcha found:** `go build ./cmd/deploymate` writes `./deploymate`, NOT
+`bin/deploymate` — a stale `bin/` binary silently ran the old code (fell
+through to `serve`, hung the seed step). The script now always `make build`s
+unless `DM_BIN` is set. **Bigger latent bug found:** `.gitignore` had a bare
+`deploymate` line (for the built binary) that also matched the
+`cmd/deploymate/` **source dir** — the entire main package (`main.go`,
+`serve`, `setupAdmin`) was **never committed**; a fresh clone would not
+build. Anchored it to `/deploymate` so only the root binary is ignored;
+`cmd/` is now trackable. **Not yet committed** (this round adds `cmd/` to
+the repo for the first time — review the diff before pushing).
+
 **2026-08-30 (logs round)** — **`build_logs` retention + app-log history
 (stateless snapshot)**. Two backlog items:
 1. **`build_logs` retention** — build logs (one row per output line, every
@@ -231,8 +260,13 @@ real Let's Encrypt issuance.
 
 ## Next up (ordered)
 
-1. **Real e2e suite** — `testdata/e2e.sh` covers only the P2 smoke path;
-   everything else is manually verified per feature. Entry: `testdata/e2e.sh`,
+1. **Real e2e suite (continue)** — git-deploy path is now automated
+   (`make e2e-git`); still unautomated: env injection + manifest services,
+   rollback, Traefik labels, metric/uptime assertions, the three Railpack
+   runtimes. Next slices: extend `e2e_git.sh` to assert env injection via a
+   manifest service, and add a rollback assertion. Longer-term: wire both
+   e2e scripts into CI on a Linux runner (Traefik + railpack work there).
+   Entry: `testdata/e2e_git.sh`, `testdata/e2e.sh`, `cmd/deploymate/seed.go`,
    the verification sections in `docs/specs/*.md`, backlog item in
    `docs/improvements.md` (Near-term).
 2. **Preview DNS lifecycle / dedicated domain** — auto-DNS *creates*
@@ -311,6 +345,13 @@ real Let's Encrypt issuance.
   should emit relative URLs (`vite base: "./"`, relative `fetch`) to
   work under any prefix. `fetch("/api/…")` inside JS bundles can't be
   rewritten by a proxy — app-side relative URLs are the only fix.
+- **`.gitignore` `/deploymate` is root-anchored on purpose** — a bare
+  `deploymate` also matches the `cmd/deploymate/` source dir and silently
+  un-tracks the whole main package. Keep the leading slash. After any
+  build, sanity-check `git ls-files cmd/` is non-empty.
+- **`go build ./cmd/deploymate` writes `./deploymate`, not `bin/`** — use
+  `make build` (outputs `bin/deploymate`); a stale `bin/` binary runs old
+  code silently. The e2e scripts `make build` unless `DM_BIN` is set.
 - Docs live in `docs/` — ADRs, knowledge, specs, improvements. Update them
   with the code, not later.
 - Never silently fix a gap in scope — backlog it first (see above).

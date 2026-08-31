@@ -1,6 +1,9 @@
 # Binaries
 bin/
-deploymate
+# Root-anchored: the `go build ./cmd/deploymate` binary lands at ./deploymate.
+# WITHOUT the leading slash this also matches the cmd/deploymate/ SOURCE dir,
+# which silently un-tracked the whole main package (main.go, seed.go, …).
+/deploymate
 
 # Local data (SQLite, keys, build artifacts)
 data/

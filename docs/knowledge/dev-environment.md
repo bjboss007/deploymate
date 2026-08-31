@@ -41,6 +41,7 @@ make build   # bin/deploymate
 make test    # unit tests
 make vet
 make e2e     # API smoke test against a running server (login→project→app→deploy nginx)
+make e2e-git # git-deploy path on a self-contained throwaway server (see below)
 ```
 
 ## Known macOS-only limitations
@@ -62,3 +63,32 @@ git pipeline: push it to a local bare repo, point a git_source's
 only), and deploy. `testdata/apps/dbprobe/` is a Go image that queries
 Postgres via the injected `DATABASE_URL` (build it with
 `docker build -t dbprobe:latest testdata/apps/dbprobe`).
+
+## `make e2e-git` — the git-deploy path, self-contained
+
+`testdata/e2e_git.sh` exercises the real product flow end to end against a
+**throwaway** server (spare port 18091, scratch data dir, its own owner),
+so it never touches the live :8090 apps. It builds a local bare repo from
+`testdata/repos/e2e-web/` (an nginx Dockerfile serving on the platform
+port 8080, so the worker's default port binding publishes it with no
+app-side config), links it via `seed-git-source`, fires a **signed GitHub
+webhook**, waits for the worker to clone→build→swap, then HTTP-probes the
+app through `/preview/{slug}/`. Everything (server, container, built image,
+temp repos) is cleaned up on exit.
+
+Two things make this scriptable where the UI can't be:
+- **`deploymate seed-git-source <app-slug> <repo-url> [branch] [provider]`**
+  (`cmd/deploymate/seed.go`) — a test-seeding subcommand, the git twin of
+  `setup-admin`. It links an app to *any* repo URL (including a local bare
+  path the HTTP connect handler rejects), generating a real deploy key +
+  webhook secret and printing `source_id=` / `webhook_secret=` so a caller
+  can sign a webhook. Needs `DEPLOYMATE_DATA_DIR` pointed at the server's
+  data dir (shared master key).
+- The app **slug is timestamped** (`e2eweb<epoch>`): the Docker daemon is
+  shared with the user's real server, so a fixed `dm-web` name would clobber
+  a live container. Timestamping keeps the container name, preview port
+  (crc32 of slug), and image tag unique.
+
+Deliberately passes **no** `DEPLOYMATE_CLOUDFLARE_*` vars, so the throwaway
+never creates real DNS records. Uses the Dockerfile build engine (no
+Railpack/buildkit dependency) to stay portable and fast.

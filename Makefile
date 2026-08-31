@@ -26,9 +26,15 @@ test: gen
 vet:
 	$(GO) vet ./...
 
-# End-to-end API smoke test (phases P2+ extend this).
+# End-to-end API smoke test (image deploy) against a running server.
 e2e: build
 	./testdata/e2e.sh
+
+# End-to-end git-deploy path on a self-contained throwaway server: signed
+# webhook -> worker clone/build/swap -> preview-proxy probe. Builds its own
+# binary + server + local repo and cleans everything up. Safe to run anytime.
+e2e-git:
+	./testdata/e2e_git.sh
 
 clean:
 	rm -rf bin data
