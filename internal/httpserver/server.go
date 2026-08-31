@@ -32,13 +32,15 @@ type Server struct {
 	deliveries  *webhooks.DeliveryCache
 	leMode      string
 	previewHost string
+	dataDir     string // repo mirrors for the deploy-review page
 	dns         dns.Creator // nil disables auto-DNS
 }
 
 // New builds a Server.
-func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost string, dnsCreator dns.Creator) *Server {
+func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost, dataDir string, dnsCreator dns.Creator) *Server {
 	return &Server{
 		store: st, rt: rt, prov: prov, events: events, encKey: encKey, leMode: leMode, previewHost: previewHost,
+		dataDir:    dataDir,
 		deliveries: webhooks.NewDeliveryCache(),
 		dns:        dnsCreator,
 	}
@@ -109,6 +111,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/apps/{slug}", s.handleAppPage)
 		r.Get("/apps/{slug}/history", s.handleAppHistory)
 		r.Get("/apps/{slug}/releases", s.handleAppReleases)
+		r.Get("/apps/{slug}/deploy-preview", s.handleDeployPreview)
 		r.Get("/apps/{slug}/logs", s.handleAppLogs)
 		r.Get("/preview/{slug}", s.handlePreview)
 		r.Get("/preview/{slug}/*", s.handlePreview)

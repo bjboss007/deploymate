@@ -294,10 +294,9 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 							</tr>
 						</tbody>
 					</table>
-					<form method="post" action={ "/apps/" + app.Slug + "/git/deploy" } class="git-deploy">
-						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-						<button class="btn btn-primary" type="submit">Deploy latest commit</button>
-					</form>
+					<div class="git-deploy">
+						<a class="btn btn-primary" href={ "/apps/" + app.Slug + "/deploy-preview" }>Review &amp; deploy…</a>
+					</div>
 				</div>
 				<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
 			}

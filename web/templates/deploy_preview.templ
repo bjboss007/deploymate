@@ -1,0 +1,134 @@
+package templates
+
+import (
+	"github.com/habibmuhammad/deploymate/internal/gitpkg"
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+// DeployPreview is what a git deploy would ship, vs the deployed commit.
+type DeployPreview struct {
+	Range       gitpkg.Range
+	DeployedSHA string
+	CommitURL   string // web URL of the head commit, "" when unguessable
+	FirstDeploy bool
+	NothingToDo bool
+}
+
+templ DeployPreviewPage(vc ViewCtx, project store.Project, app store.App, p DeployPreview) {
+	@Layout(vc, "Review deploy · "+app.Name, app.Slug, []Crumb{
+		{Label: project.Name, Href: "/projects/" + project.Slug},
+		{Label: app.Name, Href: "/apps/" + app.Slug},
+		{Label: "Review deploy"},
+	}) {
+		<div class="page-head">
+			<div>
+				<h1>Review deploy — { app.Name }</h1>
+				<p class="muted">
+					if p.FirstDeploy {
+						First deploy — nothing has shipped yet.
+					} else {
+						Deployed commit: <span class="mono">{ shortSHA8(p.DeployedSHA) }</span>
+					}
+				</p>
+			</div>
+			<div class="head-actions">
+				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Cancel</a>
+			</div>
+		</div>
+
+		if p.NothingToDo {
+			<div class="flash">The branch head is the same commit that is already deployed — nothing to do.</div>
+		} else {
+			<div class="stat-strip">
+				<div class="stat-card">
+					<div class="stat-value">{ len(p.Range.Commits) }</div>
+					<div class="stat-label">commits</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value">{ p.Range.Files }</div>
+					<div class="stat-label">files changed</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value">+{ p.Range.Added }</div>
+					<div class="stat-label">lines added</div>
+				</div>
+				<div class="stat-card">
+					<div class="stat-value">−{ p.Range.Deleted }</div>
+					<div class="stat-label">lines removed</div>
+				</div>
+			</div>
+
+			<div class="panel">
+				<div class="panel-title">Commits to ship</div>
+				if len(p.Range.Commits) == 0 {
+					<p class="muted">No commits found.</p>
+				} else {
+					<table class="deploy-table">
+						<thead>
+							<tr>
+								<th>Commit</th>
+								<th>Subject</th>
+								<th>Author</th>
+								<th>Date</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, c := range p.Range.Commits {
+								<tr>
+									<td class="mono">
+										if p.CommitURL != "" {
+											<a class="deploy-link" href={ p.CommitURL } target="_blank" rel="noopener" title={ p.CommitURL }>{ c.Short } ↗</a>
+										} else {
+											{c.Short}
+										}
+									</td>
+									<td>{ c.Subject }</td>
+									<td class="muted">{ c.Author }</td>
+									<td class="mono muted">{ c.Date }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+			</div>
+
+			<div class="panel">
+				<form method="post" action={ "/apps/" + app.Slug + "/git/deploy" }>
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<input type="hidden" name="sha" value={ p.Range.Head }/>
+					<p class="muted panel-hint">
+						Deploying pins commit <span class="mono">{ shortSHA8(p.Range.Head) }</span> — exactly what you reviewed here.
+					</p>
+					<button class="btn btn-primary" type="submit">Deploy { shortSHA8(p.Range.Head) }</button>
+					<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Cancel</a>
+				</form>
+			</div>
+		}
+	}
+}
+
+templ DeployPreviewError(vc ViewCtx, project store.Project, app store.App, message string) {
+	@Layout(vc, "Review deploy · "+app.Name, app.Slug, []Crumb{
+		{Label: project.Name, Href: "/projects/" + project.Slug},
+		{Label: app.Name, Href: "/apps/" + app.Slug},
+		{Label: "Review deploy"},
+	}) {
+		<div class="page-head">
+			<div>
+				<h1>Review deploy — { app.Name }</h1>
+			</div>
+			<div class="head-actions">
+				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
+			</div>
+		</div>
+		<div class="flash flash-error">{ message }</div>
+	}
+}
+
+// shortSHA8 shortens a full sha for display.
+func shortSHA8(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
+}

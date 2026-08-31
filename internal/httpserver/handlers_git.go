@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	cryptoRand "crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -85,8 +87,10 @@ func (s *Server) handleGitConnect(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
 
-// handleGitDeploy queues a deployment of the branch HEAD (webhooks deploy at
-// the pushed SHA instead).
+// handleGitDeploy queues a deployment of the branch HEAD. The optional sha
+// form field pins the deploy to a reviewed commit (the deploy-review page
+// posts it); an empty sha keeps the old "deploy latest" behavior. The worker
+// honors the pinned SHA (gitpkg.Clone fetches + detaches it).
 func (s *Server) handleGitDeploy(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
@@ -96,13 +100,91 @@ func (s *Server) handleGitDeploy(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Connect a repo first."), http.StatusSeeOther)
 		return
 	}
-	d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "dashboard"})
+	d, err := s.store.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "dashboard",
+		CommitSHA: r.FormValue("sha"),
+	})
 	if err != nil {
 		slog.Error("git: queue deploy", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
+}
+
+// handleDeployPreview shows what a deploy would ship — commits + file change
+// counts vs the currently deployed commit — and is the confirm step of the
+// two-step deploy flow. The confirm form pins the reviewed SHA.
+func (s *Server) handleDeployPreview(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	project, err := s.store.GetProjectByID(app.ProjectID)
+	if err != nil {
+		slog.Error("deploy-preview: get project", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if app.GitSourceID == "" {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Connect a repo first."), http.StatusSeeOther)
+		return
+	}
+	gs, err := s.store.GetGitSource(app.GitSourceID)
+	if err != nil {
+		slog.Error("deploy-preview: get source", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	privateKey, err := crypto.Decrypt(s.encKey, gs.PrivateKeyEnc)
+	if err != nil {
+		slog.Error("deploy-preview: decrypt key", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	dir := gitpkg.MirrorDir(s.dataDir, gs.ID)
+	if err := gitpkg.MirrorSync(ctx, gs.RepoURL, gs.DefaultBranch, privateKey, dir); err != nil {
+		slog.Error("deploy-preview: mirror sync", "err", err)
+		http.Error(w, "could not reach the repository: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+
+	// The currently deployed commit ("" when nothing has deployed yet).
+	deployedSHA := ""
+	if app.CurrentDeploymentID != "" {
+		if cur, err := s.store.GetDeployment(app.CurrentDeploymentID); err == nil {
+			deployedSHA = cur.CommitSHA
+		}
+	}
+	if err := gitpkg.MirrorEnsureSHA(ctx, dir, gs.RepoURL, privateKey, deployedSHA); err != nil {
+		render(w, r, http.StatusOK, templates.DeployPreviewError(s.viewCtx(r), project, app,
+			"the currently deployed commit ("+shortSHA(deployedSHA)+") is not on the remote anymore — likely force-pushed away. Roll back, or deploy HEAD without a diff."))
+		return
+	}
+	rg, err := gitpkg.MirrorRange(ctx, dir, gs.DefaultBranch, deployedSHA)
+	if err != nil {
+		slog.Error("deploy-preview: range", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	render(w, r, http.StatusOK, templates.DeployPreviewPage(s.viewCtx(r), project, app, templates.DeployPreview{
+		Range:        rg,
+		DeployedSHA:  deployedSHA,
+		CommitURL:    gitpkg.CommitURL(gs.RepoURL, rg.Head),
+		FirstDeploy:  deployedSHA == "",
+		NothingToDo:  deployedSHA != "" && deployedSHA == rg.Head,
+	}))
+}
+
+func shortSHA(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
 }
 
 // handleWebhook is the public push endpoint: /hooks/{sourceID}. No auth —

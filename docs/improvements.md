@@ -95,13 +95,17 @@ change.
   `HostRegexp` catch-all would win — exact `Host()` rules on apps would
   lose). **Blocker for the first real-server run (shape A)**. Found Aug
   2026 during deployment planning.
-- [ ] **Deploy-time diff review** — before a git deploy, show what's about
-  to ship: changed files with +/- line counts and the commit list vs the
-  currently deployed commit. The repo is already cloned in `builds/`, so
-  the diff is a local `git diff` — no extra API calls. deploymate.io's
-  signature feature (approve/block on diff review); the lightweight
-  version is a "deploying N commits, M files, K+/L-" line in the deploy
-  confirmation, the full version a diff page. Aug 2026 competitive review.
+- [x] **Deploy-time diff review** — done: the Git panel's one-click deploy
+  is now a two-step flow. `GET /apps/{slug}/deploy-preview` shows commits
+  + file counts (+/-) vs the currently deployed commit (persistent full
+  mirror clones in `data/repos/mirror-{sourceID}` — `internal/gitpkg/
+  mirror.go`: `MirrorSync`/`MirrorEnsureSHA`/`MirrorRange`, `ErrCommitGone`
+  when the deployed commit was force-pushed away), and the confirm form
+  **pins the reviewed SHA** (`sha` form field — `gitpkg.Clone` already
+  honored pinned SHAs). Webhook deploys skip the review but get the same
+  range recorded in the build log (`Worker.logDiffRecord`). First-deploy
+  and nothing-to-deploy states. E2e-verified: first deploy → second
+  commit → review shows the new range → pinned deploy (Aug 2026).
 - [x] **Fleet-wide build statistics** — done: `GET /stats` with 30 d
   totals, success rate, avg build time, a per-app table, and a deploys-per-
   day chart (store: `DeploymentStatsAll`/`DeploymentStatsPerApp`/

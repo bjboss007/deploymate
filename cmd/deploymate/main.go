@@ -96,7 +96,7 @@ func serve() error {
 		dnsCreator = dns.NewCloudflare(cfg.CloudflareAPIToken, cfg.CloudflareZoneID, cfg.CloudflareTunnelID)
 		slog.Info("auto-dns enabled", "zone", cfg.CloudflareZoneID, "tunnel", cfg.CloudflareTunnelID)
 	}
-	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, dnsCreator)
+	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsCreator)
 
 	// Alert dispatcher: worker + monitor emit catalog events; targets
 	// receive best-effort webhook deliveries.

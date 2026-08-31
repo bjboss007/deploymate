@@ -147,6 +147,9 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 		d.CommitSHA, d.CommitMessage = sha, message
 		_ = w.store.UpdateDeployment(d)
 	}
+	// Webhook deploys skip the review page — leave the same range record in
+	// the build log so every deploy shows what shipped.
+	w.logDiffRecord(ctx, app, gs, d)
 	w.log(d, "system", "building commit "+sha[:12]+" — "+message)
 	w.publish("deploy:"+app.Slug, "log", "building commit "+sha[:12])
 
@@ -171,6 +174,10 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	}
 
 	imageTag := fmt.Sprintf("deploymate/apps/%s:%s", app.Slug, d.ID)
+
+	// Webhook deploys skip the review page; leave the range record for them.
+	w.logDiffRecord(ctx, app, gs, d)
+
 	streamLog := func(line string) {
 		w.log(d, "stdout", line)
 		w.publish("deploy:"+app.Slug, "log", line)
@@ -206,6 +213,41 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 		return err
 	}
 	return w.finish(d, app.ID)
+}
+
+// logDiffRecord appends the deploy range to the build log for webhook
+// deploys, which skip the review page — they get the same "what shipped"
+// record the dashboard review shows. Best-effort: every error is swallowed,
+// the deploy never fails because the record failed.
+func (w *Worker) logDiffRecord(ctx context.Context, app store.App, gs store.GitSource, d store.Deployment) {
+	if d.CommitSHA == "" || app.CurrentDeploymentID == "" {
+		return
+	}
+	cur, err := w.store.GetDeployment(app.CurrentDeploymentID)
+	if err != nil || cur.CommitSHA == "" {
+		return
+	}
+	privateKey, err := crypto.Decrypt(w.encKey, gs.PrivateKeyEnc)
+	if err != nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	dir := gitpkg.MirrorDir(w.dataDir, gs.ID)
+	if err := gitpkg.MirrorSync(ctx, gs.RepoURL, gs.DefaultBranch, privateKey, dir); err != nil {
+		return
+	}
+	if err := gitpkg.MirrorEnsureSHA(ctx, dir, gs.RepoURL, privateKey, cur.CommitSHA); err != nil {
+		return
+	}
+	rg, err := gitpkg.MirrorRange(ctx, dir, gs.DefaultBranch, cur.CommitSHA)
+	if err != nil || len(rg.Commits) == 0 {
+		return
+	}
+	w.log(d, "system", rg.SummaryLine())
+	for _, c := range rg.Commits {
+		w.log(d, "system", fmt.Sprintf("  %s %s — %s", c.Short, c.Subject, c.Author))
+	}
 }
 
 // resolveManifest reconciles the declared services with the app's
