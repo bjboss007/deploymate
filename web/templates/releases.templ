@@ -50,6 +50,7 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 					}
 				</p>
 			} else {
+				<div class="table-wrap">
 				<table class="deploy-table">
 					<thead>
 						<tr>
@@ -71,7 +72,7 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 										<span class="badge badge-accent">current</span>
 									}
 								</td>
-								<td class="mono">
+								<td class="mono commit-cell">
 									if r.ImageTag != "" {
 										{r.ImageTag}
 									} else if r.CommitSHA != "" {
@@ -81,7 +82,7 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 											{r.CommitSHA}
 										}
 										if r.CommitMessage != "" {
-											<span class="muted"> — { r.CommitMessage }</span>
+											<span class="muted commit-msg" title={ r.CommitMessage }> — { r.CommitMessage }</span>
 										}
 									} else {
 										<span class="muted">—</span>
@@ -103,6 +104,7 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 						}
 					</tbody>
 				</table>
+				</div>
 			}
 		</div>
 	}

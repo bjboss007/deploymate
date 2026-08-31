@@ -330,6 +330,13 @@ select { cursor: pointer; }
 
 /* ---- deployments table ----------------------------------------------- */
 .deploy-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+/* Tables that can outgrow the panel scroll horizontally instead of breaking
+   the layout; the commit cell truncates with an ellipsis (full text in the
+   title attribute). */
+.table-wrap { overflow-x: auto; }
+.deploy-table .commit-cell {
+  max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .deploy-table th {
   text-align: left; font-family: var(--font-mono); font-size: 12px; font-weight: 400;
   color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em;
