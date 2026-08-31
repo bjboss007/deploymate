@@ -231,6 +231,12 @@ select { cursor: pointer; }
   color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
   margin-bottom: 14px;
 }
+.panel-title .panel-link {
+  float: right; text-transform: none; letter-spacing: normal;
+  color: var(--accent); text-decoration: none; font-size: 12.5px;
+}
+.panel-title .panel-link:hover { text-decoration: underline; }
+.filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
 .panel-hint { font-size: 13px; margin-top: 12px; }
 .panel-warn { border-color: rgba(255, 92, 92, 0.3); }
 .panel-warn .panel-title { color: var(--red); }

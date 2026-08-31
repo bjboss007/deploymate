@@ -108,13 +108,17 @@ change.
   `DeploysPerDay`; `stats.templ` + topbar link). Also fixed: manual image
   deploys (kind `manual`) were excluded from `DeploymentStatsFor` (History
   page) — now counted fleet-wide and per-app. E2e-verified (Aug 2026).
-- [ ] **Per-app releases list** — a browsable deployments page per app
-  (deploymate.io's "release management"): every deploy with status badge,
-  commit + message, duration, trigger (webhook/manual), filterable by
-  status/environment, and one-click rollback (rollback-last-5 exists in
-  the worker but isn't surfaced as a list). The per-deployment page
-  (`deployments.templ`) exists; this is the list view + actions around it.
-  Aug 2026 competitive review.
+- [x] **Per-app releases list** — done: `GET /apps/{slug}/releases`
+  (handlers_releases.go + releases.templ, "All releases →" on the app
+  page): every deployment with status badge, commit/image, kind, trigger,
+  duration, a "current" marker, `?status=all|successful|failed` filters,
+  and one-click rollback. New migration 0011 adds `deployments.trigger`
+  (dashboard | webhook | manual | rollback | resize; '' = legacy → UI
+  falls back to kind) set at all five create call sites. Also fixed:
+  manual deploys never set `apps.current_deployment_id` (only the worker
+  did) — every manual row showed rollbackable and nothing was "current";
+  `handleAppDeploy` now mirrors the worker's `finish`. E2e-verified (Aug
+  2026).
 - [ ] **Container command override** — image deploys can't pass a
   command/args. Useful for one-off jobs and images with odd entrypoints.
 - [ ] **Disk usage panel** — `docker system df` + per-volume sizes on the

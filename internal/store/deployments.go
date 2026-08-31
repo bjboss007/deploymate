@@ -14,8 +14,9 @@ type Deployment struct {
 	AppID         string
 	CommitSHA     string
 	CommitMessage string
-	Kind          string // deploy | rollback | manual
-	Status        string // queued | building | running | failed
+	Kind          string   // deploy | rollback | manual
+	Status        string   // queued | building | running | failed
+	Trigger       string   // dashboard | webhook | manual | rollback | resize; '' for legacy rows
 	ImageTag      string
 	Error         string
 	StartedAt     string
@@ -28,9 +29,9 @@ func (s *Store) CreateDeployment(d Deployment) (Deployment, error) {
 	d.ID = NewID()
 	d.CreatedAt = Now()
 	_, err := s.db.Exec(
-		`INSERT INTO deployments (id, app_id, commit_sha, commit_message, kind, status, image_tag, error, started_at, finished_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		d.ID, d.AppID, d.CommitSHA, d.CommitMessage, d.Kind, d.Status, d.ImageTag, d.Error,
+		`INSERT INTO deployments (id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		d.ID, d.AppID, d.CommitSHA, d.CommitMessage, d.Kind, d.Status, d.Trigger, d.ImageTag, d.Error,
 		d.StartedAt, d.FinishedAt, d.CreatedAt,
 	)
 	return d, err
@@ -49,10 +50,10 @@ func (s *Store) UpdateDeployment(d Deployment) error {
 func (s *Store) GetDeployment(id string) (Deployment, error) {
 	var d Deployment
 	err := s.db.QueryRow(
-		`SELECT id, app_id, commit_sha, commit_message, kind, status, image_tag, error, started_at, finished_at, created_at
+		`SELECT id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at
 		 FROM deployments WHERE id = ?`,
 		id,
-	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.ImageTag,
+	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
 		&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
@@ -106,10 +107,10 @@ func (s *Store) FailStaleBuilding() (int64, error) {
 func (s *Store) LatestDeploymentOfKind(appID, kind string) (*Deployment, error) {
 	var d Deployment
 	err := s.db.QueryRow(
-		`SELECT id, app_id, commit_sha, commit_message, kind, status, image_tag, error, started_at, finished_at, created_at
+		`SELECT id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at
 		 FROM deployments WHERE app_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1`,
 		appID, kind,
-	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.ImageTag,
+	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
 		&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
@@ -132,7 +133,7 @@ func (d *Deployment) CreatedTime() time.Time {
 // ListDeployments returns an app's deployment history, newest first.
 func (s *Store) ListDeployments(appID string, limit int) ([]Deployment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, app_id, commit_sha, commit_message, kind, status, image_tag, error, started_at, finished_at, created_at
+		`SELECT id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at
 		 FROM deployments WHERE app_id = ? ORDER BY created_at DESC LIMIT ?`,
 		appID, limit,
 	)
@@ -143,7 +144,7 @@ func (s *Store) ListDeployments(appID string, limit int) ([]Deployment, error) {
 	var out []Deployment
 	for rows.Next() {
 		var d Deployment
-		if err := rows.Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.ImageTag,
+		if err := rows.Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
 			&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt); err != nil {
 			return nil, err
 		}

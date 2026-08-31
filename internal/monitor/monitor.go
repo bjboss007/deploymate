@@ -225,7 +225,7 @@ func (m *Monitor) checkResourcePressure(ctx context.Context, app store.App) {
 	// Redeploy with the current image — the worker's resize path skips
 	// the build and just swaps the container with the new limits.
 	d, err := m.store.CreateDeployment(store.Deployment{
-		AppID: app.ID, Kind: "resize", Status: "queued", ImageTag: info.Image,
+		AppID: app.ID, Kind: "resize", Status: "queued", Trigger: "resize", ImageTag: info.Image,
 	})
 	if err != nil {
 		slog.Error("monitor: queue resize", "app", app.Slug, "err", err)

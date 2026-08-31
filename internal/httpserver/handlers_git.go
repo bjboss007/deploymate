@@ -96,7 +96,7 @@ func (s *Server) handleGitDeploy(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Connect a repo first."), http.StatusSeeOther)
 		return
 	}
-	d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "deploy", Status: "queued"})
+	d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "dashboard"})
 	if err != nil {
 		slog.Error("git: queue deploy", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -172,7 +172,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	if apps, err := s.store.ListAppsByGitSource(gs.ID); err == nil {
 		for _, app := range apps {
 			_, err := s.store.CreateDeployment(store.Deployment{
-				AppID: app.ID, Kind: "deploy", Status: "queued",
+				AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "webhook",
 				CommitSHA: push.CommitSHA, CommitMessage: push.CommitMessage,
 			})
 			if err != nil {
@@ -302,7 +302,7 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rb, err := s.store.CreateDeployment(store.Deployment{
-		AppID: app.ID, Kind: "rollback", Status: "queued",
+		AppID: app.ID, Kind: "rollback", Status: "queued", Trigger: "rollback",
 		ImageTag: d.ImageTag, CommitSHA: d.CommitSHA, CommitMessage: d.CommitMessage,
 	})
 	if err != nil {

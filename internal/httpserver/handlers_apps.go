@@ -340,7 +340,7 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "manual", Status: "running", ImageTag: image})
+	d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "manual", Status: "running", Trigger: "manual", ImageTag: image})
 	if err != nil {
 		slog.Error("apps: create deployment", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -393,6 +393,11 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	_ = s.store.UpdateDeployment(d)
 	if err := s.store.UpdateAppStatus(app.ID, "running"); err != nil {
 		slog.Error("apps: set running", "err", err)
+	}
+	// The new container is what's serving now — mirror the worker's finish,
+	// which points current_deployment_id at the active deploy.
+	if err := s.store.SetAppCurrentDeployment(app.ID, d.ID); err != nil {
+		slog.Error("apps: set current deployment", "err", err)
 	}
 	// Fresh container with its binding — declare healthy now (the monitor
 	// corrects within 90s if the new build actually fails to serve).

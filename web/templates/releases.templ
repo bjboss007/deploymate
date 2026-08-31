@@ -1,0 +1,116 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+// ReleaseRow is one deployment in the per-app releases list.
+type ReleaseRow struct {
+	ID            string
+	Status        string
+	Kind          string
+	Trigger       string
+	CommitSHA     string
+	CommitMessage string
+	ImageTag      string
+	CreatedAt     string
+	Duration      string
+	CommitURL     string
+	Current       bool
+	Rollbackable  bool
+}
+
+templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []ReleaseRow, filter string) {
+	@Layout(vc, "Releases · "+app.Name, app.Slug, []Crumb{
+		{Label: project.Name, Href: "/projects/" + project.Slug},
+		{Label: app.Name, Href: "/apps/" + app.Slug},
+		{Label: "Releases"},
+	}) {
+		<div class="page-head">
+			<div>
+				<h1>{ app.Name } — releases</h1>
+				<p class="muted">Every deployment this app has seen, newest first.</p>
+			</div>
+			<div class="head-actions">
+				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
+			</div>
+		</div>
+
+		<div class="filter-row">
+			<a class={ "btn btn-sm " + filterClass(filter, "all") } href={ "/apps/" + app.Slug + "/releases" }>All</a>
+			<a class={ "btn btn-sm " + filterClass(filter, "successful") } href={ "/apps/" + app.Slug + "/releases?status=successful" }>Successful</a>
+			<a class={ "btn btn-sm " + filterClass(filter, "failed") } href={ "/apps/" + app.Slug + "/releases?status=failed" }>Failed</a>
+		</div>
+
+		<div class="panel">
+			if len(rows) == 0 {
+				<p class="muted">
+					if filter == "all" {
+						Nothing deployed yet — deploy the app and releases start accumulating.
+					} else {
+						No { filter } releases in the list.
+					}
+				</p>
+			} else {
+				<table class="deploy-table">
+					<thead>
+						<tr>
+							<th>Status</th>
+							<th>Commit / image</th>
+							<th>Kind</th>
+							<th>Trigger</th>
+							<th>Duration</th>
+							<th>When</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, r := range rows {
+							<tr>
+								<td>
+									<a class="mono deploy-link" href={ "/deployments/" + r.ID }>@statusBadge(r.Status)</a>
+									if r.Current {
+										<span class="badge badge-accent">current</span>
+									}
+								</td>
+								<td class="mono">
+									if r.ImageTag != "" {
+										{r.ImageTag}
+									} else if r.CommitSHA != "" {
+										if r.CommitURL != "" {
+											<a class="deploy-link" href={ r.CommitURL } target="_blank" rel="noopener" title={ r.CommitURL }>{ r.CommitSHA } ↗</a>
+										} else {
+											{r.CommitSHA}
+										}
+										if r.CommitMessage != "" {
+											<span class="muted"> — { r.CommitMessage }</span>
+										}
+									} else {
+										<span class="muted">—</span>
+									}
+								</td>
+								<td>{ r.Kind }</td>
+								<td class="mono muted">{ r.Trigger }</td>
+								<td class="mono muted">{ r.Duration }</td>
+								<td class="mono muted">{ shortTime(r.CreatedAt) }</td>
+								<td class="env-actions">
+									if r.Rollbackable {
+										<form method="post" action={ "/deployments/" + r.ID + "/rollback" }>
+											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+											<button class="btn btn-ghost btn-sm" type="submit">Rollback</button>
+										</form>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	}
+}
+
+func filterClass(active, name string) string {
+	if active == name {
+		return "btn-primary"
+	}
+	return "btn-ghost"
+}

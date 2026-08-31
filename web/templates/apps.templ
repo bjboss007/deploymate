@@ -390,7 +390,9 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 
 		if len(deployments) > 0 {
 			<div class="panel">
-				<div class="panel-title">Deployments</div>
+				<div class="panel-title">Deployments
+					<a class="panel-link" href={ "/apps/" + app.Slug + "/releases" }>All releases →</a>
+				</div>
 				<table class="deploy-table">
 					<thead>
 						<tr>
