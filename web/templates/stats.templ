@@ -1,0 +1,77 @@
+package templates
+
+import "github.com/habibmuhammad/deploymate/internal/store"
+
+// FleetStats is the fleet-wide summary strip for the stats page.
+type FleetStats struct {
+	Total       int
+	SuccessRate float64
+	AvgBuildSec float64
+}
+
+templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, perDay []store.DayCount) {
+	@Layout(vc, "Build statistics", "", []Crumb{{Label: "Stats"}}) {
+		<div class="page-head">
+			<div>
+				<h1>Build statistics</h1>
+				<p class="muted">All apps, last 30 days.</p>
+			</div>
+		</div>
+
+		<div class="stat-strip">
+			<div class="stat-card">
+				<div class="stat-value">{ stats.Total }</div>
+				<div class="stat-label">deploys (30d)</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ fmtPct(stats.SuccessRate) }</div>
+				<div class="stat-label">success rate</div>
+			</div>
+			<div class="stat-card">
+				<div class="stat-value">{ fmtSec(stats.AvgBuildSec) }</div>
+				<div class="stat-label">avg build time</div>
+			</div>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Deploys per day</div>
+			<div id="fleet-deploys-data" hidden>{ jsonForDayCounts(perDay) }</div>
+			<div class="chart-grid">
+				<div>
+					<canvas id="fleet-deploys-chart" height="90"></canvas>
+				</div>
+			</div>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Per app</div>
+			if len(perApp) == 0 {
+				<p class="muted">No deployments in the last 30 days — deploy something and the table fills in.</p>
+			} else {
+				<table class="deploy-table">
+					<thead>
+						<tr>
+							<th>App</th>
+							<th>Deploys</th>
+							<th>Success rate</th>
+							<th>Avg build time</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, a := range perApp {
+							<tr>
+								<td>
+									<a class="deploy-link" href={ "/apps/" + a.Slug }>{ a.Name }</a>
+									<span class="muted mono"> · { a.Slug }</span>
+								</td>
+								<td class="mono">{ a.Total }</td>
+								<td class="mono">{ fmtPct(pctOf(a.Succeeded, a.Total)) }</td>
+								<td class="mono">{ fmtSec(a.AvgBuildSec) }</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	}
+}

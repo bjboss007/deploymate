@@ -99,6 +99,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/projects", s.handleProjectsList)
 		r.Post("/projects", am.CheckCSRF(s.handleProjectCreate))
 		r.Get("/alerts", s.handleAlertsPage)
+		r.Get("/stats", s.handleStatsPage)
 		r.Post("/alerts", am.CheckCSRF(s.handleAlertCreate))
 		r.Post("/alerts/{id}/delete", am.CheckCSRF(s.handleAlertDelete))
 		r.Get("/projects/{slug}", s.handleProjectDetail)

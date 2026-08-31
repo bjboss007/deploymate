@@ -201,11 +201,15 @@ change.
   backend on the deterministic preview port) and verified in a real
   headless Chrome: login → `/preview/react-spa/` renders the React app,
   body text + `api/ping` → pong (Aug 2026).
-- [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 smoke path
-  only. Manual verification exists for P3–P6 (env injection, webhook→
-  deploy→rollback, Traefik labels, metric/uptime assertions, three
-  runtimes) but none of it is automated; wire into CI with a Linux
-  runner (Traefik works there).
+- [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 image smoke
+  path; `testdata/e2e_git.sh` (`make e2e-git`, Aug 2026) now covers the
+  **git-deploy path** end to end on a throwaway server (signed webhook →
+  worker clone/build/swap → preview-proxy probe), via the new
+  `seed-git-source` subcommand + `testdata/repos/e2e-web` fixture. Still
+  unautomated: env injection + manifest services, rollback, Traefik
+  labels, metric/uptime assertions, the three Railpack runtimes (the git
+  suite uses the Dockerfile engine to avoid a buildkit dependency). Wire
+  the lot into CI with a Linux runner (Traefik + railpack work there).
 
 ## Medium-term (feature depth)
 

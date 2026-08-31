@@ -25,7 +25,7 @@ func (s *Server) handleAppHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	since := time.Now().UTC().Add(-30 * 24 * time.Hour)
+	since := time.Now().UTC().Add(-statsWindow)
 
 	stats, err := s.store.DeploymentStatsFor(app.ID, since)
 	if err != nil {

@@ -85,7 +85,7 @@ func (s *Store) DeploymentStatsFor(appID string, since time.Time) (DeploymentSta
 	sinceS := since.UTC().Format(time.RFC3339Nano)
 	if err := s.db.QueryRow(
 		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0)
-		 FROM deployments WHERE app_id = ? AND created_at >= ? AND kind IN ('deploy', 'rollback', 'resize')`,
+		 FROM deployments WHERE app_id = ? AND created_at >= ? AND kind IN ('deploy', 'manual', 'rollback', 'resize')`,
 		appID, sinceS,
 	).Scan(&out.Total, &out.Succeeded); err != nil {
 		return out, err
@@ -102,6 +102,106 @@ func (s *Store) DeploymentStatsFor(appID string, since time.Time) (DeploymentSta
 		out.AvgBuildSec = sum * 86400 / count
 	}
 	return out, nil
+}
+
+// DeploymentStatsAll computes fleet-wide deploy behavior over a window
+// (the app-scoped DeploymentStatsFor minus the app filter).
+func (s *Store) DeploymentStatsAll(since time.Time) (DeploymentStats, error) {
+	var out DeploymentStats
+	sinceS := since.UTC().Format(time.RFC3339Nano)
+	if err := s.db.QueryRow(
+		`SELECT COUNT(*), COALESCE(SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END), 0)
+		 FROM deployments WHERE created_at >= ? AND kind IN ('deploy', 'manual', 'rollback', 'resize')`,
+		sinceS,
+	).Scan(&out.Total, &out.Succeeded); err != nil {
+		return out, err
+	}
+	var sum, count float64
+	if err := s.db.QueryRow(
+		`SELECT COALESCE(SUM(julianday(finished_at) - julianday(started_at)), 0), COUNT(*)
+		 FROM deployments WHERE created_at >= ? AND started_at != '' AND finished_at != ''`,
+		sinceS,
+	).Scan(&sum, &count); err != nil {
+		return out, err
+	}
+	if count > 0 {
+		out.AvgBuildSec = sum * 86400 / count
+	}
+	return out, nil
+}
+
+// AppDeploymentStats is one app's row in the fleet stats table.
+type AppDeploymentStats struct {
+	Name        string
+	Slug        string
+	Total       int
+	Succeeded   int
+	AvgBuildSec float64
+}
+
+// DeploymentStatsPerApp computes per-app deploy behavior over a window,
+// most-deployed first. Apps with no deployments in the window are absent.
+func (s *Store) DeploymentStatsPerApp(since time.Time) ([]AppDeploymentStats, error) {
+	sinceS := since.UTC().Format(time.RFC3339Nano)
+	rows, err := s.db.Query(
+		`SELECT a.name, a.slug,
+		        COUNT(d.id),
+		        COALESCE(SUM(CASE WHEN d.status = 'running' THEN 1 ELSE 0 END), 0),
+		        COALESCE(SUM(julianday(d.finished_at) - julianday(d.started_at)), 0) * 86400,
+		        COUNT(CASE WHEN d.started_at != '' AND d.finished_at != '' THEN 1 END)
+		 FROM deployments d JOIN apps a ON a.id = d.app_id
+		 WHERE d.created_at >= ? AND d.kind IN ('deploy', 'manual', 'rollback', 'resize')
+		 GROUP BY a.id ORDER BY COUNT(d.id) DESC, a.name`,
+		sinceS,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AppDeploymentStats
+	for rows.Next() {
+		var a AppDeploymentStats
+		var sum, timed float64
+		if err := rows.Scan(&a.Name, &a.Slug, &a.Total, &a.Succeeded, &sum, &timed); err != nil {
+			return nil, err
+		}
+		if timed > 0 {
+			a.AvgBuildSec = sum / timed
+		}
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// DayCount is one day's deploy count for the fleet chart.
+type DayCount struct {
+	Day   string // YYYY-MM-DD (UTC)
+	Count int
+}
+
+// DeploysPerDay buckets deploy behavior by UTC day over the window, oldest
+// day first. Days without deploys are absent (the chart connects gaps).
+func (s *Store) DeploysPerDay(since time.Time) ([]DayCount, error) {
+	sinceS := since.UTC().Format(time.RFC3339Nano)
+	rows, err := s.db.Query(
+		`SELECT date(created_at), COUNT(*)
+		 FROM deployments WHERE created_at >= ? AND kind IN ('deploy', 'manual', 'rollback', 'resize')
+		 GROUP BY date(created_at) ORDER BY date(created_at)`,
+		sinceS,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DayCount
+	for rows.Next() {
+		var dc DayCount
+		if err := rows.Scan(&dc.Day, &dc.Count); err != nil {
+			return nil, err
+		}
+		out = append(out, dc)
+	}
+	return out, rows.Err()
 }
 
 // UptimePercent returns the fraction of successful probes over the window

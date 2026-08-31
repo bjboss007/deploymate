@@ -1,9 +1,12 @@
 package templates
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
 // fmtPort renders a port as a string, empty when unset.
@@ -52,6 +55,32 @@ func fmtMin(v float64) string {
 // fmtCPU renders a float CPU core count compactly (1.5 → "1.5").
 func fmtCPU(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
+}
+
+// pctOf renders a fraction as a percentage.
+func pctOf(part, total int) float64 {
+	if total == 0 {
+		return 0
+	}
+	return float64(part) / float64(total) * 100
+}
+
+// jsonForDayCounts renders day/count pairs as a JSON array for the fleet
+// chart (plain ASCII, so script-tag embedding is safe).
+func jsonForDayCounts(days []store.DayCount) string {
+	if len(days) == 0 {
+		return "[]"
+	}
+	var b strings.Builder
+	b.WriteByte('[')
+	for i, d := range days {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		fmt.Fprintf(&b, `{"day":%q,"count":%d}`, d.Day, d.Count)
+	}
+	b.WriteByte(']')
+	return b.String()
 }
 
 // runtimeKey splits "node:22" → "node".

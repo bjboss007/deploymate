@@ -107,8 +107,25 @@ async function loadMetrics(appSlug) {
   }
 }
 
+// --- fleet stats chart --------------------------------------------------
+function loadFleetChart() {
+  const chart = lineChart("fleet-deploys-chart", "Deploys", CHART_COLORS.cpu);
+  const dataEl = document.getElementById("fleet-deploys-data");
+  if (!chart || !dataEl) return; // not the stats page
+  let days = [];
+  try {
+    days = JSON.parse(dataEl.textContent);
+  } catch (_) {
+    return;
+  }
+  chart.data.labels = days.map((d) => d.day);
+  chart.data.datasets[0].data = days.map((d) => d.count);
+  chart.update();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-log-src]").forEach(attachLogStream);
+  loadFleetChart();
 
   const slug = document.body.dataset.appSlug;
   if (slug) loadMetrics(slug);
