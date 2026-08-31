@@ -19,13 +19,16 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
+	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
+	"github.com/habibmuhammad/deploymate/internal/swap"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
 
@@ -34,16 +37,7 @@ const NetworkName = "deploymate-net"
 
 // dmContainerName namespaces containers so DeployMate never collides with
 // the host's other docker work.
-func dmContainerName(slug string) string { return "dm-" + slug }
-
-// dmLabels marks containers as DeployMate-owned; P5 extends this with
-// Traefik routing labels.
-func dmLabels(slug string) map[string]string {
-	return map[string]string{
-		"deploymate.managed": "true",
-		"deploymate.app":     slug,
-	}
-}
+func dmContainerName(slug string) string { return appspec.CanonicalName(slug) }
 
 // deployPort resolves the deploy form's port field: an empty field keeps
 // the app's stored port (a bare 0 would persist a portless app and drop
@@ -57,35 +51,40 @@ func deployPort(form string, stored int) int {
 	return stored
 }
 
-// appSpec assembles the container spec for an image app: full env, labels,
-// preview port binding, limits, and domain routing labels — the single
-// source of truth shared by deploys and the start-time binding heal.
+// appSpec assembles the container spec for an image app through the shared
+// appspec builder: full env, labels, preview port binding, limits, and
+// domain routing. Used by manual deploys, start-heal, and ensureBinding —
+// the canonical-name + stored-port shape (zero-downtime deploys build
+// their own staged spec).
 func (s *Server) appSpec(app store.App, image string, port int) runtime.Spec {
-	// PORT env + limits, same conventions as the worker's runContainer.
 	env := s.AppEnv(app)
-	env = append(env, fmt.Sprintf("PORT=%d", effectivePort(port)))
-	spec := runtime.Spec{
-		Name:    dmContainerName(app.Slug),
-		Image:   image,
-		Env:     env,
-		Labels:  dmLabels(app.Slug),
-		Network: NetworkName,
+	if port <= 0 {
+		// Port-less image apps still get the platform's $PORT convention.
+		env = append(env, fmt.Sprintf("PORT=%d", effectivePort(port)))
 	}
-	if port > 0 {
-		spec.Labels["deploymate.port"] = strconv.Itoa(port)
-		spec.Port = port
-		spec.HostPort = runtime.PreviewPort(app.Slug)
+	return appspec.BuildSpec(app, appspec.Options{
+		Image:      image,
+		Name:       dmContainerName(app.Slug),
+		Port:       port,
+		HostPort:   appspec.ResolvedPreviewPort(app),
+		Env:        env,
+		Domains:    s.domainHostnames(app),
+		LEResolver: proxy.ResolverForLEMode(s.leMode),
+	})
+}
+
+// domainHostnames returns the app's routed hostnames for the Traefik labels.
+func (s *Server) domainHostnames(app store.App) []string {
+	domains, err := s.store.ListDomains(app.ID)
+	if err != nil {
+		slog.Error("apps: list domains for labels", "err", err)
+		return nil
 	}
-	if app.MemLimitMB > 0 {
-		spec.MemLimitMB = int64(app.MemLimitMB)
+	hostnames := make([]string, 0, len(domains))
+	for _, d := range domains {
+		hostnames = append(hostnames, d.Hostname)
 	}
-	if app.CPULimit > 0 {
-		spec.CPULimit = app.CPULimit
-	}
-	for k, v := range s.domainLabels(app) {
-		spec.Labels[k] = v
-	}
-	return spec
+	return hostnames
 }
 
 // healthReasonFor explains an unhealthy badge: the monitor's probe fails,
@@ -352,7 +351,11 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	fail := func(err error) {
 		d.Status, d.Error = "failed", err.Error()
 		_ = s.store.UpdateDeployment(d)
-		_ = s.store.UpdateAppStatus(app.ID, "failed")
+		// Zero-downtime swaps leave the old container serving on failure —
+		// only mark the app failed when nothing runs for it.
+		if info, ierr := s.rt.Inspect(context.Background(), dmContainerName(app.Slug)); ierr != nil || !info.Running {
+			_ = s.store.UpdateAppStatus(app.ID, "failed")
+		}
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Deploy failed: "+err.Error()), http.StatusSeeOther)
 	}
 
@@ -373,19 +376,47 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Replace the old container: stop + remove, then create fresh. Ignore
-	// not-found (first deploy).
-	_ = s.rt.Stop(ctx, name, 5)
-	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+	// Zero-downtime swap: stage the new container beside the old on a temp
+	// host port, prove it serves, then flip the stored preview port, drop
+	// the old container, and let the staged one take the canonical name. A
+	// failed deploy leaves the old container serving.
+	stagedName := appspec.StagedName(app.Slug, d.ID)
+	hostPort := 0
+	if port > 0 {
+		if hostPort, err = swap.ReserveLoopbackPort(); err != nil {
+			fail(err)
+			return
+		}
+	}
+	stagedEnv := s.AppEnv(app)
+	spec := appspec.BuildSpec(app, appspec.Options{
+		Image:      image,
+		Name:       stagedName,
+		Port:       port,
+		HostPort:   hostPort,
+		Env:        stagedEnv,
+		DeployID:   d.ID,
+		Domains:    s.domainHostnames(app),
+		RouterName: app.Slug + "-" + d.ID,
+		Priority:   time.Now().UnixNano(),
+		LEResolver: proxy.ResolverForLEMode(s.leMode),
+	})
+	s.events.Publish("app:"+app.Slug, sse.Event{Name: "deploy", Data: "starting staged container " + stagedName})
+	if _, err := s.rt.Create(ctx, spec); err != nil {
 		fail(err)
 		return
 	}
-	if _, err := s.rt.Create(ctx, s.appSpec(app, image, port)); err != nil {
-		fail(err)
-		return
-	}
-	s.events.Publish("app:"+app.Slug, sse.Event{Name: "deploy", Data: "starting container"})
-	if err := s.rt.Start(ctx, name); err != nil {
+	if err := swap.Swap(ctx, s.rt, name, spec, swap.Options{
+		OnFlip: func(hostPort int) error {
+			return s.store.UpdateAppPreviewPort(app.ID, hostPort)
+		},
+	}); err != nil {
+		if errors.Is(err, swap.ErrStagedFailed) {
+			d.Status, d.Error = "failed", err.Error()
+			_ = s.store.UpdateDeployment(d)
+			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Deploy failed: the new container failed its health probe — the previous container is still serving"), http.StatusSeeOther)
+			return
+		}
 		fail(err)
 		return
 	}

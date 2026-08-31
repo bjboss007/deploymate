@@ -77,6 +77,10 @@ type Runtime interface {
 	Stop(ctx context.Context, name string, timeoutSec int) error
 	// Remove deletes a container (stopping it first if needed).
 	Remove(ctx context.Context, name string) error
+	// Rename renames a container (zero-downtime swaps: the staged container
+	// takes the canonical name after the old one is removed). Labels and
+	// restart policy are untouched.
+	Rename(ctx context.Context, oldName, newName string) error
 	Inspect(ctx context.Context, name string) (Info, error)
 	// Logs returns the multiplexed container log stream; callers demux with
 	// docker's stdcopy. Follow keeps the stream open. Closing the reader

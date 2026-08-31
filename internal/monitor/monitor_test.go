@@ -25,6 +25,7 @@ func (stubRuntime) Create(context.Context, runtime.Spec) (string, error)    { re
 func (stubRuntime) Start(context.Context, string) error                     { return nil }
 func (stubRuntime) Stop(context.Context, string, int) error                 { return nil }
 func (stubRuntime) Remove(context.Context, string) error                    { return nil }
+func (stubRuntime) Rename(context.Context, string, string) error             { return nil }
 func (stubRuntime) Inspect(context.Context, string) (runtime.Info, error)   { return runtime.Info{}, nil }
 func (stubRuntime) Logs(context.Context, string, bool, int) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil

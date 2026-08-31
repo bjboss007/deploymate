@@ -11,21 +11,40 @@ import (
 	"strings"
 )
 
+// AppLabelsOpts configures one app container's Traefik labels.
+type AppLabelsOpts struct {
+	Slug       string   // app slug — the default router/service name
+	RouterName string   // per-container router/service name; default Slug (blue/green stages set their own)
+	Port       int      // the container's listening port (service port label)
+	Domains    []string // Host rule domains; empty = not exposed
+	LEResolver string   // certresolver name (see ResolverForLEMode)
+	Priority   int64    // router priority when > 0 (blue/green: the newer container wins)
+}
+
 // AppLabels returns the Traefik labels for an app container. Empty when the
 // app has no domains — unexposed containers stay unreachable.
-func AppLabels(slug string, port int, domains []string, leResolver string) map[string]string {
-	if len(domains) == 0 {
+func AppLabels(o AppLabelsOpts) map[string]string {
+	if len(o.Domains) == 0 {
 		return nil
+	}
+	name := o.RouterName
+	if name == "" {
+		name = o.Slug
 	}
 	labels := map[string]string{
 		"traefik.enable": "true",
-		"traefik.http.routers." + slug + ".rule":       "Host(`" + strings.Join(domains, "`, `") + "`)",
-		"traefik.http.routers." + slug + ".entrypoints": "websecure",
-		"traefik.http.routers." + slug + ".tls":         "true",
-		"traefik.http.routers." + slug + ".tls.certresolver": leResolver,
+		"traefik.http.routers." + name + ".rule":       "Host(`" + strings.Join(o.Domains, "`, `") + "`)",
+		"traefik.http.routers." + name + ".entrypoints": "websecure",
+		"traefik.http.routers." + name + ".tls":         "true",
+		"traefik.http.routers." + name + ".tls.certresolver": o.LEResolver,
 	}
-	if port > 0 {
-		labels["traefik.http.services."+slug+".loadbalancer.server.port"] = strconv.Itoa(port)
+	if o.Priority > 0 {
+		// The router with the higher priority wins for the same Host rule —
+		// how a blue/green staged container takes over traffic at start.
+		labels["traefik.http.routers."+name+".priority"] = strconv.FormatInt(o.Priority, 10)
+	}
+	if o.Port > 0 {
+		labels["traefik.http.services."+name+".loadbalancer.server.port"] = strconv.Itoa(o.Port)
 	}
 	return labels
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
@@ -324,7 +325,7 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 	if app.Status != "running" || app.Port <= 0 {
 		return
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/", runtime.PreviewPort(app.Slug))
+	url := fmt.Sprintf("http://127.0.0.1:%d/", appspec.ResolvedPreviewPort(app))
 	if m.probeURLFn != nil {
 		url = m.probeURLFn(app.Slug)
 	}

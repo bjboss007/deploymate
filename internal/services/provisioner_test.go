@@ -46,6 +46,7 @@ func (f *fakeRuntime) Remove(ctx context.Context, name string) error {
 	f.removed = append(f.removed, name)
 	return nil
 }
+func (f *fakeRuntime) Rename(ctx context.Context, oldName, newName string) error { return nil }
 func (f *fakeRuntime) Inspect(ctx context.Context, name string) (runtime.Info, error) {
 	return runtime.Info{}, runtime.ErrContainerNotFound
 }

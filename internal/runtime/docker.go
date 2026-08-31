@@ -194,6 +194,15 @@ func (d *Docker) Remove(ctx context.Context, name string) error {
 	return nil
 }
 
+// Rename renames a container; labels, env, and restart policy carry over.
+func (d *Docker) Rename(ctx context.Context, oldName, newName string) error {
+	err := d.cli.ContainerRename(ctx, oldName, newName)
+	if err != nil {
+		return mapNotFound(fmt.Errorf("rename container %s: %w", oldName, err))
+	}
+	return nil
+}
+
 func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 	ctr, err := d.cli.ContainerInspect(ctx, name)
 	if err != nil {

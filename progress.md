@@ -7,6 +7,53 @@
 
 ## Where we stopped
 
+**2026-08-31 (competitive wave)** — **Four deploymate.io-parity features
+shipped** (from the competitive review; all e2e-verified, commits
+`5cec14a`→`c754390`, this round's final commit below):
+1. **Fleet-wide build statistics** — `GET /stats` (topbar link): 30 d
+   totals, success rate, avg build time, per-app table, deploys/day
+   Chart.js chart. New store queries `DeploymentStatsAll`/
+   `DeploymentStatsPerApp`/`DeploysPerDay`. **Bug fixed en route:** manual
+   image deploys (kind `manual`) were excluded from `DeploymentStatsFor`
+   — the History page undercounted; `manual` counts everywhere now.
+2. **Per-app releases list** — `GET /apps/{slug}/releases` ("All releases
+   →" on the app page): status badge, commit/image, kind, trigger,
+   duration, current marker, `?status=` filters, one-click rollback.
+   Migration **0011** adds `deployments.trigger` (dashboard | webhook |
+   manual | rollback | resize) set at all five create call sites. **Bug
+   fixed en route:** manual deploys never set `apps.current_deployment_id`
+   (only the worker's `finish` did) — every manual row looked rollbackable
+   and nothing was "current"; `handleAppDeploy` now mirrors `finish`.
+3. **Deploy-time diff review** — the Git panel's one-click deploy is now
+   "Review & deploy…": `GET /apps/{slug}/deploy-preview` shows commits +
+   file counts (+/-) vs the deployed commit via persistent mirror clones
+   (`data/repos/mirror-{sourceID}`, `internal/gitpkg/mirror.go` —
+   `MirrorSync`/`MirrorEnsureSHA`/`MirrorRange`, `ErrCommitGone` when the
+   deployed commit was force-pushed away), and the confirm form **pins
+   the reviewed SHA** (`sha` form field; `gitpkg.Clone` already honored
+   pinned SHAs). Webhook deploys skip the review but get the range
+   recorded in the build log (`Worker.logDiffRecord`). `Server` gained a
+   `dataDir` field.
+4. **Zero-downtime deploys** (blue/green-lite) — a deploy starts the new
+   container BESIDE the old (`dm-{slug}-{deployID}`, temp loopback host
+   port, own Traefik router + UnixNano priority), probes it (30×2s), then
+   flips `apps.preview_host_port` (migration **0012**; preview proxy +
+   monitor resolve through it, hash fallback), removes the old, renames
+   the staged to canonical — all in **`internal/swap`** (probe-fail:
+   staged removed, old keeps serving, app stays running). New
+   **`internal/appspec`** replaces the two parallel spec builders (fixes
+   the stale-`app.Port` Traefik drift the explorer flagged); `runtime.
+   Rename` added (3 test fakes updated); `fail()` + the deploy handler
+   only mark the app failed when nothing runs for it. Rollback/resize
+   reuse the swap. **E2e-verified live:** 33/33 preview probes 200 across
+   a deploy; broken image (busybox) left nginx serving, app badge stayed
+   `running`, deployment row `failed`; rollback through the swap works;
+   no leftover containers.
+`make test` + `make vet` green across all 12 packages. All four backlog
+entries checked off; docs updated. **Unverified:** nothing new — the
+server-deployment track (Traefik file provider, auto-DNS origin mode)
+remains a separate round (see Next up).
+
 **2026-08-30 (e2e-git round)** — **Automated the git-deploy path** (Next-up
 item 1, first slice). `make e2e-git` (`testdata/e2e_git.sh`) runs the real
 product flow end to end against a **throwaway** server (port 18091, scratch

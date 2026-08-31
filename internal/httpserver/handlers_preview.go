@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/habibmuhammad/deploymate/internal/runtime"
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -41,8 +41,9 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 
 	// The app's container publishes its port on 127.0.0.1 only — reachable
 	// from this host process on Linux servers AND Docker Desktop, and never
-	// from the internet.
-	target, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(runtime.PreviewPort(app.Slug)))
+	// from the internet. The port resolves through the stored preview port
+	// (zero-downtime swaps flip it), falling back to the per-slug hash.
+	target, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(appspec.ResolvedPreviewPort(app)))
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
@@ -69,7 +70,7 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 	// Apps that redirect with absolute URLs back to their loopback port
 	// (Spring Security logins, trailing-slash redirects) must stay inside
 	// the preview path.
-	loopbackPrefix := "http://127.0.0.1:" + strconv.Itoa(runtime.PreviewPort(app.Slug))
+	loopbackPrefix := "http://127.0.0.1:" + strconv.Itoa(appspec.ResolvedPreviewPort(app))
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, loopbackPrefix) {
 			resp.Header.Set("Location", "/preview/"+app.Slug+strings.TrimPrefix(loc, loopbackPrefix))

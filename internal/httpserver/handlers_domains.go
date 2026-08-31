@@ -9,7 +9,6 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
-	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -77,16 +76,3 @@ func (s *Server) handleAppPort(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Routing port saved. Redeploy to apply."), http.StatusSeeOther)
 }
 
-// domainLabels returns the Traefik labels for an app's domains.
-func (s *Server) domainLabels(app store.App) map[string]string {
-	domains, err := s.store.ListDomains(app.ID)
-	if err != nil {
-		slog.Error("domains: list for labels", "err", err)
-		return nil
-	}
-	hostnames := make([]string, 0, len(domains))
-	for _, d := range domains {
-		hostnames = append(hostnames, d.Hostname)
-	}
-	return proxy.AppLabels(app.Slug, app.Port, hostnames, proxy.ResolverForLEMode(s.leMode))
-}

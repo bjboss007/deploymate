@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
@@ -23,6 +24,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
+	"github.com/habibmuhammad/deploymate/internal/swap"
 )
 
 // imageRetention is how many built images per app are kept for rollbacks.
@@ -297,16 +299,15 @@ func (w *Worker) runRollback(ctx context.Context, app store.App, d store.Deploym
 	return w.finish(d, app.ID)
 }
 
-// runContainer swaps the app's running container for one from imageTag:
-// stop + remove the old, create + start the new with the full app env.
+// runContainer starts the app's next container BESIDE the running one (a
+// staged name + its own loopback host port + its own Traefik router with a
+// higher priority) and swaps it in only after it passes the readiness
+// probe: probe → flip the stored preview port → remove the old container →
+// rename the staged one to the canonical name. A failed deploy leaves the
+// old container serving.
 func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deployment, imageTag string, extraEnv map[string]string) error {
 	if err := w.rt.EnsureNetwork(ctx, w.network); err != nil {
 		return err
-	}
-	name := "dm-" + app.Slug
-	_ = w.rt.Stop(ctx, name, 5)
-	if err := w.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
-		return fmt.Errorf("remove old container: %w", err)
 	}
 	env := w.buildEnv(app)
 	port := app.Port
@@ -314,57 +315,61 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		port = 8080 // platform convention; railpack apps read $PORT
 		_ = w.store.UpdateAppPort(app.ID, port)
 	}
-	// The platform's routing port maps to the app's $PORT env — railpack
-	// start commands (java -Dserver.port=$PORT, node server.js, …) all
-	// honor it.
-	env = append(env, fmt.Sprintf("PORT=%d", port))
-	for k, v := range extraEnv {
-		env = append(env, k+"="+v)
-	}
-	labels := map[string]string{
-		"deploymate.managed": "true",
-		"deploymate.app":     app.Slug,
-		"deploymate.deploy":  d.ID,
-	}
+	// The staged container needs its OWN host port while the old one still
+	// publishes the canonical binding.
+	hostPort := 0
 	if port > 0 {
-		labels["deploymate.port"] = fmt.Sprintf("%d", port)
-	}
-	// Traefik routing labels for the app's domains.
-	if domains, err := w.store.ListDomains(app.ID); err == nil {
-		hostnames := make([]string, 0, len(domains))
-		for _, dm := range domains {
-			hostnames = append(hostnames, dm.Hostname)
-		}
-		for k, v := range proxy.AppLabels(app.Slug, app.Port, hostnames, proxy.ResolverForLEMode(w.leMode)) {
-			labels[k] = v
+		var err error
+		if hostPort, err = swap.ReserveLoopbackPort(); err != nil {
+			return err
 		}
 	}
-	spec := runtime.Spec{
-		Name:    name,
-		Image:   imageTag,
-		Env:     env,
-		Labels:  labels,
-		Network: w.network,
-	}
-	if port > 0 {
-		spec.Port = port
-		spec.HostPort = runtime.PreviewPort(app.Slug)
-	}
-	if app.MemLimitMB > 0 {
-		spec.MemLimitMB = int64(app.MemLimitMB)
-	}
-	if app.CPULimit > 0 {
-		spec.CPULimit = app.CPULimit
-	}
+	spec := appspec.BuildSpec(app, appspec.Options{
+		Image:      imageTag,
+		Name:       appspec.StagedName(app.Slug, d.ID),
+		Port:       port,
+		HostPort:   hostPort,
+		Env:        env,
+		ExtraEnv:   extraEnv,
+		DeployID:   d.ID,
+		Network:    w.network,
+		Domains:    w.appDomains(app),
+		RouterName: app.Slug + "-" + d.ID,
+		Priority:   time.Now().UnixNano(),
+		LEResolver: proxy.ResolverForLEMode(w.leMode),
+	})
 	slog.Info("worker: container spec", "app", app.Slug, "mem_limit_mb", app.MemLimitMB, "cpu", app.CPULimit, "kind", d.Kind)
-	w.publish("deploy:"+app.Slug, "deploy", "starting container "+name)
+	w.publish("deploy:"+app.Slug, "deploy", "starting staged container "+spec.Name)
 	if _, err := w.rt.Create(ctx, spec); err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
-	if err := w.rt.Start(ctx, name); err != nil {
-		return fmt.Errorf("start container: %w", err)
+	if err := swap.Swap(ctx, w.rt, appspec.CanonicalName(app.Slug), spec, swap.Options{
+		OnFlip: func(hostPort int) error {
+			return w.store.UpdateAppPreviewPort(app.ID, hostPort)
+		},
+	}); err != nil {
+		if errors.Is(err, swap.ErrStagedFailed) {
+			msg := "new container failed its health probe — the previous container is still serving"
+			w.log(d, "system", msg)
+			w.publish("deploy:"+app.Slug, "log", msg)
+		}
+		return err
 	}
 	return nil
+}
+
+// appDomains returns the app's routed hostnames for the Traefik labels.
+func (w *Worker) appDomains(app store.App) []string {
+	domains, err := w.store.ListDomains(app.ID)
+	if err != nil {
+		slog.Error("worker: list domains", "app", app.Slug, "err", err)
+		return nil
+	}
+	hostnames := make([]string, 0, len(domains))
+	for _, dm := range domains {
+		hostnames = append(hostnames, dm.Hostname)
+	}
+	return hostnames
 }
 
 // finish marks the deployment running, promotes the app, and prunes old images.
@@ -419,7 +424,12 @@ func (w *Worker) fail(d store.Deployment, err error) {
 		slog.Error("worker: mark failed", "err", uerr)
 	}
 	if app, aerr := w.store.GetAppByID(d.AppID); aerr == nil {
-		_ = w.store.UpdateAppStatus(app.ID, "failed")
+		// With zero-downtime swaps the old container usually keeps serving
+		// after a failed deploy — only mark the APP failed when nothing is
+		// running for it.
+		if info, ierr := w.rt.Inspect(context.Background(), appspec.CanonicalName(app.Slug)); ierr != nil || !info.Running {
+			_ = w.store.UpdateAppStatus(app.ID, "failed")
+		}
 	}
 	slog.Error("worker: deployment failed", "deployment", d.ID, "err", err)
 }

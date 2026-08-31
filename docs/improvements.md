@@ -283,14 +283,19 @@ change.
   (small: the column and filtering already exist).
 - [ ] **Automatic deploy on git connect** — after linking a repo, offer
   "deploy now" in the same flow (today it's two clicks).
-- [ ] **Zero-downtime deploys** — today a deploy recreates the app's
-  container in place (brief outage window; the deployer swaps the
-  container with the new image). deploymate.io's headline deploy feature
-  is zero-downtime rollout. Blue/green-lite: start the new container
-  beside the old on a spare port, gate on the same health probe the
-  monitor uses, then flip the published port mapping and drop the old
-  container. Adds a second container per app during deploys — worth
-  checking resource headroom first. Aug 2026 competitive review.
+- [x] **Zero-downtime deploys** — done (blue/green-lite). A deploy starts
+  the new container BESIDE the old (`dm-{slug}-{deployID}`, temp loopback
+  host port, own Traefik router + UnixNano priority), probes it like the
+  monitor does, then flips `apps.preview_host_port` (new migration 0012;
+  proxy + monitor resolve through it with the per-slug hash fallback),
+  removes the old container, and renames the staged one to the canonical
+  name — all in `internal/swap` (probe-fail → staged removed, old keeps
+  serving, app stays running). Shared `internal/appspec` replaces the two
+  parallel spec builders (fixes the stale-`app.Port` Traefik drift);
+  `runtime.Rename` added; worker `fail()` + deploy handler only mark the
+  app failed when nothing runs for it. Rollback/resize reuse the swap.
+  E2e-verified: 33/33 preview probes 200 across a live deploy; a broken
+  image leaves the old container serving (Aug 2026).
 - [x] **Notifications** — done via the alerts system: webhook channel
   with per-event subscriptions (Slack-compatible). Email/Telegram remain
   as additive channels (the `channel` column is the seam, Aug 2026).
