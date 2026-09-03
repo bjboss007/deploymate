@@ -7,6 +7,26 @@
 
 ## Where we stopped
 
+**2026-08-31 (wrap-up)** — **The :8090 server now runs the competitive-wave
+binary** (restarted twice that day; full live env: `DEPLOYMATE_ADDR=
+127.0.0.1:8090`, `DATA_DIR=./data`, `PREVIEW_HOST=dm.getmerchanttech.com`,
+the three `DEPLOYMATE_CLOUDFLARE_*` vars — token/zone aliased in ~/.zshrc
+as `CLOUD_FLARE_TOKEN`/`CLOUD_FLARE_ZONE_ID`, tunnel
+`f6a3a4b6-727b-4f85-975e-ac1976d65a3a` from `cloudflared tunnel list` —
+and `DEPLOYMATE_RAILPACK=$(go env GOPATH)/bin/railpack`; run via
+`nohup ./bin/deploymate serve`). `react-spa`/`py-api` verified through the
+live tunnel. Also shipped: **releases-table overflow fix** (`d5df63f`) —
+the 7-column table sits in an `overflow-x: auto` wrapper and the
+commit/image cell is capped at 420px with ellipsis (static assets are
+embedded, so CSS changes need `make build` + restart). **Incident + lesson
+added to rules:** my zero-downtime e2e cleanup used `grep "^dm-web-"` to
+find staged containers — which also matched the user's real `dm-web-front`
+container and deleted it. DB row intact; restored by a dashboard redeploy
+(image app). The monitor's auto-heal can't restore a **missing** container
+(its Inspect-based heal needs the container to exist) — that stays a
+human redeploy, as the UI's "container missing — redeploy the app" reason
+says.
+
 **2026-08-31 (competitive wave)** — **Four deploymate.io-parity features
 shipped** (from the competitive review; all e2e-verified, commits
 `5cec14a`→`c754390`, this round's final commit below):
@@ -368,6 +388,11 @@ real Let's Encrypt issuance.
 
 ## Hard-won rules (skipping these burns an hour)
 
+- **Docker cleanup patterns must never prefix-grep real container names** —
+  `grep "^dm-web-"` was meant for staged containers (`dm-{slug}-{deployID}`)
+  and deleted the user's real `dm-web-front`. Anchor cleanup to the exact
+  staged shape (a 32-hex suffix) or `docker ps --filter` with the full name
+  list; when in doubt, `ls` the matches before removing (Aug 2026).
 - **Before every push:** `gh auth switch --user bjboss007`, then verify
   `gh auth status` shows it active — the account flips back to
   `habibmuhammad002` on its own, and pushes fail with "Repository not
