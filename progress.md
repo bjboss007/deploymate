@@ -32,7 +32,16 @@ identity paths (restarted 2026-09-04, pid 70776, `data/server.log`; all
 other env vars unchanged). Webhook fan-out workaround in use: replay the
 signed push to the other two apps' `/hooks/{id}` (fresh GUID) after a real
 push. Session cookie jar at `/tmp/dm-jar` (owner login) enables curl
-automation of the router.
+automation of the router. **Branch-per-environment follow-up (same
+round):** each app's git source now tracks its own branch — dev
+`develop`, stage `stage`, prod `main` (sqlite UPDATE of
+`git_sources.default_branch`; no CLI/UI exposes it, backlogged). The
+handler's `ref`-vs-DefaultBranch check (before the delivery dedupe)
+makes one push deploy only its matching env — verified live on both
+`develop` and `stage` pushes (delivery records: matching hook 6-byte
+"queued", others 30-byte "ignored: not the deploy branch"; dev runs a
+develop-only endpoint that stage/prod 404 on). Promote by merging
+develop → stage → main.
 
 **2026-09-04 (dns-cleanup round)** — **Preview DNS cleanup shipped** (backlog
 item; the "Next up" #2 cleanup slice). Deleting an app now removes its

@@ -272,6 +272,15 @@ change.
   labels, metric/uptime assertions, the three Railpack runtimes (the git
   suite uses the Dockerfile engine to avoid a buildkit dependency). Wire
   the lot into CI with a Linux runner (Traefik + railpack work there).
+- [ ] **Per-source branch not editable after connect** — `default_branch`
+  is set at connect/seed time only; the demo (Sep 2026) re-pointed an app
+  at another branch (dev → `develop`, staging → `stage`) with a direct
+  sqlite UPDATE of `git_sources.default_branch`. The handler already
+  differentiates webhooks by it (payload `ref` vs the source's
+  DefaultBranch, checked before the delivery dedupe — so one-repo
+  multi-app branch-per-environment flows work and dodge the fan-out
+  dedupe bug entirely); only the *editing* is missing. Add a branch field
+  to the app page + an update endpoint.
 
 ## Medium-term (feature depth)
 
