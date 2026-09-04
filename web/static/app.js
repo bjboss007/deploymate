@@ -8,6 +8,29 @@ document.body.addEventListener("htmx:afterSwap", (e) => {
   }
 });
 
+// --- restore confirmation ------------------------------------------------
+// Restore is destructive (the database is dropped and recreated), so the
+// prompt asks the owner to TYPE the service name. The slug comes from the
+// form's own action URL; the server re-checks the confirm field on POST —
+// this prompt is UX, not security.
+function confirmRestore(form) {
+  const m = (form.action || "").match(/\/services\/([^/]+)\/backups\/restore/);
+  const slug = m ? m[1] : "";
+  if (!slug) return false;
+  const answer = prompt('Type "' + slug + '" to confirm restoring this database from the backup. The database is dropped and recreated.');
+  if (answer === null) return false;
+  if (answer.trim() !== slug) {
+    alert("Restore cancelled — the name did not match.");
+    return false;
+  }
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "confirm";
+  input.value = slug;
+  form.appendChild(input);
+  return true;
+}
+
 // --- live logs via EventSource -------------------------------------------
 // Batched + capped: a crash-looping container emits a firehose of boot
 // logs — appending one DOM node per line, unbounded, is what made pages

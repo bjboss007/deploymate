@@ -20,6 +20,7 @@ import (
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/backup"
 	"github.com/habibmuhammad/deploymate/internal/config"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/dns"
@@ -97,16 +98,32 @@ func serve() error {
 		dnsManager = dns.NewCloudflare(cfg.CloudflareAPIToken, cfg.CloudflareZoneID, cfg.CloudflareTunnelID)
 		slog.Info("auto-dns enabled", "zone", cfg.CloudflareZoneID, "tunnel", cfg.CloudflareTunnelID)
 	}
-	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsManager)
-
 	// Alert dispatcher: worker + monitor emit catalog events; targets
 	// receive best-effort webhook deliveries.
 	dispatcher := alerts.New(st, encKey)
 
-	// The deployment worker: one in-process loop, builds serialized.
-	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)
+	// Background loops (worker, monitor, backup scheduler) share one cancel.
 	workerCtx, stopWorker := context.WithCancel(context.Background())
 	defer stopWorker()
+
+	// Database backups: destinations from env (DEPLOYMATE_BACKUP_DEST_*),
+	// each service opting in per docs/specs/database-backups.md. With no
+	// destinations configured nothing can enable, so no manager/scheduler is
+	// built and the service pages show no backup panel at all.
+	var backupMgr *backup.Manager
+	if len(cfg.BackupDestinations) > 0 {
+		backupDests, err := backup.NewDestinations(cfg.BackupDestinations)
+		if err != nil {
+			return err
+		}
+		backupMgr = backup.NewManager(st, rt, encKey, dispatcher, backupDests)
+		sched := backup.NewScheduler(st, backupMgr)
+		go sched.Run(workerCtx)
+	}
+	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsManager, backupMgr)
+
+	// The deployment worker: one in-process loop, builds serialized.
+	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)
 	go worker.Run(workerCtx)
 
 	// Metrics, health, uptime, restart, and disk sampling.

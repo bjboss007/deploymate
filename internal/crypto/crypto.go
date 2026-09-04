@@ -87,6 +87,41 @@ func Decrypt(key [keySize]byte, envelope string) (string, error) {
 	return string(plaintext), nil
 }
 
+// EncryptBytes seals a binary payload (e.g. a database dump) with the key.
+// The result is nonce‖ciphertext in raw bytes — unlike the string envelopes
+// above, which base64 the same parts into a "v1:" string. Strings are for
+// SQLite text columns; bytes are for file-shaped payloads where base64 would
+// waste a third of every byte.
+func EncryptBytes(key [keySize]byte, plaintext []byte) ([]byte, error) {
+	aead, err := chacha20poly1305.NewX(key[:])
+	if err != nil {
+		return nil, err
+	}
+	nonce := make([]byte, chacha20poly1305.NonceSizeX)
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("generate nonce: %w", err)
+	}
+	return aead.Seal(nonce, nonce, plaintext, nil), nil
+}
+
+// DecryptBytes opens a payload produced by EncryptBytes. It returns an
+// error for tampered ciphertext or malformed input.
+func DecryptBytes(key [keySize]byte, blob []byte) ([]byte, error) {
+	if len(blob) < chacha20poly1305.NonceSizeX {
+		return nil, errors.New("ciphertext too short")
+	}
+	nonce, ct := blob[:chacha20poly1305.NonceSizeX], blob[chacha20poly1305.NonceSizeX:]
+	aead, err := chacha20poly1305.NewX(key[:])
+	if err != nil {
+		return nil, err
+	}
+	plaintext, err := aead.Open(nil, nonce, ct, nil)
+	if err != nil {
+		return nil, errors.New("decryption failed: wrong key or tampered ciphertext")
+	}
+	return plaintext, nil
+}
+
 func cut(s string, sep byte) (string, string, bool) {
 	for i := 0; i < len(s); i++ {
 		if s[i] == sep {

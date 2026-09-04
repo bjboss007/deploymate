@@ -54,11 +54,21 @@ func (f *fakeRuntime) Logs(ctx context.Context, name string, follow bool, tail i
 	return nil, nil
 }
 func (f *fakeRuntime) Exec(ctx context.Context, name string, cmd []string) (string, error) {
+	return f.execEnv(ctx, name, cmd, nil)
+}
+func (f *fakeRuntime) ExecEnv(ctx context.Context, name string, cmd, env []string) (string, error) {
+	return f.execEnv(ctx, name, cmd, env)
+}
+func (f *fakeRuntime) execEnv(_ context.Context, _ string, _ []string, _ []string) (string, error) {
 	f.execs++
 	if f.failExec {
 		return "", errors.New("probe failed")
 	}
 	return "ok", nil
+}
+func (f *fakeRuntime) WriteFile(context.Context, string, string, []byte) error { return nil }
+func (f *fakeRuntime) ReadFile(context.Context, string, string) ([]byte, error) {
+	return nil, errors.New("no files in the provisioner fake")
 }
 func (f *fakeRuntime) Stats(ctx context.Context, name string) (runtime.Stats, error) {
 	return runtime.Stats{}, nil

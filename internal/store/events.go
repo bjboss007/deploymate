@@ -40,6 +40,24 @@ const (
 	// EventDNSRecordFailed: auto-DNS could not create the app's preview
 	// record; the preview URL stays without an edge cert until fixed.
 	EventDNSRecordFailed = "dns_record_failed"
+	// Backup events (app_id empty — they hang off services): the events
+	// timeline is the run history for backups and restores.
+	EventBackupEnabled       = "backup_enabled"
+	EventBackupDisabled      = "backup_disabled"
+	EventBackupConfigChanged = "backup_config_changed"
+	EventBackupOK            = "backup_ok"
+	EventBackupFailed        = "backup_failed"
+	// EventBackupSkipped: a scheduled window fired but the service's
+	// container was not running (DeployMate never starts a service just to
+	// back it up). The window still counts as handled.
+	EventBackupSkipped = "backup_skipped"
+	// EventBackupPruneFailed: retention pruning hit an error; the fresh
+	// backup itself succeeded (prune failures are warnings, never failures
+	// of the run).
+	EventBackupPruneFailed = "backup_prune_failed"
+	EventRestoreStarted    = "restore_started"
+	EventRestoreOK         = "restore_ok"
+	EventRestoreFailed     = "restore_failed"
 )
 
 // RecordEvent appends one event.

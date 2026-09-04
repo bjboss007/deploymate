@@ -88,7 +88,7 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 			connURL = tpl.ConnURL(creds, services.ContainerName(svc.Slug))
 		}
 	}
-	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL))
+	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc)))
 }
 
 // handleServiceStart provisions (first run) or resumes a service via the

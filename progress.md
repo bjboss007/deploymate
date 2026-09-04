@@ -7,6 +7,47 @@
 
 ## Where we stopped
 
+**2026-09-04 (backups round)** — **Database backups shipped end to end**
+(backlog item; spec at `docs/specs/database-backups.md` — Postgres MVP).
+Opt-in per service (`service_backups`, migration **0014**): `pg_dump -Fc`
+exec'd INSIDE the container (new `runtime` seams `WriteFile`/`ReadFile`/
+`ExecEnv` — tar-packed docker copy + env-capable exec; all 5 test fakes
+updated), gzip + **XChaCha20** with a per-service key (generated at
+opt-in, encrypted at rest, downloadable once — spec's "AES-GCM" wording
+corrected; the repo AEAD standard is ADR 0008), uploaded to a named
+destination from `DEPLOYMATE_BACKUP_DEST_*` env blocks (s3/minio-go
+v7.3.0 → Cloudflare R2; `local` for dev/e2e), sibling plaintext
+`.meta.json` (slug/type/image/sha256/key id). New `internal/backup`
+package: `Manager` (config validation, key lifecycle, flight gate shared
+by backups+restores), `Scheduler` (1-min tick mirroring the monitor,
+robfig/cron v3.0.1 for `Next()` only, persisted `last_run_at` — empty =
+run on first tick after opt-in — never back-fills, stopped container →
+`backup_skipped` + window handled), `runner` (prune keeps newest N after
+each upload; prune failure = warning event, never a failed run),
+`restore` (typed-confirm on the service page + server-side slug check;
+terminate → DROP/CREATE `app` db → `pg_restore -Fc --no-owner`;
+sha256+meta checks before anything touches the DB). Service page panel
+(config form with cron presets via datalist, keep, destination select,
+Back up now, key download, per-object Restore with JS prompt) — postgres
+services only (templ gate); 10 new event kinds + 2 alert catalog entries;
+main.go starts the scheduler only when destinations exist (no
+destinations → no panel). **E2e-verified: `make e2e-backup` PASSED**
+(throwaway server :18094 + local dest: provision real postgres → seed 3
+rows → opt in via the form (key generated) → bad destination rejected →
+key download 64-hex → Back up now (blob+meta, meta sha == blob sha,
+`backup_ok`) → DROP TABLE → restore via the page → rows back →
+keep=1 + second backup prunes to one object → stop service → Back up now
+→ `backup_skipped`, no new object; cleanup trap leaves no container/
+volume). 14 packages `make test` + `make vet` green (unit: config dest
+parsing, store upsert/join, backup package incl. scheduler due/not-due/
+single-flight, restore exec ordering + tamper/slug/key refusal, S3
+destination against an in-process fake S3 server incl. aws-chunked
+decoding, handler tests through the real router). Follow-ups logged:
+MySQL/Redis dumpers + manifest-declared config (improvements.md).
+**Unverified:** a real R2 upload/restore (S3 path unit-tested, local dest
+e2e'd; live smoke needs a `DEPLOYMATE_BACKUP_DEST_*` block). Committed +
+pushed (bjboss007 rule).
+
 **2026-09-04 (dogfood demo round)** — **The whole platform exercised live by
 a real three-environment demo** (document-only round: no DeployMate code
 changed; findings went to `docs/improvements.md`). Live on :8090 now:
@@ -542,6 +583,20 @@ real Let's Encrypt issuance.
 - **templ literals:** templ treats `{...}` as expressions — literal
   braces in text need a string expression (`{ "deploymate.{env}.yml" }`),
   and `\{` is illegal. `make gen` regenerates; commit `_templ.go` too.
+  Control flow (`if`/`for`) cannot start mid-text-run — put it on its own
+  line as an element child. Dynamic `onsubmit={ expr }` compiles to a
+  templ ComponentScript (a string is rejected) — keep `on*` attributes
+  static and read per-page values from the DOM instead (the restore
+  confirm derives the slug from `form.action`) (Sep 2026).
+- **docker exec into service containers runs as root — but root is not a
+  role**: every psql/pg_dump/pg_restore call must pass `-U dm` (or run
+  `-u postgres`); pg_restore without it fails "role root does not exist"
+  while pg_dump without it would dump the wrong-owner db. Related: the
+  official postgres entrypoint restarts the server once between its
+  initdb phase and the foreground exec — polling container
+  `.State.Running` or even the provisioner's readiness probe can pass in
+  that gap; poll an actual `psql SELECT 1` before scripting against a
+  fresh service (e2e_backup.sh does this) (Sep 2026).
 - **Git-source apps have no `app.Image`** — the row is empty; the
   container's own image (worker-built `deploymate/apps/{slug}:{hash}`,
   readable via `runtime.Info.Image`) is the ground truth for any

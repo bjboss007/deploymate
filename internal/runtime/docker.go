@@ -1,12 +1,15 @@
 package runtime
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"time"
@@ -250,8 +253,18 @@ func (d *Docker) Logs(ctx context.Context, name string, follow bool, tail int) (
 }
 
 func (d *Docker) Exec(ctx context.Context, name string, cmd []string) (string, error) {
+	return d.exec(ctx, name, cmd, nil)
+}
+
+// ExecEnv is Exec with environment overrides for the command.
+func (d *Docker) ExecEnv(ctx context.Context, name string, cmd, env []string) (string, error) {
+	return d.exec(ctx, name, cmd, env)
+}
+
+func (d *Docker) exec(ctx context.Context, name string, cmd, env []string) (string, error) {
 	execResp, err := d.cli.ContainerExecCreate(ctx, name, container.ExecOptions{
 		Cmd:          cmd,
+		Env:          env,
 		AttachStdout: true,
 		AttachStderr: true,
 	})
@@ -275,6 +288,69 @@ func (d *Docker) Exec(ctx context.Context, name string, cmd []string) (string, e
 		return string(out), fmt.Errorf("exec in %s exited %d: %s", name, insp.ExitCode, out)
 	}
 	return string(out), nil
+}
+
+// maxReadFile caps a ReadFile result — dumps are single-digit-GiB at most
+// and the backup path handles blobs in memory (see the backup spec's
+// streaming note). Errors, not silent truncation, above the cap.
+const maxReadFile = 4 << 30
+
+// WriteFile writes content to a file inside a running container. The docker
+// copy API moves tar archives, so the file is packed alone, destination
+// directory and all (the daemon creates intermediate paths).
+func (d *Docker) WriteFile(ctx context.Context, name, containerPath string, content []byte) error {
+	dir, file := path.Split(containerPath)
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	if err := tw.WriteHeader(&tar.Header{
+		Name: file, Mode: 0o644, Size: int64(len(content)),
+		ModTime: time.Now(), Typeflag: tar.TypeReg,
+	}); err != nil {
+		return fmt.Errorf("write tar header: %w", err)
+	}
+	if _, err := tw.Write(content); err != nil {
+		return fmt.Errorf("write tar body: %w", err)
+	}
+	if err := tw.Close(); err != nil {
+		return fmt.Errorf("close tar: %w", err)
+	}
+	err := d.cli.CopyToContainer(ctx, name, dir, &buf, container.CopyToContainerOptions{})
+	if err != nil {
+		return mapNotFound(fmt.Errorf("copy into %s: %w", name, err))
+	}
+	return nil
+}
+
+// ReadFile reads a file out of a running container. The returned archive is
+// unwrapped and must contain exactly one regular file.
+func (d *Docker) ReadFile(ctx context.Context, name, containerPath string) ([]byte, error) {
+	rd, _, err := d.cli.CopyFromContainer(ctx, name, containerPath)
+	if err != nil {
+		return nil, mapNotFound(fmt.Errorf("copy out of %s: %w", name, err))
+	}
+	defer rd.Close()
+	tr := tar.NewReader(rd)
+	hdr, err := tr.Next()
+	if err == io.EOF {
+		return nil, fmt.Errorf("read file %s from %s: empty archive", containerPath, name)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("read file %s from %s: %w", containerPath, name, err)
+	}
+	if hdr.Size < 0 || hdr.Size > maxReadFile {
+		return nil, fmt.Errorf("read file %s from %s: size %d out of range", containerPath, name, hdr.Size)
+	}
+	if hdr.Size == 0 {
+		return nil, fmt.Errorf("read file %s from %s: file is empty", containerPath, name)
+	}
+	content, err := io.ReadAll(io.LimitReader(tr, maxReadFile+1))
+	if err != nil {
+		return nil, fmt.Errorf("read file %s from %s: %w", containerPath, name, err)
+	}
+	if len(content) > maxReadFile {
+		return nil, fmt.Errorf("read file %s from %s: exceeds %d bytes", containerPath, name, maxReadFile)
+	}
+	return content, nil
 }
 
 func (d *Docker) Stats(ctx context.Context, name string) (Stats, error) {

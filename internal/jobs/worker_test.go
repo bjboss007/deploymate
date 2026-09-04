@@ -64,6 +64,13 @@ func (f *fakeRT) Logs(context.Context, string, bool, int) (io.ReadCloser, error)
 	return io.NopCloser(strings.NewReader("")), nil
 }
 func (f *fakeRT) Exec(context.Context, string, []string) (string, error) { return "", nil }
+func (f *fakeRT) ExecEnv(context.Context, string, []string, []string) (string, error) {
+	return "", nil
+}
+func (f *fakeRT) WriteFile(context.Context, string, string, []byte) error { return nil }
+func (f *fakeRT) ReadFile(context.Context, string, string) ([]byte, error) {
+	return nil, errors.New("no files in the worker fake")
+}
 func (f *fakeRT) Stats(context.Context, string) (runtime.Stats, error)    { return runtime.Stats{}, nil }
 func (f *fakeRT) StorageUsed(context.Context) (uint64, error)             { return 0, nil }
 func (f *fakeRT) DiskUsage(context.Context) (runtime.DiskUsage, error)        { return runtime.DiskUsage{}, nil }

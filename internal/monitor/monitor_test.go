@@ -30,7 +30,10 @@ func (stubRuntime) Inspect(context.Context, string) (runtime.Info, error)   { re
 func (stubRuntime) Logs(context.Context, string, bool, int) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
-func (stubRuntime) Exec(context.Context, string, []string) (string, error) { return "", nil }
+func (stubRuntime) Exec(context.Context, string, []string) (string, error)                { return "", nil }
+func (stubRuntime) ExecEnv(context.Context, string, []string, []string) (string, error)   { return "", nil }
+func (stubRuntime) WriteFile(context.Context, string, string, []byte) error               { return nil }
+func (stubRuntime) ReadFile(context.Context, string, string) ([]byte, error)              { return nil, nil }
 func (stubRuntime) Stats(context.Context, string) (runtime.Stats, error)    { return runtime.Stats{}, nil }
 func (stubRuntime) StorageUsed(context.Context) (uint64, error)             { return 0, nil }
 func (stubRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error)        { return runtime.DiskUsage{}, nil }

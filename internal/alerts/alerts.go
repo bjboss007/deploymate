@@ -29,6 +29,8 @@ const (
 	EventAppUnhealthy     = "app_unhealthy"
 	EventAppRecovered     = "app_recovered"
 	EventResourceResized  = "resource_resized"
+	EventBackupFailed     = "backup_failed"
+	EventRestoreFailed    = "restore_failed"
 )
 
 // CatalogEvent pairs an event name with its UI label.
@@ -48,6 +50,8 @@ var Catalog = []CatalogEvent{
 	{EventContainerRestart, "Container restarting"},
 	{EventDiskAlmostFull, "Disk almost full"},
 	{EventResourceResized, "Resource resized"},
+	{EventBackupFailed, "Backup failed"},
+	{EventRestoreFailed, "Restore failed"},
 }
 
 // KnownEvent reports whether a name is in the catalog.
@@ -134,7 +138,7 @@ func (d *Dispatcher) record(alertID, event, subject string, delivered bool, code
 func slackPayload(event, subject, details string) []byte {
 	color := "good"
 	switch event {
-	case EventDeployFailed, EventUptimeDown, EventContainerRestart, EventDiskAlmostFull, EventAppUnhealthy:
+	case EventDeployFailed, EventUptimeDown, EventContainerRestart, EventDiskAlmostFull, EventAppUnhealthy, EventBackupFailed, EventRestoreFailed:
 		color = "danger"
 	case EventUptimeRecovered, EventAppRecovered:
 		color = "warning"

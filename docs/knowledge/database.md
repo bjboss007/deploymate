@@ -27,6 +27,7 @@ server listens. The migration dir passed to goose is `"."` because
 | `domains` | hostname → app routing | `tls_status` (pending/active/failed — informational) |
 | `services` | databases & caches | `type`, `volume_name`, `port`, `status` |
 | `service_credentials` | generated passwords | encrypted values |
+| `service_backups` | per-service backup opt-in (1:1 with `services`) | `enabled`, `schedule` (5-field cron), `keep`, `destination`, `key_enc` (service backup key), `last_run_at` |
 | `metrics` | 5 s resource samples | pruned after 7 d |
 | `uptime_checks` | 30 s domain probes | pruned after 30 d |
 
@@ -60,3 +61,26 @@ server listens. The migration dir passed to goose is `"."` because
   `?sslmode=disable` — private network, no TLS), `MYSQL_URL`, `REDIS_URL`.
   Host is the container name (`dm-svc-<slug>`), resolvable on
   `deploymate-net`.
+
+## Backups (Postgres MVP)
+
+- Named volumes are **not** backups (same disk as the server). Opt-in per
+  service (`docs/specs/database-backups.md`); dumps run *inside* the
+  container (`pg_dump -Fc`) because service ports are deliberately
+  unpublished — nothing off the docker network can reach the database.
+- Restore is destructive: terminate `app`-db connections → `DROP DATABASE
+  app` → `CREATE DATABASE app` → `pg_restore`. Apps keep running through
+  the window; their clients reconnect.
+- **Version boundary:** restore into a *same-major* Postgres is the
+  documented case. A dump from an older major usually restores; restoring
+  into a **newer** major can fail (the `latest`-floating case — the same
+  reason "pin in production" exists). Restore failure lands as a
+  `restore_failed` event, never a silent partial.
+- **Cross-server restore** (a wiped box, a different server) is manual by
+  design: take the object + its matching downloaded backup key from the
+  service page; blob + `.meta.json` identify the object, and the key id in
+  the meta lets you match the key. Decrypt/restore is a small script (a
+  `deploymate` CLI subcommand is the natural follow-up).
+- Dump exec runs as the container's root over the local socket — pg_hba
+  trusts it, and every psql/pg_dump/pg_restore call passes `-U dm`
+  explicitly (the OS user `root` is not a role).

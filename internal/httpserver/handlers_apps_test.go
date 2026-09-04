@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -49,7 +50,12 @@ func (f *fakeRuntime) Inspect(context.Context, string) (runtime.Info, error) {
 func (f *fakeRuntime) Logs(context.Context, string, bool, int) (io.ReadCloser, error) {
 	return io.NopCloser(strings.NewReader("")), nil
 }
-func (f *fakeRuntime) Exec(context.Context, string, []string) (string, error) { return "", nil }
+func (f *fakeRuntime) Exec(context.Context, string, []string) (string, error)             { return "", nil }
+func (f *fakeRuntime) ExecEnv(context.Context, string, []string, []string) (string, error) { return "", nil }
+func (f *fakeRuntime) WriteFile(context.Context, string, string, []byte) error            { return nil }
+func (f *fakeRuntime) ReadFile(context.Context, string, string) ([]byte, error) {
+	return nil, errors.New("no files in the http fake")
+}
 func (f *fakeRuntime) Stats(context.Context, string) (runtime.Stats, error)   { return runtime.Stats{}, nil }
 func (f *fakeRuntime) StorageUsed(context.Context) (uint64, error)            { return 0, nil }
 func (f *fakeRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error)   { return f.disk, f.diskErr }

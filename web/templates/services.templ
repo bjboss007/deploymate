@@ -17,7 +17,28 @@ templ serviceCard(sv store.Service) {
 	</a>
 }
 
-templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string) {
+// BackupView carries a service's backup config + catalog to the page. The
+// objects are a page-local copy — the destination listing is the catalog,
+// so rows are re-listed on every page load.
+type BackupView struct {
+	Enabled     bool
+	Schedule    string
+	Keep        int
+	Destination string
+	HasDests    bool
+	DestIDs     []string
+	Objects     []BackupObject
+}
+
+// BackupObject is one stored backup row on the service page.
+type BackupObject struct {
+	Key     string // object key — the restore form's handle on the object
+	TakenAt string // RFC3339
+	Size    int64
+	SHA     string // hex sha256 of the encrypted blob ("" if meta unreadable)
+}
+
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView) {
 	@Layout(vc, sv.Name, "", []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: sv.Name}}) {
 		<div class="page-head">
 			<div>
@@ -95,5 +116,112 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 			</table>
 			<p class="muted panel-hint">While running, apps in this project's { sv.Environment } environment get this URL injected automatically as { urlEnvKey }. Copy the connection string into an env var if an app expects it under a different key. Passwords are generated once, encrypted at rest, and never shown anywhere else.</p>
 		</div>
+
+		if sv.Type == "postgres" {
+			@backupPanel(vc, sv, bk)
+		}
 	}
+}
+
+// backupPanel is the opt-in config + catalog for database backups
+// (docs/specs/database-backups.md). Postgres-only in the MVP — the
+// template gate above hides it for MySQL/Redis.
+templ backupPanel(vc ViewCtx, sv store.Service, bk BackupView) {
+	<div class="panel">
+		<div class="panel-title">Backups</div>
+		<p class="muted">Encrypted snapshots of this database, dumped inside the container and uploaded off-box to a configured destination (Cloudflare R2 in production). Named volumes alone are not backups — they sit on the same disk as the server.</p>
+
+		if !bk.HasDests {
+			<p class="muted panel-hint">No backup destinations are configured on this server (DEPLOYMATE_BACKUP_DEST_&lt;ID&gt;_* env blocks) — backups cannot be enabled until one is.</p>
+		}
+
+		<form class="form-grid" method="post" action={ "/services/" + sv.Slug + "/backup" }>
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<label class="check-row">
+				<input type="checkbox" name="enabled" if bk.Enabled { checked }/>
+				<span>Backups enabled</span>
+			</label>
+			<label>
+				<span class="field-label">Schedule (server-local cron)</span>
+				<input type="text" name="schedule" list="cron-presets" value={ bk.Schedule } required/>
+				<datalist id="cron-presets">
+					<option value="0 2 * * *">Daily 02:00</option>
+					<option value="0 0 * * *">Daily midnight</option>
+					<option value="13 * * * *">Hourly at :13</option>
+					<option value="0 3 * * 0">Weekly Sun 03:00</option>
+				</datalist>
+			</label>
+			<label>
+				<span class="field-label">Keep newest</span>
+				<input type="number" name="keep" min="1" max="366" value={ bk.Keep } required/>
+			</label>
+			<label>
+				<span class="field-label">Destination</span>
+				<select name="destination" if !bk.HasDests { disabled }>
+					for _, id := range bk.DestIDs {
+						<option value={ id } if bk.Destination == id { selected }>{ id }</option>
+					}
+				</select>
+			</label>
+			<button class="btn btn-primary" type="submit">Save settings</button>
+		</form>
+
+		if bk.Enabled {
+			<div class="head-actions">
+				<form method="post" action={ "/services/" + sv.Slug + "/backup/now" }>
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-ghost" type="submit">Back up now</button>
+				</form>
+				<a class="btn btn-ghost" href={ "/services/" + sv.Slug + "/backup/key" }>Download backup key</a>
+			</div>
+			<p class="muted panel-hint">The backup key encrypts every object of this database. Download it once and keep a copy off-box — a backup made by a dead server is deliberately unreadable without it.</p>
+		}
+
+		<div class="panel-title">Stored backups</div>
+		if len(bk.Objects) == 0 {
+			<p class="muted">No backups yet
+				if bk.Enabled {
+					— opt-in is set; the first run fires on the schedule or via the Back up now button.
+				} else {
+					— enable backups above to start taking snapshots.
+				}
+			</p>
+		} else {
+			<div class="overflow-x">
+				<table class="deploy-table">
+					<thead>
+						<tr>
+							<th>Taken</th>
+							<th>Size</th>
+							<th>Sha256</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, o := range bk.Objects {
+							<tr>
+								<td class="mono">{ shortTime(o.TakenAt) }</td>
+								<td>{ fmtBytes(uint64(o.Size)) }</td>
+								<td class="mono">
+									if len(o.SHA) >= 12 {
+										{ o.SHA[:12] + "…" }
+									} else {
+										<span class="muted">—</span>
+									}
+								</td>
+								<td>
+									<form method="post" action={ "/services/" + sv.Slug + "/backups/restore" } onsubmit="return confirmRestore(this)">
+										<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+										<input type="hidden" name="object_key" value={ o.Key }/>
+										<button class="btn btn-danger" type="submit">Restore</button>
+									</form>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+			<p class="muted panel-hint">Restoring drops and recreates the { "app" } database from the object — apps keep running and reconnect. Restore to a same-version Postgres: a dump from an older major usually restores, a dump into a <em>newer</em> major may fail.</p>
+		}
+	</div>
 }

@@ -91,6 +91,18 @@ type Runtime interface {
 	// Exec runs a command inside a running container and returns combined
 	// output; a non-zero exit code is an error.
 	Exec(ctx context.Context, name string, cmd []string) (string, error)
+	// ExecEnv is Exec with extra environment variables (KEY=VALUE) for the
+	// command. Used where a tool needs credentials it cannot get from the
+	// container's own environment (e.g. PGPASSWORD inside the exec).
+	ExecEnv(ctx context.Context, name string, cmd, env []string) (string, error)
+	// WriteFile writes content into a file inside a running container,
+	// creating intermediate directories as needed. Backup/restore round-trips
+	// files because dumps are binary and can be large — stdout piping is not
+	// enough.
+	WriteFile(ctx context.Context, name, containerPath string, content []byte) error
+	// ReadFile reads a file out of a running container. The file must exist;
+	// an empty result is an error.
+	ReadFile(ctx context.Context, name, containerPath string) ([]byte, error)
 	// Stats returns one resource sample for a running container.
 	Stats(ctx context.Context, name string) (Stats, error)
 	// StorageUsed reports the growable docker storage in bytes: images +

@@ -2,7 +2,7 @@ GO      ?= go
 BIN     := bin/deploymate
 TEMPL   := $(shell go env GOPATH)/bin/templ
 
-.PHONY: build gen dev test vet e2e clean
+.PHONY: build gen dev test vet e2e e2e-backup clean
 
 build: gen
 	$(GO) build -o $(BIN) ./cmd/deploymate
@@ -50,6 +50,13 @@ e2e-manual:
 # run anytime — never touches the live :8090 server or its apps.
 e2e-dns:
 	./testdata/e2e_dns.sh
+
+# End-to-end database-backup path on a throwaway server with a LOCAL backup
+# destination: opt-in -> snapshot -> drop table -> restore -> retention
+# prune -> stopped-skip. Never touches R2 or the live :8090 server. Safe to
+# run anytime.
+e2e-backup:
+	./testdata/e2e_backup.sh
 
 clean:
 	rm -rf bin data

@@ -296,9 +296,19 @@ change.
   against the full computed env, chained with a cycle guard (ADR 0016).
   VGG's DATABASE_URL is now just `${MYSQL_URL}` — no copied credentials
   (Aug 2026).
-- [ ] **Database backups** — `pg_dump`/`mysqldump`/redis SAVE on a
-  schedule into the data dir (or S3), with restore UI. Named volumes
-  alone are not backups.
+- [x] **Database backups** — done (Sep 2026; spec
+  docs/specs/database-backups.md): opt-in per Postgres service,
+  `pg_dump -Fc` inside the container, per-service key (XChaCha20 AEAD —
+  the spec's "AES-GCM" wording corrected), destinations from
+  `DEPLOYMATE_BACKUP_DEST_*` env blocks (s3/minio-go v7.3.0 → R2, plus
+  local for dev/e2e), per-service cron (robfig/cron v3.0.1, server-local)
+  / keep / destination, 1-min scheduler with persisted `last_run_at` +
+  single-flight, typed-confirm restore (terminate → drop → recreate →
+  pg_restore), events + alerts, bucket listing is the catalog. Migration
+  0014; `runtime.Runtime` gained WriteFile/ReadFile/ExecEnv. `make
+  e2e-backup` green. Follow-ups: MySQL/Redis dumpers (same machinery,
+  different commands — Redis restore is a container-level RDB swap) and
+  manifest-declared config (the "Infra manifest seeding" item below).
 - [x] **Infra manifest teardown (surface-only)** — done: a
   manifest-created service the manifest stops declaring is flagged
   orphaned (badge + build-log line + `service_orphaned` event), never
