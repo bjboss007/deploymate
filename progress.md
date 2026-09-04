@@ -59,8 +59,10 @@ the built image's size_bytes > 0 AND the /stats tracked total matches the
 DB value byte-for-byte (awk ≈ Go formatting); `e2e_manual.sh` creates a
 named volume and asserts it appears on /stats as untracked. `make test` +
 `make vet` green across all 22 packages. Committed + pushed (bjboss007
-rule). **The live :8090 server has NOT been restarted with this binary
-yet** (three commits pushed; the wrap-up binary is still serving).
+rule). **The live :8090 server now runs this binary** (restarted 2026-09-04,
+pid 58400, `data/server.log`; migration 13 applied, worker started;
+logged-in /stats spot-check shows the Storage panel rendering the real
+daemon snapshot).
 
 **2026-08-31 (wrap-up)** — **The :8090 server now runs the competitive-wave
 binary** (restarted twice that day; full live env: `DEPLOYMATE_ADDR=
