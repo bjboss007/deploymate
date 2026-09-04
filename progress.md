@@ -46,7 +46,11 @@ decoding, handler tests through the real router). Follow-ups logged:
 MySQL/Redis dumpers + manifest-declared config (improvements.md).
 **Unverified:** a real R2 upload/restore (S3 path unit-tested, local dest
 e2e'd; live smoke needs a `DEPLOYMATE_BACKUP_DEST_*` block). Committed +
-pushed (bjboss007 rule).
+pushed (bjboss007 rule). **Live server:** restarted on the backups binary
+the same day (pid 96300, `data/server.log` — env unchanged: absolute data
+dir symlink, auto-DNS on, no backup destinations, so the backups panel is
+dormant on :8090 until a destination block joins the env in a later
+restart; live DB migrated to 14; healthz ok; demo traffic green).
 
 **2026-09-04 (dogfood demo round)** — **The whole platform exercised live by
 a real three-environment demo** (document-only round: no DeployMate code
