@@ -229,6 +229,40 @@ change.
   backend on the deterministic preview port) and verified in a real
   headless Chrome: login → `/preview/react-spa/` renders the React app,
   body text + `api/ping` → pong (Aug 2026).
+- [ ] **Multi-webhook fan-out deduped to one app** — found live
+  (2026-09-04) by the three-environment dogfood demo (one GitHub repo →
+  one webhook per app, all on the same repo). GitHub sends every webhook
+  on a repo the **same `X-GitHub-Delivery` GUID** for one push event
+  (verified across three hook deliveries: identical `bb45e8b8-…`), so
+  `DeliveryCache.Seen(provider, deliveryID)`
+  (`internal/webhooks/webhooks.go`) — designed to dedupe retries on a
+  *single* source — eats the 2nd..Nth fan-out deliveries: only the first
+  hook to arrive queues a deployment, the rest get `200 "duplicate
+  delivery ignored"` (response `Content-Length: 26` in GitHub's
+  delivery records). Manual replays with a fresh GUID always queue, so
+  the handler is otherwise fine. Fix idea: include the git source id in
+  the dedupe key (`provider:sourceID:deliveryID`), or hash the payload
+  instead of the GUID. **No e2e caught it** — `e2e_git.sh` fires one
+  webhook; add a two-apps-one-repo assertion.
+- [ ] **SSH deploy-key clones fail when `DEPLOYMATE_DATA_DIR` is
+  relative or space-containing** — found live (2026-09-04, same demo).
+  The worker's checkout + identity paths come from `cfg.DataDir`
+  (`internal/jobs/worker.go` → `gitpkg.Clone`, key written at
+  `checkoutDir+".key"`, `GIT_SSH_COMMAND="ssh -i <key> …"`). Two
+  independent breakages on macOS/git 2.40.1, both reproducible outside
+  the worker:
+  1. **Relative `-i` path**: `git clone` with `-i data/repos/x.key` →
+     ssh: "Identity file data/repos/x.key not accessible" even though
+     the file exists (direct `ssh -i rel.key` works; absolute `-i`
+     through git works). The live server launched with `DataDir=./data`
+     → every SSH-URL deploy died at clone with "Repository not found".
+  2. **Unquoted absolute path with spaces**: `-i /Users/…/Start
+     Up/…/key` splits on the space → ssh resolves a bogus hostname.
+  Workaround (used live): run the server with an **absolute,
+  space-free** data dir (`~/dm-data` → symlink). `e2e_git.sh` never
+  exercised SSH (local-path repos) — a real-SSH clone e2e on an
+  absolute scratch dir would have caught this. Fix idea: build
+  `keyPath` as an absolute path and shell-quote it in the ssh command.
 - [ ] **Real e2e suite** — `testdata/e2e.sh` covers the P2 image smoke
   path; `testdata/e2e_git.sh` (`make e2e-git`, Aug 2026) now covers the
   **git-deploy path** end to end on a throwaway server (signed webhook →

@@ -7,6 +7,33 @@
 
 ## Where we stopped
 
+**2026-09-04 (dogfood demo round)** — **The whole platform exercised live by
+a real three-environment demo** (document-only round: no DeployMate code
+changed; findings went to `docs/improvements.md`). Live on :8090 now:
+project `shortener` with **`shortlink-dev` (dev) / `shortlink-stage`
+(staging) / `shortlink-prod` (production)** — same Node 22 + Express API
+repo `bjboss007/dm-shortlink-api`, each env with its own Postgres + Redis
+provisioned from `deploymate.yml` (dev, unpinned `latest`) and the
+staging/production overlays (pinned `postgres:16-alpine`,
+`redis:7-alpine`) — plus **`shortlink-web`** (React matrix page, repo
+`bjboss007/dm-shortlink-web`) with per-env panels. All four green through
+public auto-DNS subdomains (`http://shortlink-{dev,stage,prod,web}.dm.
+getmerchanttech.com`), verified: create→302→hit counters flushed Redis→PG,
+per-env isolation, releases/history rows, health badges. Demo code lives in
+`~/Documents/Start Up/dm-shortlink/{api,web}` (own git repos). Two
+real-product bugs found & documented (not fixed): the multi-webhook
+fan-out dedupe (GitHub sends one repo's hooks the **same**
+`X-GitHub-Delivery` GUID → only the first hook's app deploys) and SSH
+deploy-key clones failing on relative/space-containing data dirs — see
+improvements.md Near-term. **Environment change:** the live server now
+runs with `DEPLOYMATE_DATA_DIR=/Users/habibmuhammad/dm-data` — a symlink
+to `…/deploymate/data` — because git-spawned ssh needs absolute space-free
+identity paths (restarted 2026-09-04, pid 70776, `data/server.log`; all
+other env vars unchanged). Webhook fan-out workaround in use: replay the
+signed push to the other two apps' `/hooks/{id}` (fresh GUID) after a real
+push. Session cookie jar at `/tmp/dm-jar` (owner login) enables curl
+automation of the router.
+
 **2026-09-04 (dns-cleanup round)** — **Preview DNS cleanup shipped** (backlog
 item; the "Next up" #2 cleanup slice). Deleting an app now removes its
 preview CNAME via the Cloudflare API instead of leaving it to linger:
@@ -478,6 +505,18 @@ real Let's Encrypt issuance.
 
 ## Hard-won rules (skipping these burns an hour)
 
+- **GitHub fans one push out to every webhook on a repo with the SAME
+  `X-GitHub-Delivery` GUID** — DeployMate's delivery dedupe then ignores
+  all but the first hook's app. One-repo-many-apps deploys need a manual
+  replay (fresh GUID) per extra app, or a fix (see improvements.md).
+  Single-hook repos (one app per repo) are unaffected (Sep 2026).
+- **The live server must run with an absolute, space-free data dir on
+  macOS** — `git`-spawned `ssh` can't open a relative `-i` key path, and
+  an unquoted absolute path with spaces breaks too; SSH git deploys fail
+  at clone ("Identity file … not accessible") otherwise. Current setup:
+  `DEPLOYMATE_DATA_DIR=/Users/habibmuhammad/dm-data` (symlink →
+  `…/Start Up/deploymate/data`), pid in progress.md top entry. e2e/throwaway
+  servers use absolute `mktemp` dirs, so they never hit this (Sep 2026).
 - **Docker cleanup patterns must never prefix-grep real container names** —
   `grep "^dm-web-"` was meant for staged containers (`dm-{slug}-{deployID}`)
   and deleted the user's real `dm-web-front`. Anchor cleanup to the exact
