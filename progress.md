@@ -7,10 +7,11 @@
 
 ## Where we stopped
 
-**2026-09-04 (worker round)** — **Two backlog items shipped.** (1)
+**2026-09-04 (worker round)** — **Three backlog items shipped.** (1)
 **Manual deploys now run on the worker queue** ("Deployment
 command/timeout"). (2) **Container command override** (migration 0013:
-`apps.entrypoint`/`apps.command`). Details per item:
+`apps.entrypoint`/`apps.command`). (3) **Disk usage panel** on /stats.
+Details per item:
 
 **Manual deploys on the queue** — `POST /apps/{slug}/deploy`
 persists image/port and creates the row as `queued` (`manual`/`manual`),
@@ -42,7 +43,24 @@ worker spec inheritance incl. rollback, heal-inheritance subtest).
 E2e-extended `e2e_manual.sh`: busybox deployed with `httpd -f -p 8080`
 override serves + survives `docker inspect` (Config carry), form
 prefilled, redeploy with empty fields restores nginx's image defaults.
-`make test` + `make vet` green. Committed + pushed (bjboss007 rule).
+**Disk usage panel** — Storage section on /stats (nil rt hides it; daemon
+error = warning note, never a 500): stat cards for images/containers/
+volumes/build cache/reclaimable/**tracked app images**, a per-volume
+table with every daemon volume (non-service ones flagged "not tracked by
+DeployMate" — the ENOSPC-diagnosis point), and the 5 largest images.
+New `runtime.DiskUsage` (docker-free struct) + `runtime.DiskUsage(ctx)`
++ `ImageSize(ctx, ref)` interface methods; docker.go wraps the existing
+`cli.DiskUsage` call and adds `ImageInspectWithRaw`. **`images.size_bytes`
+is finally filled** — best-effort inspect at `CreateImage` time (warn-only
+on error) — and summed by new `Store.TotalImageBytes`; new
+`Store.ListAllServices` for volume tracking. 5 runtime fakes gained the
+two methods. `fmtBytes` helper added. E2e-verified: `e2e_git.sh` asserts
+the built image's size_bytes > 0 AND the /stats tracked total matches the
+DB value byte-for-byte (awk ≈ Go formatting); `e2e_manual.sh` creates a
+named volume and asserts it appears on /stats as untracked. `make test` +
+`make vet` green across all 22 packages. Committed + pushed (bjboss007
+rule). **The live :8090 server has NOT been restarted with this binary
+yet** (three commits pushed; the wrap-up binary is still serving).
 
 **2026-08-31 (wrap-up)** — **The :8090 server now runs the competitive-wave
 binary** (restarted twice that day; full live env: `DEPLOYMATE_ADDR=

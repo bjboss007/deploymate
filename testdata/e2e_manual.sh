@@ -31,6 +31,7 @@ CONTAINERS=("dm-$SLUG" "dm-$FAIL_SLUG" "dm-$CMD_SLUG")
 
 DATA_DIR="$(mktemp -d)"
 JAR="$(mktemp)"
+VOLUME="dm-e2e-$STAMP-data"     # created for the storage-panel check
 SRV_PID=""
 
 log()  { echo "== $*"; }
@@ -48,6 +49,7 @@ cleanup() {
       docker rm -f "$staged" >/dev/null 2>&1
     done
   done
+  docker volume rm -f "$VOLUME" >/dev/null 2>&1
   rm -rf "$DATA_DIR" "$JAR"
 }
 trap cleanup EXIT
@@ -243,5 +245,16 @@ for i in $(seq 1 30); do
   [ "$i" = 30 ] && fail "overrides never cleared (entrypoint=$ep cmd=$cmd)"
 done
 
-# 7. Teardown happens in the EXIT trap; nothing after this should deploy.
+# 7. Storage panel: a freshly created (orphan) named volume must appear on
+#    /stats flagged "not tracked by DeployMate" — the disk-diagnosis point
+#    of the panel.
+log "checking the /stats storage panel"
+docker volume create "$VOLUME" >/dev/null || fail "create test volume"
+stats="$(curl -s -b "$JAR" "$BASE/stats")"
+echo "$stats" | grep -q "Storage" || fail "stats page missing the Storage panel"
+echo "$stats" | grep -qF "$VOLUME" || fail "stats volume table missing $VOLUME"
+echo "$stats" | grep -q "not tracked by DeployMate" || fail "stats missing the not-tracked note"
+log "PASS: /stats storage panel lists daemon volumes"
+
+# 8. Teardown happens in the EXIT trap; nothing after this should deploy.
 log "e2e_manual: all checks passed"

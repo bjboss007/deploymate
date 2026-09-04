@@ -137,11 +137,16 @@ change.
   and binding heals all inherit them from the row. Git apps are
   unaffected. E2e-verified: busybox `httpd -f -p 8080` override served
   and cleared back to image defaults (Sep 2026).
-- [ ] **Disk usage panel** — `docker system df` + per-volume sizes on the
-  dashboard; `images.size_bytes` is recorded but never displayed or
-  filled from the daemon. *Bitten us already: Docker Desktop's disk
-  filled, MySQL init started failing ("UUID failed", ENOSPC) and it took
-  an hour to diagnose (Aug 2026) — at minimum surface a disk warning.*
+- [x] **Disk usage panel** — done: a Storage panel on /stats with a live
+  `docker system df` snapshot — stat cards per category (images,
+  containers, volumes, build cache, reclaimable, tracked app images),
+  every named volume with its size (volumes not owned by a DeployMate
+  service flagged "not tracked"), and the 5 largest images. New
+  `runtime.DiskUsage`/`ImageSize` methods (docker-free structs);
+  `images.size_bytes` is now filled from a best-effort inspect at build
+  time and summed via `Store.TotalImageBytes`. Best-effort by design: a
+  nil runtime hides the panel, a daemon error renders a warning note —
+  /stats never 500s on docker. E2e-verified (Sep 2026).
 - [x] **`build_logs` retention** — done: `Store.PruneBuildLogsBefore`
   deletes lines older than 30 d, called from the monitor's hourly
   `prune()` pass alongside metrics/uptime (`buildLogsRetain` in

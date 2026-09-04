@@ -238,8 +238,14 @@ select { cursor: pointer; }
 .panel-title .panel-link:hover { text-decoration: underline; }
 .filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
 .panel-hint { font-size: 13px; margin-top: 12px; }
+.panel-sub {
+  font-family: var(--font-mono); font-size: 12px; font-weight: 500;
+  color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em;
+  margin: 18px 0 8px;
+}
 .panel-warn { border-color: rgba(255, 92, 92, 0.3); }
 .panel-warn .panel-title { color: var(--red); }
+.warn-note { color: var(--red); }
 .deploy-form { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .deploy-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 .deploy-form input[type="text"] { min-width: 220px; }

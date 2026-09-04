@@ -9,7 +9,39 @@ type FleetStats struct {
 	AvgBuildSec float64
 }
 
-templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, perDay []store.DayCount) {
+// DiskStats is the storage snapshot for the stats page's Storage panel
+// (assembled in httpserver.diskStats; nil hides the panel entirely).
+type DiskStats struct {
+	Error             string // non-empty = daemon problem; render a warning note
+	ImagesBytes       uint64
+	ContainersBytes   uint64
+	VolumesBytes      uint64
+	BuildCacheBytes   uint64
+	ReclaimableBytes  uint64
+	ImageCount        int
+	ContainerCount    int
+	VolumeCount       int
+	TrackedImageBytes int64 // kept rollback images (images.size_bytes sum)
+	TopImages         []DiskImage
+	Volumes           []VolumeRow
+}
+
+// DiskImage is one of the largest images on the daemon.
+type DiskImage struct {
+	Tag    string
+	Size   uint64
+	UsedBy int
+}
+
+// VolumeRow is one daemon named volume, flagged when a DeployMate service
+// owns it (matched by the derived volume name).
+type VolumeRow struct {
+	Name    string
+	Bytes   uint64
+	Tracked bool
+}
+
+templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, perDay []store.DayCount, disk *DiskStats) {
 	@Layout(vc, "Build statistics", "", []Crumb{{Label: "Stats"}}) {
 		<div class="page-head">
 			<div>
@@ -73,5 +105,97 @@ templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats,
 				</table>
 			}
 		</div>
+
+		if disk != nil {
+			<div class="panel">
+				<div class="panel-title">Storage</div>
+				<p class="muted">Live docker daemon snapshot — Docker Desktop's disk filled once and database init started failing (ENOSPC); watch the totals here.</p>
+				if disk.Error != "" {
+					<p class="warn-note">{ disk.Error }</p>
+				} else {
+					<div class="stat-strip">
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(disk.ImagesBytes) }</div>
+							<div class="stat-label">{ disk.ImageCount } images</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(disk.ContainersBytes) }</div>
+							<div class="stat-label">{ disk.ContainerCount } containers</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(disk.VolumesBytes) }</div>
+							<div class="stat-label">{ disk.VolumeCount } volumes</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(disk.BuildCacheBytes) }</div>
+							<div class="stat-label">build cache</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(disk.ReclaimableBytes) }</div>
+							<div class="stat-label">reclaimable</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(uint64(disk.TrackedImageBytes)) }</div>
+							<div class="stat-label">tracked app images</div>
+						</div>
+					</div>
+
+					if len(disk.Volumes) > 0 {
+						<h3 class="panel-sub">Volumes</h3>
+						<table class="deploy-table">
+							<thead>
+								<tr>
+									<th>Volume</th>
+									<th>Size</th>
+									<th></th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, v := range disk.Volumes {
+									<tr>
+										<td class="mono">{ v.Name }</td>
+										<td class="mono">{ fmtBytes(v.Bytes) }</td>
+										<td class="muted">
+											if v.Tracked {
+												DeployMate service
+											} else {
+												not tracked by DeployMate
+											}
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+
+					if len(disk.TopImages) > 0 {
+						<h3 class="panel-sub">Largest images</h3>
+						<table class="deploy-table">
+							<thead>
+								<tr>
+									<th>Image</th>
+									<th>Size</th>
+									<th>Containers</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, img := range disk.TopImages {
+									<tr>
+										<td class="mono">{ img.Tag }</td>
+										<td class="mono">{ fmtBytes(img.Size) }</td>
+										<td class="mono">{ img.UsedBy }</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+					<p class="muted panel-hint">
+						Reclaim space with <code>docker system prune</code> (stops nothing) or
+						<code>docker system prune -a</code> (removes unused images). Rebuilding an app
+						regenerates its rollback images.
+					</p>
+				}
+			</div>
+		}
 	}
 }

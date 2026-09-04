@@ -66,6 +66,8 @@ func (f *fakeRT) Logs(context.Context, string, bool, int) (io.ReadCloser, error)
 func (f *fakeRT) Exec(context.Context, string, []string) (string, error) { return "", nil }
 func (f *fakeRT) Stats(context.Context, string) (runtime.Stats, error)    { return runtime.Stats{}, nil }
 func (f *fakeRT) StorageUsed(context.Context) (uint64, error)             { return 0, nil }
+func (f *fakeRT) DiskUsage(context.Context) (runtime.DiskUsage, error)        { return runtime.DiskUsage{}, nil }
+func (f *fakeRT) ImageSize(context.Context, string) (uint64, error)           { return 0, nil }
 func (f *fakeRT) Close() error                                            { return nil }
 
 func (f *fakeRT) pullNames() []string {

@@ -137,8 +137,24 @@ for i in $(seq 1 15); do
   out="$(curl -s -b "$JAR" "$BASE/preview/$SLUG/" || true)"
   if echo "$out" | grep -q "deploymate e2e git fixture"; then
     log "PASS: app served expected content through the preview proxy"
-    exit 0
+    break
   fi
   sleep 1
+  [ "$i" = 15 ] && fail "app did not serve expected content (last: $out)"
 done
-fail "app did not serve expected content (last: $out)"
+
+# 8. The built image's on-disk size must be recorded (best-effort inspect
+#    at build time) and surface on /stats as the tracked app-images total.
+SZ="$(sqlite3 "$DATA_DIR/data.db" "SELECT size_bytes FROM images LIMIT 1" 2>/dev/null || true)"
+[ -n "$SZ" ] && [ "$SZ" -gt 0 ] 2>/dev/null || fail "images.size_bytes not recorded (got '$SZ')"
+expected="$(awk -v n="$SZ" 'BEGIN{
+  if (n < 1024) printf "%d B", n;
+  else if (n < 1048576) printf "%.1f KB", n/1024;
+  else if (n < 1073741824) printf "%.1f MB", n/1048576;
+  else printf "%.1f GB", n/1073741824 }')"
+stats="$(curl -s -b "$JAR" "$BASE/stats")"
+echo "$stats" | grep -q "Storage" || fail "stats page missing the Storage panel"
+echo "$stats" | grep -q "tracked app images" || fail "stats page missing tracked app images"
+echo "$stats" | grep -qF "$expected" || fail "stats tracked total '$expected' missing (size $SZ)"
+log "PASS: image size recorded ($SZ bytes) and shown on /stats ($expected)"
+exit 0

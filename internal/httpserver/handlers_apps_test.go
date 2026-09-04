@@ -21,11 +21,13 @@ import (
 // fakeRuntime records calls for the start/heal path; everything else is a
 // no-op success.
 type fakeRuntime struct {
-	started   int
-	created   int
-	lastSpec  runtime.Spec
-	info      runtime.Info
+	started    int
+	created    int
+	lastSpec   runtime.Spec
+	info       runtime.Info
 	inspectErr error
+	disk       runtime.DiskUsage // DiskUsage stub result
+	diskErr    error
 }
 
 func (f *fakeRuntime) EnsureNetwork(context.Context, string) error          { return nil }
@@ -50,6 +52,8 @@ func (f *fakeRuntime) Logs(context.Context, string, bool, int) (io.ReadCloser, e
 func (f *fakeRuntime) Exec(context.Context, string, []string) (string, error) { return "", nil }
 func (f *fakeRuntime) Stats(context.Context, string) (runtime.Stats, error)   { return runtime.Stats{}, nil }
 func (f *fakeRuntime) StorageUsed(context.Context) (uint64, error)            { return 0, nil }
+func (f *fakeRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error)   { return f.disk, f.diskErr }
+func (f *fakeRuntime) ImageSize(context.Context, string) (uint64, error)      { return 0, nil }
 func (f *fakeRuntime) Close() error                                           { return nil }
 
 // TestAppEnvFiltersByEnvironment proves URL injection is environment-scoped:

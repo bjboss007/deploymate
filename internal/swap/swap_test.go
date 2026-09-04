@@ -57,6 +57,8 @@ func (f *recordingRuntime) Logs(context.Context, string, bool, int) (io.ReadClos
 func (f *recordingRuntime) Exec(context.Context, string, []string) (string, error) { return "", nil }
 func (f *recordingRuntime) Stats(context.Context, string) (runtime.Stats, error)    { return runtime.Stats{}, nil }
 func (f *recordingRuntime) StorageUsed(context.Context) (uint64, error)             { return 0, nil }
+func (f *recordingRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error)        { return runtime.DiskUsage{}, nil }
+func (f *recordingRuntime) ImageSize(context.Context, string) (uint64, error)           { return 0, nil }
 func (f *recordingRuntime) Close() error                                            { return nil }
 
 func (f *recordingRuntime) calls() (started, removed []string, renamed [][2]string) {

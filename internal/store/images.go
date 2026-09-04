@@ -47,3 +47,11 @@ func (s *Store) DeleteImage(id string) error {
 	_, err := s.db.Exec(`DELETE FROM images WHERE id = ?`, id)
 	return err
 }
+
+// TotalImageBytes sums the recorded sizes of all kept app images (the
+// rollback registry's disk footprint, shown on /stats).
+func (s *Store) TotalImageBytes() (int64, error) {
+	var total int64
+	err := s.db.QueryRow(`SELECT COALESCE(SUM(size_bytes), 0) FROM images`).Scan(&total)
+	return total, err
+}

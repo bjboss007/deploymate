@@ -33,6 +33,27 @@ reads only `DOCKER_HOST`. `runtime.NewDocker` tries, in order:
 `unix://$HOME/.docker/run/docker.sock` (Docker Desktop's macOS socket).
 On Ubuntu only the second exists.
 
+## Docker Desktop disk
+
+Docker Desktop's virtual disk filled up once and database init started
+failing with bizarre errors (MySQL: "UUID failed", ENOSPC) — took an hour
+to diagnose. The daemon cannot report host-disk free space, so watch the
+**growable** storage instead:
+
+- **/stats → Storage panel**: live `docker system df` totals (images,
+  containers, volumes, build cache, reclaimable), every named volume with
+  its size (untracked ones flagged — that is the diagnosis), and the 5
+  largest images. Loaded on page view; a daemon hiccup shows a warning
+  note, never a 500.
+- **The growth alert** (`disk_almost_full`, once/24 h) fires at 20 GiB of
+  images + build cache — `internal/monitor` `checkDisk`; volume bytes are
+  deliberately excluded (user data).
+- Reclaim: `docker system prune` (safe, keeps running containers) or
+  `docker system prune -a` (also drops unused images). DeployMate keeps
+  the newest 5 rollback images per app; rebuilding an app regenerates them.
+  `images.size_bytes` (filled at build time) feeds the "tracked app
+  images" card, which survives daemon pruning.
+
 ## Build & test
 
 ```sh

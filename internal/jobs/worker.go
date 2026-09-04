@@ -254,7 +254,13 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 
 	d.ImageTag = imageTag
 	_ = w.store.UpdateDeployment(d)
-	if _, err := w.store.CreateImage(store.Image{AppID: app.ID, Tag: imageTag, DeploymentID: d.ID}); err != nil {
+	// Record the image's on-disk size for the /stats storage panel. The
+	// inspect is best-effort — a daemon hiccup must never fail a deploy.
+	size, err := w.rt.ImageSize(ctx, imageTag)
+	if err != nil {
+		slog.Warn("worker: image size inspect", "tag", imageTag, "err", err)
+	}
+	if _, err := w.store.CreateImage(store.Image{AppID: app.ID, Tag: imageTag, DeploymentID: d.ID, SizeBytes: int64(size)}); err != nil {
 		return fmt.Errorf("record image: %w", err)
 	}
 

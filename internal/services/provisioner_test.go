@@ -64,6 +64,8 @@ func (f *fakeRuntime) Stats(ctx context.Context, name string) (runtime.Stats, er
 	return runtime.Stats{}, nil
 }
 func (f *fakeRuntime) StorageUsed(ctx context.Context) (uint64, error) { return 0, nil }
+func (f *fakeRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error) { return runtime.DiskUsage{}, nil }
+func (f *fakeRuntime) ImageSize(context.Context, string) (uint64, error)     { return 0, nil }
 func (f *fakeRuntime) Close() error                                    { return nil }
 
 func newTestProvisioner(t *testing.T) (*Provisioner, *store.Store, *fakeRuntime) {

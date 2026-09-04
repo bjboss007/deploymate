@@ -23,7 +23,7 @@ server listens. The migration dir passed to goose is `"."` because
 | `env_vars` | per-app environment | `value_enc` (always encrypted), `is_secret` (UI masking only), UNIQUE(app_id, key) |
 | `deployments` | deploy history **and** the worker queue | `kind` (deploy/rollback/manual), `status` (queued/building/running/failed), `image_tag`, `error` |
 | `build_logs` | build output per deployment | `seq`, `stream`, append-only |
-| `images` | built image tags (rollback registry) | keep newest 5 per app |
+| `images` | built image tags (rollback registry) | keep newest 5 per app; `size_bytes` filled from a best-effort daemon inspect at build time and summed on /stats |
 | `domains` | hostname → app routing | `tls_status` (pending/active/failed — informational) |
 | `services` | databases & caches | `type`, `volume_name`, `port`, `status` |
 | `service_credentials` | generated passwords | encrypted values |

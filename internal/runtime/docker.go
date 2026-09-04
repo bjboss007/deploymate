@@ -331,6 +331,53 @@ func (d *Docker) StorageUsed(ctx context.Context) (uint64, error) {
 	return used, nil
 }
 
+// DiskUsage returns a docker system df snapshot. ReclaimableBytes counts
+// the shared image layers plus build cache — what `docker system df`
+// reports as reclaimable without touching running containers.
+func (d *Docker) DiskUsage(ctx context.Context) (DiskUsage, error) {
+	du, err := d.cli.DiskUsage(ctx, types.DiskUsageOptions{})
+	if err != nil {
+		return DiskUsage{}, fmt.Errorf("disk usage: %w", err)
+	}
+	out := DiskUsage{}
+	for _, img := range du.Images {
+		out.ImagesBytes += uint64(img.Size)
+		out.ReclaimableBytes += uint64(img.SharedSize)
+		out.ImageCount++
+		out.Images = append(out.Images, ImageUsage{
+			Tags: img.RepoTags, Size: uint64(img.Size),
+			Shared: uint64(img.SharedSize), UsedBy: int(img.Containers),
+		})
+	}
+	for _, c := range du.Containers {
+		out.ContainersBytes += uint64(c.SizeRw)
+		out.ContainerCount++
+	}
+	for _, v := range du.Volumes {
+		var sz uint64
+		if v.UsageData != nil {
+			sz = uint64(v.UsageData.Size)
+		}
+		out.VolumesBytes += sz
+		out.VolumeCount++
+		out.Volumes = append(out.Volumes, VolumeUsage{Name: v.Name, Size: sz})
+	}
+	for _, bc := range du.BuildCache {
+		out.BuildCacheBytes += uint64(bc.Size)
+		out.ReclaimableBytes += uint64(bc.Size)
+	}
+	return out, nil
+}
+
+// ImageSize inspects a local image and returns its on-disk size in bytes.
+func (d *Docker) ImageSize(ctx context.Context, ref string) (uint64, error) {
+	in, _, err := d.cli.ImageInspectWithRaw(ctx, ref)
+	if err != nil {
+		return 0, fmt.Errorf("inspect image %s: %w", ref, err)
+	}
+	return uint64(in.Size), nil
+}
+
 // mapNotFound converts docker's not-found errors into ErrContainerNotFound
 // so handlers can branch on a single sentinel.
 func mapNotFound(err error) error {

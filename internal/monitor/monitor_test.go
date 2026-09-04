@@ -33,6 +33,8 @@ func (stubRuntime) Logs(context.Context, string, bool, int) (io.ReadCloser, erro
 func (stubRuntime) Exec(context.Context, string, []string) (string, error) { return "", nil }
 func (stubRuntime) Stats(context.Context, string) (runtime.Stats, error)    { return runtime.Stats{}, nil }
 func (stubRuntime) StorageUsed(context.Context) (uint64, error)             { return 0, nil }
+func (stubRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error)        { return runtime.DiskUsage{}, nil }
+func (stubRuntime) ImageSize(context.Context, string) (uint64, error)           { return 0, nil }
 func (stubRuntime) Close() error                                            { return nil }
 
 func newTestMonitor(t *testing.T) (*Monitor, *store.Store, store.App) {

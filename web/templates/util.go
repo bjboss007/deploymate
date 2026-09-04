@@ -57,6 +57,21 @@ func fmtCPU(v float64) string {
 	return strconv.FormatFloat(v, 'f', -1, 64)
 }
 
+// fmtBytes renders a byte count in human units ("1.2 GB"). Below 1 KiB it
+// stays exact bytes; the size string is what the storage panel shows.
+func fmtBytes(n uint64) string {
+	const unit = 1024
+	if n < unit {
+		return strconv.FormatUint(n, 10) + " B"
+	}
+	div, exp := unit, 0
+	for m := n / unit; m >= unit; m /= unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
+}
+
 // pctOf renders a fraction as a percentage.
 func pctOf(part, total int) float64 {
 	if total == 0 {

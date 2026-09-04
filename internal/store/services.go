@@ -59,6 +59,20 @@ func (s *Store) ListServices(projectID string) ([]Service, error) {
 	return scanServices(rows)
 }
 
+// ListAllServices returns every service across projects (stats use: match
+// named volumes against the daemon's volume list).
+func (s *Store) ListAllServices() ([]Service, error) {
+	rows, err := s.db.Query(
+		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, origin, orphaned, created_at
+		 FROM services ORDER BY created_at`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanServices(rows)
+}
+
 // GetServiceBySlug fetches a service by slug (globally unique).
 func (s *Store) GetServiceBySlug(slug string) (Service, error) {
 	var sv Service

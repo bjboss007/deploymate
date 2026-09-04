@@ -97,7 +97,42 @@ type Runtime interface {
 	// build cache (volumes are user data and excluded). The daemon cannot
 	// report host-disk free space, so the alert is growth-based.
 	StorageUsed(ctx context.Context) (uint64, error)
+	// DiskUsage returns a point-in-time docker system df snapshot: totals
+	// per category plus per-image/per-volume detail. Best-effort — a slow or
+	// unhappy daemon must never take a dashboard page down.
+	DiskUsage(ctx context.Context) (DiskUsage, error)
+	// ImageSize returns an image's on-disk size in bytes (ImageInspect).
+	ImageSize(ctx context.Context, ref string) (uint64, error)
 	Close() error
+}
+
+// DiskUsage is a point-in-time snapshot of the daemon's disk consumption
+// (docker system df) plus the detail behind the totals.
+type DiskUsage struct {
+	ImagesBytes      uint64 // image layer sizes
+	ContainersBytes  uint64 // container writable layers
+	VolumesBytes     uint64 // named volumes (user data)
+	BuildCacheBytes  uint64
+	ReclaimableBytes uint64 // shared image layers + build cache (docker's "reclaimable")
+	ImageCount       int
+	ContainerCount   int
+	VolumeCount      int
+	Images           []ImageUsage
+	Volumes          []VolumeUsage
+}
+
+// ImageUsage is one image's footprint; Tags is empty for dangling images.
+type ImageUsage struct {
+	Tags   []string
+	Size   uint64
+	Shared uint64
+	UsedBy int // containers currently referencing the image
+}
+
+// VolumeUsage is one named volume's footprint.
+type VolumeUsage struct {
+	Name string
+	Size uint64
 }
 
 // Stats is one container resource sample.
