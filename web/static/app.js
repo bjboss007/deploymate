@@ -8,6 +8,30 @@ document.body.addEventListener("htmx:afterSwap", (e) => {
   }
 });
 
+// --- copy-to-clipboard --------------------------------------------------
+// Generic: any [data-copy="elementId"] button copies that element's text.
+// Falls back to a prompt on non-secure origins (plain-http tunnels), where
+// the clipboard API is unavailable.
+document.body.addEventListener("click", (e) => {
+  const btn = e.target.closest(".js-copy");
+  if (!btn) return;
+  const src = document.getElementById(btn.dataset.copy || "");
+  if (!src) return;
+  const text = src.textContent.trim();
+  const done = () => {
+    const old = btn.textContent;
+    btn.textContent = "Copied";
+    btn.disabled = true;
+    setTimeout(() => { btn.textContent = old; btn.disabled = false; }, 1400);
+  };
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => {});
+  } else {
+    window.prompt("Copy this value:", text); // not a secure context — let the owner copy manually
+    done();
+  }
+});
+
 // --- restore confirmation ------------------------------------------------
 // Restore is destructive (the database is dropped and recreated), so the
 // prompt asks the owner to TYPE the service name. The slug comes from the

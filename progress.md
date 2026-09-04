@@ -7,6 +7,29 @@
 
 ## Where we stopped
 
+**2026-09-04 (service-page redesign round)** — **The service page was
+redesigned as "the appliance front panel"** (owner: the stacked Details +
+Backups layout felt clumsy; UI-only, no handler/route changes). What
+changed on `/services/{slug}`: a live state row under the title (status +
+env + orphan pills), a hairline **spec plate** (Type/Image/Internal
+port/Data volume) replacing the Details table, the connection string as a
+**terminal readout** (`DATABASE_URL`-labeled, amber key, copy button with
+clipboard + insecure-context fallback) shown only while running, and the
+Backups panel restructured — master **switch** (pure-CSS reveal via
+`:has`, no JS; static "Enable backups" label — stateful labels were wrong
+because nothing applies until Save), the config fields in a real grid
+(the old `.form-grid` class had NO CSS rules at all — the actual source of
+the clumsiness), catalog under a proper nested `.panel-sub` header.
+Verbose doc-paragraphs cut to single operator lines; Delete pushed to the
+far edge of the action row. Verified via CDP computed-style assertions
+against the live page AND a throwaway server with an enabled backup
+(toggle round-trip block↔flex, 1-row catalog, readout) — headless-shell
+screenshots can't be read in this environment, so DOM+computed checks
+stood in; caught en route: the CSS-only label claimed "Backups are on"
+after toggling off — fixed by making it static. Live :8090 restarted on
+the redesign (pid 98718, same env; healthz ok). Committed + pushed
+(bjboss007 rule).
+
 **2026-09-04 (backups round)** — **Database backups shipped end to end**
 (backlog item; spec at `docs/specs/database-backups.md` — Postgres MVP).
 Opt-in per service (`service_backups`, migration **0014**): `pg_dump -Fc`
