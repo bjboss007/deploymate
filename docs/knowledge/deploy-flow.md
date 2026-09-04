@@ -48,16 +48,28 @@ every build line with sequence numbers.
 **Rollback** skips steps 2–4: it reuses a kept `image_tag` and goes
 straight to the swap. Rollback of a rollback is prevented in the UI.
 
+**Manual deploys** (`kind=manual`, the dashboard Deploy button) also skip
+steps 2–4: no repo, so no clone/build/manifest — the persisted image is
+pulled if missing (bounded at 10 min so a hung registry can't hold the
+serial worker) and the swap runs.
+
 **Failure** anywhere → deployment `failed` + `error`, app `failed`. The
 previous container is untouched — a failed build never takes a running
 app down.
 
 ## Manual (image) deploys
 
-`POST /apps/{slug}/deploy` runs the same swap synchronously in the HTTP
-handler (no worker): check `HasImage` → pull if missing → swap. This is
-the P2 path; the git path is the worker path. Both build env through the
-same `Server.AppEnv` function (single source of truth for env assembly).
+`POST /apps/{slug}/deploy` persists the form (image/port) and **queues** a
+`manual` deployment row — the request never blocks on a pull. The worker
+(`runManualDeploy`) owns everything after that: check `HasImage` → pull if
+missing (**bounded: 10 min** — a hung registry fails the deploy instead of
+holding the worker forever) → the shared zero-downtime swap → `finish`.
+Manual deploys skip the clone/build/manifest steps (no repo); they wait
+their turn behind queued git builds — deploys serialize by construction.
+Progress and failures land on `/deployments/{id}` (build-log SSE), exactly
+like git deploys; a failed pull never flashes on the app page anymore, and
+a failed swap leaves the old container serving. Both paths build env
+through the same `Server.AppEnv` function (single source of truth).
 
 ## Webhook → deploy (timing)
 

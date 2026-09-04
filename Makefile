@@ -36,5 +36,12 @@ e2e: build
 e2e-git:
 	./testdata/e2e_git.sh
 
+# End-to-end manual (image) deploy path on a self-contained throwaway server:
+# the deploy form queues for the worker (303 to /deployments/{id}) instead of
+# blocking the request, nginx comes up, and a bogus image fails with a pull
+# error. Safe to run anytime.
+e2e-manual:
+	./testdata/e2e_manual.sh
+
 clean:
 	rm -rf bin data

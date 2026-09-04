@@ -32,8 +32,10 @@ curl -sf -b "$JAR" -o /dev/null --max-time 300 -d "image=nginx:alpine&port=80&cs
   "$BASE/apps/web/deploy" || fail "deploy"
 echo "ok: deploy accepted"
 
-# 4. Verify the container came up on the private network
-for i in $(seq 1 30); do
+# 4. Verify the container came up on the private network. The deploy is now
+#    async (the POST only queues; the worker pulls + swaps), so allow longer
+#    than the old 60 s — the first pull of nginx:alpine can take a while.
+for i in $(seq 1 120); do
   if docker inspect dm-web --format '{{.State.Running}}' 2>/dev/null | grep -q true; then
     echo "ok: dm-web running"
     exit 0

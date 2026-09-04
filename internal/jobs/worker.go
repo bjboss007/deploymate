@@ -30,6 +30,10 @@ import (
 // imageRetention is how many built images per app are kept for rollbacks.
 const imageRetention = 5
 
+// manualPullTimeout bounds a manual deploy's image pull so a hung registry
+// can't hold the single worker hostage indefinitely.
+const manualPullTimeout = 10 * time.Minute
+
 // Worker processes the deployment queue.
 type Worker struct {
 	store        *store.Store
@@ -43,12 +47,19 @@ type Worker struct {
 	railpackPath string
 	buildEnv     func(app store.App) []string // injected by the server (services + env vars)
 	alerts       *alerts.Dispatcher
+
+	// Test seams (mirroring the monitor's probeURLFn): zero values pick the
+	// swap defaults (30 attempts × 2s) and manualPullTimeout.
+	pullTimeout   time.Duration
+	probeURL      func(hostPort int) string
+	probeAttempts int
+	probeInterval time.Duration
 }
 
 // NewWorker builds a Worker. buildEnv supplies the app container environment
 // (shared with the manual-deploy path).
 func NewWorker(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string, a *alerts.Dispatcher) *Worker {
-	return &Worker{store: st, rt: rt, prov: prov, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv, alerts: a}
+	return &Worker{store: st, rt: rt, prov: prov, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv, alerts: a, pullTimeout: manualPullTimeout}
 }
 
 // Run polls the queue until ctx is cancelled.
@@ -96,6 +107,8 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 	switch d.Kind {
 	case "rollback", "resize":
 		err = w.runRollback(ctx, app, d)
+	case "manual":
+		err = w.runManualDeploy(ctx, app, d)
 	default:
 		err = w.runGitDeploy(ctx, app, d)
 	}
@@ -117,6 +130,40 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 			fmt.Sprintf("deploy succeeded: %s", app.Name),
 			fmt.Sprintf("the current image is live (deployment %s)", shortID(d.ID)))
 	}
+}
+
+// runManualDeploy is the worker side of the dashboard "Deploy" button: the
+// handler persisted image/port and queued the row. There is no repo, so no
+// clone or build — the persisted image is pulled (bounded, so a hung
+// registry can't hold the worker forever) and the shared zero-downtime swap
+// runs. A manual deploy waits its turn behind any queued git build; deploys
+// serialize by construction.
+func (w *Worker) runManualDeploy(ctx context.Context, app store.App, d store.Deployment) error {
+	image := d.ImageTag
+	if image == "" {
+		return errors.New("no image to deploy — submit the image field on the app page")
+	}
+	has, err := w.rt.HasImage(ctx, image)
+	if err != nil {
+		return fmt.Errorf("check image %s: %w", image, err)
+	}
+	if !has {
+		w.log(d, "system", "pulling "+image)
+		w.publish("deploy:"+app.Slug, "log", "pulling "+image)
+		pctx, cancel := context.WithTimeout(ctx, w.pullTimeout)
+		defer cancel()
+		if err := w.rt.PullImage(pctx, image); err != nil {
+			if errors.Is(err, context.DeadlineExceeded) {
+				return fmt.Errorf("pull %s timed out after %s — check the image name and registry connectivity", image, w.pullTimeout)
+			}
+			return fmt.Errorf("pull %s: %w", image, err)
+		}
+		w.log(d, "system", "pulled "+image)
+	}
+	if err := w.runContainer(ctx, app, d, image, nil); err != nil {
+		return err
+	}
+	return w.finish(d, app.ID)
 }
 
 // runGitDeploy clones, builds, and swaps in the new container.
@@ -347,6 +394,9 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		OnFlip: func(hostPort int) error {
 			return w.store.UpdateAppPreviewPort(app.ID, hostPort)
 		},
+		ProbeURL:      w.probeURL,
+		ProbeAttempts: w.probeAttempts,
+		ProbeInterval: w.probeInterval,
 	}); err != nil {
 		if errors.Is(err, swap.ErrStagedFailed) {
 			msg := "new container failed its health probe — the previous container is still serving"

@@ -3,10 +3,15 @@ package httpserver
 import (
 	"context"
 	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
@@ -261,6 +266,120 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 			t.Errorf("recreate used image %q, want the container's own image", fake.lastSpec.Image)
 		}
 	})
+}
+
+// TestAppDeployQueuesDeployment proves the manual deploy form no longer
+// runs the deploy in the request: it persists image/port, queues a
+// deployment row for the worker, and redirects to the deployment page. The
+// Server deliberately has a nil runtime and nil events broker — the handler
+// must not touch either anymore.
+func TestAppDeployQueuesDeployment(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "dm.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+	owner, err := st.CreateUser(store.User{Email: "owner@test.dev", PasswordHash: "x", Role: "owner"})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	proj, err := st.CreateProject(store.Project{UserID: owner.ID, Name: "Test", Slug: "test"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	app, err := st.CreateApp(store.App{ProjectID: proj.ID, Name: "Web", Slug: "web"})
+	if err != nil {
+		t.Fatalf("create app: %v", err)
+	}
+	if _, err := st.CreateSession(store.Session{
+		UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "csrf",
+		ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	// No rt, no events: the handler queues and returns.
+	s := &Server{store: st}
+
+	form := url.Values{"image": {"nginx:alpine"}, "port": {"80"}, "csrf_token": {"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/apps/web/deploy", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/deployments/") {
+		t.Fatalf("redirect to %q, want /deployments/{id}", loc)
+	}
+	id := strings.TrimPrefix(loc, "/deployments/")
+	d, err := st.GetDeployment(id)
+	if err != nil {
+		t.Fatalf("get deployment %q: %v", id, err)
+	}
+	if d.Status != "queued" || d.Kind != "manual" || d.Trigger != "manual" || d.ImageTag != "nginx:alpine" {
+		t.Errorf("deployment = status %q kind %q trigger %q image %q, want queued/manual/manual/nginx:alpine",
+			d.Status, d.Kind, d.Trigger, d.ImageTag)
+	}
+	app2, err := st.GetAppByID(app.ID)
+	if err != nil {
+		t.Fatalf("get app: %v", err)
+	}
+	if app2.Image != "nginx:alpine" || app2.Port != 80 {
+		t.Errorf("app = image %q port %d, want persisted nginx:alpine/80", app2.Image, app2.Port)
+	}
+}
+
+// TestAppDeployEmptyImageRedirects proves an image-less deploy is rejected
+// at the form with a flash and no deployment row.
+func TestAppDeployEmptyImageRedirects(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "dm.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	defer st.Close()
+	owner, err := st.CreateUser(store.User{Email: "owner@test.dev", PasswordHash: "x", Role: "owner"})
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	proj, err := st.CreateProject(store.Project{UserID: owner.ID, Name: "Test", Slug: "test"})
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	app, err := st.CreateApp(store.App{ProjectID: proj.ID, Name: "Web", Slug: "web"})
+	if err != nil {
+		t.Fatalf("create app: %v", err)
+	}
+	if _, err := st.CreateSession(store.Session{
+		UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "csrf",
+		ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano),
+	}); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	s := &Server{store: st}
+
+	form := url.Values{"csrf_token": {"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/apps/web/deploy", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); !strings.HasPrefix(loc, "/apps/web?flash=") {
+		t.Fatalf("redirect to %q, want the app page with a flash", loc)
+	}
+	rows, err := st.ListDeployments(app.ID, 10)
+	if err != nil {
+		t.Fatalf("list deployments: %v", err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("empty image must not queue a deployment, got %d rows", len(rows))
+	}
 }
 
 // TestHealApp proves the monitor's auto-heal entrypoint: it recreates a

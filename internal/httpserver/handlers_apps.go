@@ -28,7 +28,6 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
-	"github.com/habibmuhammad/deploymate/internal/swap"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
 
@@ -314,9 +313,11 @@ func mustDecrypt(s *Server, envelope string) string {
 	return plain
 }
 
-// handleAppDeploy runs a manual container deploy: pull, replace any running
-// container, start. Synchronous for now; P4 moves git builds into the
-// worker with a full queued→building→running state machine.
+// handleAppDeploy persists the manual deploy form (image, port) and queues
+// a deployment for the worker. The worker owns everything after this —
+// bounded pull, staged spec, zero-downtime swap, finish/fail — the same
+// path git builds take. Failures land on the deployment page instead of
+// blocking the HTTP request on a hung pull.
 func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
@@ -332,109 +333,23 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist the chosen image/port so restart/start keep working.
+	// Persist the chosen image/port first so start/restart keep working and
+	// the worker builds the spec from a fresh row.
 	if err := s.store.UpdateAppImagePort(app.ID, image, port); err != nil {
 		slog.Error("apps: update image/port", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
-	d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "manual", Status: "running", Trigger: "manual", ImageTag: image})
+	d, err := s.store.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "manual", Status: "queued", Trigger: "manual", ImageTag: image,
+	})
 	if err != nil {
-		slog.Error("apps: create deployment", "err", err)
+		slog.Error("apps: queue deploy", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-
-	ctx := r.Context()
-	name := dmContainerName(app.Slug)
-	fail := func(err error) {
-		d.Status, d.Error = "failed", err.Error()
-		_ = s.store.UpdateDeployment(d)
-		// Zero-downtime swaps leave the old container serving on failure —
-		// only mark the app failed when nothing runs for it.
-		if info, ierr := s.rt.Inspect(context.Background(), dmContainerName(app.Slug)); ierr != nil || !info.Running {
-			_ = s.store.UpdateAppStatus(app.ID, "failed")
-		}
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Deploy failed: "+err.Error()), http.StatusSeeOther)
-	}
-
-	has, err := s.rt.HasImage(ctx, image)
-	if err != nil {
-		fail(err)
-		return
-	}
-	if !has {
-		s.events.Publish("app:"+app.Slug, sse.Event{Name: "deploy", Data: "pulling " + image})
-		if err := s.rt.PullImage(ctx, image); err != nil {
-			fail(err)
-			return
-		}
-	}
-	if err := s.rt.EnsureNetwork(ctx, NetworkName); err != nil {
-		fail(err)
-		return
-	}
-
-	// Zero-downtime swap: stage the new container beside the old on a temp
-	// host port, prove it serves, then flip the stored preview port, drop
-	// the old container, and let the staged one take the canonical name. A
-	// failed deploy leaves the old container serving.
-	stagedName := appspec.StagedName(app.Slug, d.ID)
-	hostPort := 0
-	if port > 0 {
-		if hostPort, err = swap.ReserveLoopbackPort(); err != nil {
-			fail(err)
-			return
-		}
-	}
-	stagedEnv := s.AppEnv(app)
-	spec := appspec.BuildSpec(app, appspec.Options{
-		Image:      image,
-		Name:       stagedName,
-		Port:       port,
-		HostPort:   hostPort,
-		Env:        stagedEnv,
-		DeployID:   d.ID,
-		Domains:    s.domainHostnames(app),
-		RouterName: app.Slug + "-" + d.ID,
-		Priority:   time.Now().UnixNano(),
-		LEResolver: proxy.ResolverForLEMode(s.leMode),
-	})
-	s.events.Publish("app:"+app.Slug, sse.Event{Name: "deploy", Data: "starting staged container " + stagedName})
-	if _, err := s.rt.Create(ctx, spec); err != nil {
-		fail(err)
-		return
-	}
-	if err := swap.Swap(ctx, s.rt, name, spec, swap.Options{
-		OnFlip: func(hostPort int) error {
-			return s.store.UpdateAppPreviewPort(app.ID, hostPort)
-		},
-	}); err != nil {
-		if errors.Is(err, swap.ErrStagedFailed) {
-			d.Status, d.Error = "failed", err.Error()
-			_ = s.store.UpdateDeployment(d)
-			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Deploy failed: the new container failed its health probe — the previous container is still serving"), http.StatusSeeOther)
-			return
-		}
-		fail(err)
-		return
-	}
-
-	_ = s.store.UpdateDeployment(d)
-	if err := s.store.UpdateAppStatus(app.ID, "running"); err != nil {
-		slog.Error("apps: set running", "err", err)
-	}
-	// The new container is what's serving now — mirror the worker's finish,
-	// which points current_deployment_id at the active deploy.
-	if err := s.store.SetAppCurrentDeployment(app.ID, d.ID); err != nil {
-		slog.Error("apps: set current deployment", "err", err)
-	}
-	// Fresh container with its binding — declare healthy now (the monitor
-	// corrects within 90s if the new build actually fails to serve).
-	_ = s.store.UpdateAppHealth(app.ID, "healthy")
-	s.events.Publish("app:"+app.Slug, sse.Event{Name: "deploy", Data: "deployed " + image})
-	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
+	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
 }
 
 func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {

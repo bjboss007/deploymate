@@ -81,9 +81,14 @@ change.
   (and edge cert) behind; remove the record via the API on app delete.
 - [ ] **Preview privacy** — preview subdomains are public by design; a
   per-app private toggle + Cloudflare Access is the lock-down path.
-- [ ] **Deployment command/timeout** — manual deploys run in the HTTP
-  handler with no timeout; a hung pull blocks the request. Move manual
-  deploys onto the worker queue (they already create deployment rows).
+- [x] **Deployment command/timeout** — done: the Deploy button queues a
+  `manual` deployment row (kind/trigger `manual`, `queued`) and redirects
+  to `/deployments/{id}`; the worker's `runManualDeploy` pulls (bounded at
+  10 min — a hung registry fails the deploy instead of blocking the HTTP
+  request), then runs the shared zero-downtime swap + `finish`/`fail`.
+  Progress/failures land on the deployment page like git deploys; manual
+  rows now get `started_at`/`finished_at` (durations on the releases page
+  were empty before). E2e-verified on a throwaway server (Sep 2026).
 - [ ] **Server-side dashboard routing (Traefik file provider)** — bootstrap
   installs Traefik with the docker provider only, but the dashboard runs
   as a host systemd service on `127.0.0.1:8080` (not a container), so on a

@@ -7,6 +7,25 @@
 
 ## Where we stopped
 
+**2026-09-04 (worker round)** — **Manual deploys now run on the worker
+queue** (backlog "Deployment command/timeout"). `POST /apps/{slug}/deploy`
+persists image/port and creates the row as `queued` (`manual`/`manual`),
+then 303s to `/deployments/{id}` — it never blocks on a pull. New
+`Worker.runManualDeploy` pulls (bounded at 10 min; `DeadlineExceeded` gets a
+friendly error), then reuses the shared swap + `finish`/`fail`, so manual
+deploys get SSE build-log progress, success/failure alerts, and
+`started_at`/`finished_at` (releases-page durations were always empty
+before). The handler's entire pull/swap/finish block and the dead
+`"app:"+slug` SSE publishes are gone; `current_deployment_id` now has a
+single writer (`Worker.finish`). Worker gained test seams (pullTimeout +
+probe overrides → forwarded into `swap.Options`) and its first tests
+(`internal/jobs/worker_test.go`: success, pull timeout, pull error, no
+image, probe-fail-keeps-old-serving). New `make e2e-manual`
+(`testdata/e2e_manual.sh`): queued-303 assertion + sqlite poll to
+`running` + preview serves nginx + bogus-image pull-failure path — all
+passed on a throwaway server; `e2e.sh`'s poll window bumped to 120s.
+`make test` + `make vet` green. Committed + pushed (bjboss007 rule).
+
 **2026-08-31 (wrap-up)** — **The :8090 server now runs the competitive-wave
 binary** (restarted twice that day; full live env: `DEPLOYMATE_ADDR=
 127.0.0.1:8090`, `DATA_DIR=./data`, `PREVIEW_HOST=dm.getmerchanttech.com`,
@@ -328,14 +347,16 @@ real Let's Encrypt issuance.
 ## Next up (ordered)
 
 1. **Real e2e suite (continue)** — git-deploy path is now automated
-   (`make e2e-git`); still unautomated: env injection + manifest services,
-   rollback, Traefik labels, metric/uptime assertions, the three Railpack
-   runtimes. Next slices: extend `e2e_git.sh` to assert env injection via a
-   manifest service, and add a rollback assertion. Longer-term: wire both
-   e2e scripts into CI on a Linux runner (Traefik + railpack work there).
-   Entry: `testdata/e2e_git.sh`, `testdata/e2e.sh`, `cmd/deploymate/seed.go`,
-   the verification sections in `docs/specs/*.md`, backlog item in
-   `docs/improvements.md` (Near-term).
+   (`make e2e-git`), manual-deploy path too (`make e2e-manual`, Sep 2026);
+   still unautomated: env injection + manifest services, rollback, Traefik
+   labels, metric/uptime assertions, the three Railpack runtimes. Next
+   slices: extend `e2e_git.sh` to assert env injection via a manifest
+   service, and add a rollback assertion. Longer-term: wire the e2e
+   scripts into CI on a Linux runner (Traefik + railpack work there).
+   Entry: `testdata/e2e_git.sh`, `testdata/e2e.sh`,
+   `testdata/e2e_manual.sh`, `cmd/deploymate/seed.go`, the verification
+   sections in `docs/specs/*.md`, backlog item in `docs/improvements.md`
+   (Near-term).
 2. **Preview DNS lifecycle / dedicated domain** — auto-DNS *creates*
    per-app CNAMEs, but deleting an app leaves its CNAME behind (add
    API-side cleanup on delete). And **preview https is blocked on the
@@ -348,15 +369,11 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **Deployment command/timeout** — manual deploys run in the HTTP handler
-   with no timeout; move them onto the worker queue. Entry:
-   `internal/httpserver/handlers_apps.go` (`handleAppDeploy`),
-   `internal/jobs/worker.go`, backlog item (Near-term).
-4. **Recurring bindingless containers** — the auto-heal is reactive (on
+3. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if
    it recurs, investigate why starts produce unbound containers.
-5. Anything else: the full ordered backlog is `docs/improvements.md`.
+4. Anything else: the full ordered backlog is `docs/improvements.md`.
 
 **Bigger milestone on the horizon:** first real-server run
 (`deploy/bootstrap.sh` on Ubuntu 24.04, production LE certs) —
