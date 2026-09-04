@@ -226,6 +226,36 @@ func TestStartAppHealsMissingBinding(t *testing.T) {
 		if fake.lastSpec.Port != 8080 || fake.lastSpec.HostPort != runtime.PreviewPort("img-app") {
 			t.Errorf("recreated spec missing preview binding: port=%d hostport=%d", fake.lastSpec.Port, fake.lastSpec.HostPort)
 		}
+		// No overrides stored → nil argv → the image's own entrypoint/cmd.
+		if fake.lastSpec.Entrypoint != nil || fake.lastSpec.Cmd != nil {
+			t.Errorf("unset overrides must stay nil: %v / %v", fake.lastSpec.Entrypoint, fake.lastSpec.Cmd)
+		}
+	})
+
+	t.Run("recreated spec inherits the stored command overrides", func(t *testing.T) {
+		app := mkApp("cmd-heal", 8080, "", "example.com/app:1")
+		if err := st.UpdateAppDeployConfig(app.ID, "example.com/app:1", 8080, "/bin/sh", "-c echo hi"); err != nil {
+			t.Fatalf("set overrides: %v", err)
+		}
+		fresh, err := st.GetAppByID(app.ID) // handlers operate on a fresh row
+		if err != nil {
+			t.Fatalf("get app: %v", err)
+		}
+		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
+		s := &Server{store: st, rt: fake}
+
+		if err := s.startApp(context.Background(), fresh); err != nil {
+			t.Fatalf("startApp: %v", err)
+		}
+		if fake.created != 1 {
+			t.Fatalf("expected one recreate, got %d", fake.created)
+		}
+		if got := strings.Join(fake.lastSpec.Entrypoint, " "); got != "/bin/sh" {
+			t.Errorf("recreated spec entrypoint = %q, want /bin/sh", got)
+		}
+		if got := strings.Join(fake.lastSpec.Cmd, " "); got != "-c echo hi" {
+			t.Errorf("recreated spec cmd = %q, want -c echo hi", got)
+		}
 	})
 
 	t.Run("bound container is left alone", func(t *testing.T) {
@@ -300,7 +330,10 @@ func TestAppDeployQueuesDeployment(t *testing.T) {
 	// No rt, no events: the handler queues and returns.
 	s := &Server{store: st}
 
-	form := url.Values{"image": {"nginx:alpine"}, "port": {"80"}, "csrf_token": {"csrf"}}
+	form := url.Values{
+		"image": {"nginx:alpine"}, "port": {"80"}, "csrf_token": {"csrf"},
+		"entrypoint": {"/bin/sh"}, "command": {"-c echo hi"},
+	}
 	req := httptest.NewRequest(http.MethodPost, "/apps/web/deploy", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
@@ -329,6 +362,9 @@ func TestAppDeployQueuesDeployment(t *testing.T) {
 	}
 	if app2.Image != "nginx:alpine" || app2.Port != 80 {
 		t.Errorf("app = image %q port %d, want persisted nginx:alpine/80", app2.Image, app2.Port)
+	}
+	if app2.Entrypoint != "/bin/sh" || app2.Command != "-c echo hi" {
+		t.Errorf("app = entrypoint %q command %q, want the form's overrides persisted", app2.Entrypoint, app2.Command)
 	}
 }
 

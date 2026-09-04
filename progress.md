@@ -7,8 +7,12 @@
 
 ## Where we stopped
 
-**2026-09-04 (worker round)** — **Manual deploys now run on the worker
-queue** (backlog "Deployment command/timeout"). `POST /apps/{slug}/deploy`
+**2026-09-04 (worker round)** — **Two backlog items shipped.** (1)
+**Manual deploys now run on the worker queue** ("Deployment
+command/timeout"). (2) **Container command override** (migration 0013:
+`apps.entrypoint`/`apps.command`). Details per item:
+
+**Manual deploys on the queue** — `POST /apps/{slug}/deploy`
 persists image/port and creates the row as `queued` (`manual`/`manual`),
 then 303s to `/deployments/{id}` — it never blocks on a pull. New
 `Worker.runManualDeploy` pulls (bounded at 10 min; `DeadlineExceeded` gets a
@@ -24,6 +28,20 @@ image, probe-fail-keeps-old-serving). New `make e2e-manual`
 (`testdata/e2e_manual.sh`): queued-303 assertion + sqlite poll to
 `running` + preview serves nginx + bogus-image pull-failure path — all
 passed on a throwaway server; `e2e.sh`'s poll window bumped to 120s.
+**Command override** — the image deploy form takes optional Entrypoint +
+Command fields (whitespace-separated, no quoting; empty = image's own
+values), persisted on the app row and applied through the shared spec
+chain: `runtime.Spec.Entrypoint/Cmd` + len-guards in docker `Create` (the
+single "empty = not set" boundary), `appspec.Options`/`SplitArgs`, and the
+two rebuild passers (`Server.appSpec` → start/restart/binding-heal;
+`Worker.runContainer` → manual deploys/rollbacks/resizes; git apps
+unaffected, empty columns → nil). `UpdateAppImagePort` became
+`UpdateAppDeployConfig(id, image, port, entrypoint, command)`. Unit-tested
+(store round-trip incl. clearing, appspec passthrough + SplitArgs,
+worker spec inheritance incl. rollback, heal-inheritance subtest).
+E2e-extended `e2e_manual.sh`: busybox deployed with `httpd -f -p 8080`
+override serves + survives `docker inspect` (Config carry), form
+prefilled, redeploy with empty fields restores nginx's image defaults.
 `make test` + `make vet` green. Committed + pushed (bjboss007 rule).
 
 **2026-08-31 (wrap-up)** — **The :8090 server now runs the competitive-wave

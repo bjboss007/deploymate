@@ -19,7 +19,7 @@ server listens. The migration dir passed to goose is `"."` because
 | `sessions` | browser sessions | `token_hash` (SHA-256 of cookie value), `csrf_token`, `expires_at` |
 | `projects` | grouping for apps + services | unique `slug` |
 | `git_sources` | connected repos | `provider`, `repo_url`, encrypted deploy key + webhook secret, `default_branch` |
-| `apps` | runnable things (manual or git) | `git_source_id` (nullable FK), `image`, `port`, `status`, `current_deployment_id` |
+| `apps` | runnable things (manual or git) | `git_source_id` (nullable FK), `image`, `port`, `entrypoint`/`command` (manual-deploy overrides, raw whitespace-split strings; `''` = image default), `status`, `current_deployment_id` |
 | `env_vars` | per-app environment | `value_enc` (always encrypted), `is_secret` (UI masking only), UNIQUE(app_id, key) |
 | `deployments` | deploy history **and** the worker queue | `kind` (deploy/rollback/manual), `status` (queued/building/running/failed), `image_tag`, `error` |
 | `build_logs` | build output per deployment | `seq`, `stream`, append-only |

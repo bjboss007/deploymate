@@ -152,13 +152,23 @@ func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 	if spec.Port > 0 {
 		exposed[nat.Port(fmt.Sprintf("%d/tcp", spec.Port))] = struct{}{}
 	}
+	cfg := &container.Config{
+		Image:        spec.Image,
+		Env:          spec.Env,
+		Labels:       spec.Labels,
+		ExposedPorts: exposed,
+	}
+	// Command overrides are optional: an unset (nil) Entrypoint/Cmd leaves
+	// the image's own values intact. This len-guard is the single
+	// "empty = image default" boundary for the whole chain.
+	if len(spec.Entrypoint) > 0 {
+		cfg.Entrypoint = spec.Entrypoint
+	}
+	if len(spec.Cmd) > 0 {
+		cfg.Cmd = spec.Cmd
+	}
 	resp, err := d.cli.ContainerCreate(ctx,
-		&container.Config{
-			Image:        spec.Image,
-			Env:          spec.Env,
-			Labels:       spec.Labels,
-			ExposedPorts: exposed,
-		},
+		cfg,
 		hostCfg,
 		nil, // no NetworkingConfig — it silently disables PortBindings
 		nil,

@@ -8,6 +8,7 @@ package appspec
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
@@ -61,6 +62,10 @@ type Options struct {
 	RouterName string
 	Priority   int64
 	LEResolver string
+	// Entrypoint/Cmd override the image's own values; nil = image default
+	// (callers get these from the app row via SplitArgs).
+	Entrypoint []string
+	Cmd        []string
 }
 
 // BuildSpec assembles the container spec for an app deploy.
@@ -108,5 +113,18 @@ func BuildSpec(app store.App, o Options) runtime.Spec {
 	if app.CPULimit > 0 {
 		spec.CPULimit = app.CPULimit
 	}
+	spec.Entrypoint = o.Entrypoint
+	spec.Cmd = o.Cmd
 	return spec
+}
+
+// SplitArgs splits a raw command string on whitespace into argv. No quoting
+// support (documented contract of the deploy form): fields are simple
+// whitespace-separated tokens. Empty/whitespace-only input returns nil —
+// nil means "image default" downstream at docker.Create.
+func SplitArgs(s string) []string {
+	if len(strings.TrimSpace(s)) == 0 {
+		return nil
+	}
+	return strings.Fields(s)
 }

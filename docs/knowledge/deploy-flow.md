@@ -71,6 +71,13 @@ like git deploys; a failed pull never flashes on the app page anymore, and
 a failed swap leaves the old container serving. Both paths build env
 through the same `Server.AppEnv` function (single source of truth).
 
+The form also carries optional **entrypoint/command overrides** (two
+whitespace-separated fields, no quoting; empty = the image's own values).
+They persist on the app row (`apps.entrypoint`/`apps.command`) and flow
+into every rebuild of an image app — deploys, rollbacks, restarts, and
+binding heals read them through `appspec.SplitArgs` at spec time. Git
+apps always have empty columns and are unaffected.
+
 ## Webhook → deploy (timing)
 
 1. Provider POSTs `/hooks/{id}`; handler verifies HMAC, dedupes the

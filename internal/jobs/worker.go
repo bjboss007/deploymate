@@ -384,6 +384,10 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		RouterName: app.Slug + "-" + d.ID,
 		Priority:   time.Now().UnixNano(),
 		LEResolver: proxy.ResolverForLEMode(w.leMode),
+		// Manual deploys/rollbacks/resizes inherit the stored overrides from
+		// the row; git apps always have empty columns (nil = image default).
+		Entrypoint: appspec.SplitArgs(app.Entrypoint),
+		Cmd:        appspec.SplitArgs(app.Command),
 	})
 	slog.Info("worker: container spec", "app", app.Slug, "mem_limit_mb", app.MemLimitMB, "cpu", app.CPULimit, "kind", d.Kind)
 	w.publish("deploy:"+app.Slug, "deploy", "starting staged container "+spec.Name)

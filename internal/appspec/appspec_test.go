@@ -56,6 +56,55 @@ func TestBuildSpecFullShape(t *testing.T) {
 	}
 }
 
+// TestBuildSpecCarriesCommandOverrides proves the Entrypoint/Cmd options
+// pass through to the runtime spec untouched.
+func TestBuildSpecCarriesCommandOverrides(t *testing.T) {
+	spec := BuildSpec(testApp(), Options{
+		Image:      "img",
+		Name:       CanonicalName("web"),
+		Entrypoint: []string{"sleep"},
+		Cmd:        []string{"3000"},
+	})
+	if len(spec.Entrypoint) != 1 || spec.Entrypoint[0] != "sleep" {
+		t.Fatalf("entrypoint = %v, want [sleep]", spec.Entrypoint)
+	}
+	if len(spec.Cmd) != 1 || spec.Cmd[0] != "3000" {
+		t.Fatalf("cmd = %v, want [3000]", spec.Cmd)
+	}
+	// Omitted options stay nil — the "image default" signal downstream.
+	plain := BuildSpec(testApp(), Options{Image: "img", Name: CanonicalName("web")})
+	if plain.Entrypoint != nil || plain.Cmd != nil {
+		t.Fatalf("nil options must stay nil: %v / %v", plain.Entrypoint, plain.Cmd)
+	}
+}
+
+// TestSplitArgs pins the whitespace-split contract of the deploy form
+// fields: empty and whitespace-only input is nil ("image default"), runs
+// of whitespace collapse, tabs/newlines split.
+func TestSplitArgs(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		{"", nil},
+		{"   ", nil},
+		{"\t\n", nil},
+		{"sleep", []string{"sleep"}},
+		{"sleep 3000", []string{"sleep", "3000"}},
+		{"  httpd  -f\t-p 8080\n", []string{"httpd", "-f", "-p", "8080"}},
+	}
+	for _, c := range cases {
+		got := SplitArgs(c.in)
+		if got == nil && c.want != nil {
+			t.Errorf("SplitArgs(%q) = nil, want %v", c.in, c.want)
+			continue
+		}
+		if got != nil && (len(got) != len(c.want) || strings.Join(got, " ") != strings.Join(c.want, " ")) {
+			t.Errorf("SplitArgs(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 // TestBuildSpecStagedShape covers the blue/green shape: staged name, its
 // own router + priority, and the temp host port.
 func TestBuildSpecStagedShape(t *testing.T) {

@@ -141,9 +141,15 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					<label>Port
 						<input class="port-input" type="text" name="port" placeholder="80" value={ fmtPort(app.Port) }/>
 					</label>
+					<label>Entrypoint
+						<input type="text" name="entrypoint" placeholder="optional — image default" value={ app.Entrypoint }/>
+					</label>
+					<label>Command
+						<input type="text" name="command" placeholder="optional — image default" value={ app.Command }/>
+					</label>
 					<button class="btn btn-primary" type="submit">Deploy</button>
 				</form>
-				<p class="muted panel-hint">Runs any container image on the private deploymate network. Connect a git repo below to build from source instead.</p>
+				<p class="muted panel-hint">Runs any container image on the private deploymate network. Entrypoint/Command are whitespace-separated with no quoting — leave empty for the image's defaults. Connect a git repo below to build from source instead.</p>
 			</div>
 		}
 

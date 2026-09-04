@@ -69,6 +69,10 @@ func (s *Server) appSpec(app store.App, image string, port int) runtime.Spec {
 		Env:        env,
 		Domains:    s.domainHostnames(app),
 		LEResolver: proxy.ResolverForLEMode(s.leMode),
+		// Start/restart/heal rebuild from the row, so the stored overrides
+		// must carry through here (nil for git apps and empty fields).
+		Entrypoint: appspec.SplitArgs(app.Entrypoint),
+		Cmd:        appspec.SplitArgs(app.Command),
 	})
 }
 
@@ -333,10 +337,11 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Persist the chosen image/port first so start/restart keep working and
-	// the worker builds the spec from a fresh row.
-	if err := s.store.UpdateAppImagePort(app.ID, image, port); err != nil {
-		slog.Error("apps: update image/port", "err", err)
+	// Persist the chosen image/port/overrides first so start/restart keep
+	// working and the worker builds the spec from a fresh row.
+	if err := s.store.UpdateAppDeployConfig(app.ID, image, port,
+		strings.TrimSpace(r.FormValue("entrypoint")), strings.TrimSpace(r.FormValue("command"))); err != nil {
+		slog.Error("apps: update deploy config", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}

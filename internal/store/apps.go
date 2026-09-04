@@ -27,6 +27,8 @@ type App struct {
 	MemLimitMB          int    // detected limit; 0 = not yet detected
 	CPULimit            float64
 	PreviewHostPort     int    // loopback port the current container publishes; 0 = deterministic hash
+	Entrypoint          string // image-deploy override; whitespace-separated; "" = image default
+	Command             string // image-deploy override; whitespace-separated; "" = image default
 	CreatedAt           string
 }
 
@@ -46,10 +48,10 @@ func (s *Store) CreateApp(a App) (App, error) {
 		gitSourceID = a.GitSourceID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.ProjectID, a.Name, a.Slug, gitSourceID, a.BuildType, a.RootDirectory,
-		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.PreviewHostPort, a.CreatedAt,
+		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.PreviewHostPort, a.Entrypoint, a.Command, a.CreatedAt,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return a, ErrSlugTaken
@@ -60,7 +62,7 @@ func (s *Store) CreateApp(a App) (App, error) {
 // ListApps returns all apps in a project, newest first.
 func (s *Store) ListApps(projectID string) ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at
 		 FROM apps WHERE project_id = ? ORDER BY created_at DESC`,
 		projectID,
 	)
@@ -76,11 +78,11 @@ func (s *Store) GetAppBySlug(slug string) (App, error) {
 	var a App
 	var gitSourceID sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at
 		 FROM apps WHERE slug = ?`,
 		slug,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.CreatedAt)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -94,10 +96,14 @@ func (s *Store) UpdateAppStatus(id, status string) error {
 	return err
 }
 
-// UpdateAppImagePort persists the image/port chosen at deploy time so
-// start/stop and future deploys keep working.
-func (s *Store) UpdateAppImagePort(id, image string, port int) error {
-	_, err := s.db.Exec(`UPDATE apps SET image = ?, port = ? WHERE id = ?`, image, port, id)
+// UpdateAppDeployConfig persists the deploy form (image, port, and the
+// entrypoint/command overrides) so start/restart, heals, rollbacks, and
+// future deploys rebuild from this row. Empty entrypoint/command mean
+// "image default".
+func (s *Store) UpdateAppDeployConfig(id, image string, port int, entrypoint, command string) error {
+	_, err := s.db.Exec(
+		`UPDATE apps SET image = ?, port = ?, entrypoint = ?, command = ? WHERE id = ?`,
+		image, port, entrypoint, command, id)
 	return err
 }
 
@@ -147,11 +153,11 @@ func (s *Store) GetAppByID(id string) (App, error) {
 	var a App
 	var gitSourceID sql.NullString
 	err := s.db.QueryRow(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at
 		 FROM apps WHERE id = ?`,
 		id,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.CreatedAt)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -168,7 +174,7 @@ func (s *Store) SetAppCurrentDeployment(appID, deploymentID string) error {
 // ListAllApps returns every app across projects (monitor use).
 func (s *Store) ListAllApps() ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at
 		 FROM apps ORDER BY created_at`,
 	)
 	if err != nil {
@@ -181,7 +187,7 @@ func (s *Store) ListAllApps() ([]App, error) {
 // ListAppsByGitSource returns apps linked to a git source.
 func (s *Store) ListAppsByGitSource(gitSourceID string) ([]App, error) {
 	rows, err := s.db.Query(
-		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, created_at
+		`SELECT id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at
 		 FROM apps WHERE git_source_id = ?`,
 		gitSourceID,
 	)
@@ -204,7 +210,7 @@ func scanApps(rows *sql.Rows) ([]App, error) {
 		var a App
 		var gitSourceID sql.NullString
 		if err := rows.Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType,
-			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.CreatedAt); err != nil {
+			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt); err != nil {
 			return nil, err
 		}
 		a.GitSourceID = gitSourceID.String

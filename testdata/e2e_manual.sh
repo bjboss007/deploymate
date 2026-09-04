@@ -26,7 +26,8 @@ PASSWORD="e2epassword123"
 STAMP="$(date +%s)"
 SLUG="e2eman$STAMP"              # timestamped slug: unique container/preview port
 FAIL_SLUG="e2efail$STAMP"
-CONTAINERS=("dm-$SLUG" "dm-$FAIL_SLUG")
+CMD_SLUG="e2ecmd$STAMP"          # command-override scenario
+CONTAINERS=("dm-$SLUG" "dm-$FAIL_SLUG" "dm-$CMD_SLUG")
 
 DATA_DIR="$(mktemp -d)"
 JAR="$(mktemp)"
@@ -86,7 +87,7 @@ CSRF="$(csrf "$BASE/projects")"
 PROJ="e2e-$STAMP"
 curl -sf -b "$JAR" -o /dev/null -d "name=$PROJ&csrf_token=$CSRF" "$BASE/projects" || fail "create project"
 PROJ_SLUG="$(echo "$PROJ" | tr '[:upper:]' '[:lower:]')"
-for name in "$SLUG" "$FAIL_SLUG"; do
+for name in "$SLUG" "$FAIL_SLUG" "$CMD_SLUG"; do
   curl -sf -b "$JAR" -o /dev/null -d "name=$name&csrf_token=$CSRF" "$BASE/projects/$PROJ_SLUG/apps" || fail "create app $name"
 done
 log "project + apps created"
@@ -172,5 +173,75 @@ DID2="$(deploy "$FAIL_SLUG" "no-such-registry.invalid/nope:latest")"
 wait_status "$DID2" "failed" 90 "pull" || fail "bogus image did not fail with a pull error"
 log "PASS: bogus image failed with a pull error"
 
-# 6. Teardown happens in the EXIT trap; nothing after this should deploy.
+# 6. Command override: busybox's own default CMD is `sh` (exits immediately
+#    with no TTY). Deploying with entrypoint `httpd` + command `-f -p 8080`
+#    must produce a container that (a) actually serves (swap probe passes)
+#    and (b) carries the override in Config.
+log "deploying busybox with an entrypoint/command override to $CMD_SLUG"
+c="$(csrf "$BASE/apps/$CMD_SLUG")"
+out="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' \
+  --data-urlencode "image=busybox:latest" \
+  --data-urlencode "port=8080" \
+  --data-urlencode "entrypoint=httpd" \
+  --data-urlencode "command=-f -p 8080" \
+  --data-urlencode "csrf_token=$c" \
+  "$BASE/apps/$CMD_SLUG/deploy")"
+[ "${out%% *}" = "303" ] || fail "cmd deploy returned ${out%% *}, want 303"
+CMD_DID="${out#*deployments/}"
+wait_status "$CMD_DID" "running" 180 || fail "cmd deployment never reached running"
+
+for i in $(seq 1 30); do
+  [ "$(docker inspect "dm-$CMD_SLUG" --format '{{.State.Running}}' 2>/dev/null)" = "true" ] && break
+  sleep 1
+  [ "$i" = 30 ] && fail "container dm-$CMD_SLUG never started"
+done
+ep="$(docker inspect "dm-$CMD_SLUG" --format '{{.Config.Entrypoint}}')"
+cmd="$(docker inspect "dm-$CMD_SLUG" --format '{{.Config.Cmd}}')"
+[ "$ep" = "[httpd]" ] || fail "Config.Entrypoint = '$ep', want [httpd]"
+[ "$cmd" = "[-f -p 8080]" ] || fail "Config.Cmd = '$cmd', want [-f -p 8080]"
+# The override must serve: busybox httpd answers (a 404 index still counts
+# as healthy to the swap probe).
+for i in $(seq 1 15); do
+  out="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code}' "$BASE/preview/$CMD_SLUG/" || true)"
+  [ "$out" = "404" ] || [ "$out" = "200" ] && break
+  sleep 1
+done
+[ "$out" = "404" ] || [ "$out" = "200" ] || fail "overridden container did not serve (got $out)"
+log "PASS: entrypoint/command override live in the container and serving"
+
+# The app page must show the overrides prefilled.
+html="$(curl -s -b "$JAR" "$BASE/apps/$CMD_SLUG")"
+echo "$html" | grep -q 'name="entrypoint" .* value="httpd"' || fail "entrypoint not prefilled on the form"
+echo "$html" | grep -q 'name="command" .* value="-f -p 8080"' || fail "command not prefilled on the form"
+log "PASS: overrides prefilled on the deploy form"
+
+# Redeploy with BOTH fields empty → the image's own defaults return (the
+# overrides must not linger on the app row). nginx:alpine is the probe
+# image here: its own default CMD serves, so the swap passes with no
+# override in place (busybox's default `sh` would exit and prove nothing).
+c="$(csrf "$BASE/apps/$CMD_SLUG")"
+out="$(curl -s -b "$JAR" -o /dev/null -w '%{http_code} %{redirect_url}' \
+  --data-urlencode "image=nginx:alpine" \
+  --data-urlencode "port=80" \
+  --data-urlencode "entrypoint=" \
+  --data-urlencode "command=" \
+  --data-urlencode "csrf_token=$c" \
+  "$BASE/apps/$CMD_SLUG/deploy")"
+[ "${out%% *}" = "303" ] || fail "empty-override redeploy returned ${out%% *}, want 303"
+EMPTY_DID="${out#*deployments/}"
+wait_status "$EMPTY_DID" "running" 180 || fail "empty-override redeploy never reached running"
+for i in $(seq 1 30); do
+  ep="$(docker inspect "dm-$CMD_SLUG" --format '{{.Config.Entrypoint}}' 2>/dev/null)"
+  cmd="$(docker inspect "dm-$CMD_SLUG" --format '{{.Config.Cmd}}' 2>/dev/null)"
+  # nginx:alpine's own defaults: entrypoint /docker-entrypoint.sh, CMD
+  # `nginx -g daemon off;`.
+  if [ "$ep" = "[/docker-entrypoint.sh]" ] && [ "$cmd" = "[nginx -g daemon off;]" ]; then
+    log "PASS: empty fields restored image defaults (entrypoint=$ep cmd=$cmd)"
+    break
+  fi
+  sleep 1
+  [ "$i" = 30 ] && fail "overrides never cleared (entrypoint=$ep cmd=$cmd)"
+done
+
+# 7. Teardown happens in the EXIT trap; nothing after this should deploy.
 log "e2e_manual: all checks passed"

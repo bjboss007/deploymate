@@ -191,6 +191,51 @@ func TestRunManualDeploySuccess(t *testing.T) {
 	}
 }
 
+// TestRunManualDeployCarriesCommandOverrides proves the stored
+// entrypoint/command overrides reach the container spec: the manual deploy
+// builds from the app row, and the rollback path inherits them too.
+func TestRunManualDeployCarriesCommandOverrides(t *testing.T) {
+	w, fake, st := newTestWorker(t)
+	app := seedApp(t, st)
+	if err := st.UpdateAppDeployConfig(app.ID, "busybox", 8080, "sleep", "3000"); err != nil {
+		t.Fatalf("set overrides: %v", err)
+	}
+
+	// Manual deploy → spec carries the split overrides.
+	d := queuedManual(t, st, app.ID, "busybox")
+	w.process(context.Background(), d)
+	created := fake.createdSpecs()
+	if len(created) != 1 {
+		t.Fatalf("manual deploy created %d containers, want 1", len(created))
+	}
+	if len(created[0].Entrypoint) != 1 || created[0].Entrypoint[0] != "sleep" {
+		t.Errorf("spec entrypoint = %v, want [sleep]", created[0].Entrypoint)
+	}
+	if len(created[0].Cmd) != 1 || created[0].Cmd[0] != "3000" {
+		t.Errorf("spec cmd = %v, want [3000]", created[0].Cmd)
+	}
+
+	// Rollback of a manual deploy inherits the row's overrides too.
+	fake.mu.Lock()
+	fake.created = nil
+	fake.mu.Unlock()
+	rb, err := st.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "rollback", Status: "queued", Trigger: "rollback",
+		ImageTag: "busybox",
+	})
+	if err != nil {
+		t.Fatalf("create rollback: %v", err)
+	}
+	w.process(context.Background(), rb)
+	created = fake.createdSpecs()
+	if len(created) != 1 {
+		t.Fatalf("rollback created %d containers, want 1", len(created))
+	}
+	if len(created[0].Entrypoint) != 1 || created[0].Entrypoint[0] != "sleep" {
+		t.Errorf("rollback spec entrypoint = %v, want [sleep]", created[0].Entrypoint)
+	}
+}
+
 // TestRunManualDeployPullTimeout proves the pull is bounded: a registry that
 // hangs (the fake PullImage blocks until the context dies) fails the
 // deployment with a timeout error instead of blocking forever.

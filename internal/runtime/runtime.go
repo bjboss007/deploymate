@@ -33,6 +33,8 @@ type Spec struct {
 	HostPort   int               // loopback-published host port for Port (0 = no publish)
 	MemLimitMB int64             // memory limit in MB (0 = unlimited)
 	CPULimit   float64           // cpu limit in cores (0 = unlimited)
+	Entrypoint []string          // entrypoint override; nil = the image's own
+	Cmd        []string          // command override; nil = the image's own
 }
 
 // PreviewPort derives a stable loopback port for an app's preview URL.

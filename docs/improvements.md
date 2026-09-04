@@ -128,8 +128,15 @@ change.
   did) — every manual row showed rollbackable and nothing was "current";
   `handleAppDeploy` now mirrors the worker's `finish`. E2e-verified (Aug
   2026).
-- [ ] **Container command override** — image deploys can't pass a
-  command/args. Useful for one-off jobs and images with odd entrypoints.
+- [x] **Container command override** — done: the image deploy form takes
+  optional Entrypoint + Command fields (whitespace-separated, no quoting;
+  empty = image default). Persisted on `apps.entrypoint`/`apps.command`
+  (migration 0013) and applied by the shared spec chain — `runtime.Spec`
+  + docker `container.Config` len-guards (the single "empty = not set"
+  boundary), `appspec.SplitArgs` — so manual deploys, rollbacks, restarts,
+  and binding heals all inherit them from the row. Git apps are
+  unaffected. E2e-verified: busybox `httpd -f -p 8080` override served
+  and cleared back to image defaults (Sep 2026).
 - [ ] **Disk usage panel** — `docker system df` + per-volume sizes on the
   dashboard; `images.size_bytes` is recorded but never displayed or
   filled from the daemon. *Bitten us already: Docker Desktop's disk
