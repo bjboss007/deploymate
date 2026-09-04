@@ -490,3 +490,8 @@ select { cursor: pointer; }
 .bk-form .switch-row:has(.switch:checked) ~ .bk-config { display: block; }
 .bk-form .switch-row:not(:has(.switch:checked)) ~ .bk-off { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .bk-off p { color: var(--muted); font-size: 13.5px; margin: 0; }
+
+/* Disabled backup settings (no destination on the host): the whole form
+   reads as inert — the htmx .btn:disabled spinner rule does not apply. */
+.bk-form input:disabled, .bk-form select:disabled { opacity: 0.55; cursor: not-allowed; }
+.bk-form .btn:disabled { opacity: 0.55; cursor: not-allowed; }

@@ -134,69 +134,70 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 templ backupPanel(vc ViewCtx, sv store.Service, bk BackupView) {
 	<div class="panel">
 		<div class="panel-title">Backups</div>
+		// The settings always render — a server-side prerequisite is no
+		// reason for the page to look empty. With no destination configured
+		// on the host they show disabled and say why.
 		if !bk.HasDests {
 			if bk.Enabled {
-				<p class="muted">Backups are paused: this service's destination is no longer configured on the server. Restore from existing snapshots still works.</p>
+				<p class="bk-note warn-note">Backups are paused: this service's destination is no longer configured on the server. Restoring from existing snapshots still works.</p>
 			} else {
-				<p class="muted">No backup destination is configured on this server. Add a DEPLOYMATE_BACKUP_DEST_&lt;ID&gt;_* block on the host and restart, then enable backups here.</p>
+				<p class="bk-note">No backup destination is configured on this server — add a DEPLOYMATE_BACKUP_DEST_&lt;ID&gt;_* block on the host and restart to unlock these settings.</p>
 			}
-			@backupCatalog(vc, sv, bk)
-		} else {
-			<form class="bk-form" method="post" action={ "/services/" + sv.Slug + "/backup" }>
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<div class="switch-row">
-					<input class="switch" type="checkbox" name="enabled" id="bk-enabled" if bk.Enabled { checked }/>
-					<label class="switch-label" for="bk-enabled">Enable backups</label>
-				</div>
-
-				<div class="bk-config">
-					<div class="form-grid">
-						<label>
-							<span class="field-label">Schedule (server-local cron)</span>
-							<input type="text" name="schedule" list="cron-presets" value={ bk.Schedule } required/>
-							<datalist id="cron-presets">
-								<option value="0 2 * * *">Daily 02:00</option>
-								<option value="0 0 * * *">Daily midnight</option>
-								<option value="13 * * * *">Hourly at :13</option>
-								<option value="0 3 * * 0">Weekly Sun 03:00</option>
-							</datalist>
-						</label>
-						<label>
-							<span class="field-label">Keep newest</span>
-							<input type="number" name="keep" min="1" max="366" value={ bk.Keep } required/>
-						</label>
-						<label>
-							<span class="field-label">Destination</span>
-							<select name="destination">
-								for _, id := range bk.DestIDs {
-									<option value={ id } if bk.Destination == id { selected }>{ id }</option>
-								}
-							</select>
-						</label>
-					</div>
-					<button class="btn btn-primary" type="submit">Save settings</button>
-				</div>
-
-				<div class="bk-off">
-					<p>Nothing leaves this machine while backups are off.</p>
-					<button class="btn btn-ghost" type="submit">Save settings</button>
-				</div>
-			</form>
-
-			if bk.Enabled {
-				<div class="bk-actions">
-					<form method="post" action={ "/services/" + sv.Slug + "/backup/now" }>
-						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-						<button class="btn btn-ghost" type="submit">Back up now</button>
-					</form>
-					<a class="btn btn-ghost" href={ "/services/" + sv.Slug + "/backup/key" }>Download backup key</a>
-				</div>
-				<p class="bk-note">The backup key encrypts every snapshot of this database. Download it once and keep a copy off-box — a snapshot made by a dead server is deliberately unreadable without it.</p>
-			}
-
-			@backupCatalog(vc, sv, bk)
 		}
-		</div>
+		<form class="bk-form" method="post" action={ "/services/" + sv.Slug + "/backup" }>
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<div class="switch-row">
+				<input class="switch" type="checkbox" name="enabled" id="bk-enabled" if bk.Enabled { checked } if !bk.HasDests { disabled }/>
+				<label class="switch-label" for="bk-enabled">Enable backups</label>
+			</div>
+
+			<div class="bk-config">
+				<div class="form-grid">
+					<label>
+						<span class="field-label">Schedule (server-local cron)</span>
+						<input type="text" name="schedule" list="cron-presets" value={ bk.Schedule } required if !bk.HasDests { disabled }/>
+						<datalist id="cron-presets">
+							<option value="0 2 * * *">Daily 02:00</option>
+							<option value="0 0 * * *">Daily midnight</option>
+							<option value="13 * * * *">Hourly at :13</option>
+							<option value="0 3 * * 0">Weekly Sun 03:00</option>
+						</datalist>
+					</label>
+					<label>
+						<span class="field-label">Keep newest</span>
+						<input type="number" name="keep" min="1" max="366" value={ bk.Keep } required if !bk.HasDests { disabled }/>
+					</label>
+					<label>
+						<span class="field-label">Destination</span>
+						<select name="destination" if !bk.HasDests { disabled }>
+							for _, id := range bk.DestIDs {
+								<option value={ id } if bk.Destination == id { selected }>{ id }</option>
+							}
+						</select>
+					</label>
+				</div>
+				<button class="btn btn-primary" type="submit" if !bk.HasDests { disabled }>Save settings</button>
+			</div>
+
+			<div class="bk-off">
+				<p>Nothing leaves this machine while backups are off.</p>
+				<button class="btn btn-ghost" type="submit" if !bk.HasDests { disabled }>Save settings</button>
+			</div>
+		</form>
+
+		if bk.Enabled {
+			<div class="bk-actions">
+				<form method="post" action={ "/services/" + sv.Slug + "/backup/now" }>
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-ghost" type="submit">Back up now</button>
+				</form>
+				<a class="btn btn-ghost" href={ "/services/" + sv.Slug + "/backup/key" }>Download backup key</a>
+			</div>
+			<p class="bk-note">The backup key encrypts every snapshot of this database. Download it once and keep a copy off-box — a snapshot made by a dead server is deliberately unreadable without it.</p>
+		}
+
+		@backupCatalog(vc, sv, bk)
+	</div>
 }
 
 // backupCatalog lists the destination's objects for this service. Rendering
