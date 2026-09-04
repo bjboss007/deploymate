@@ -32,17 +32,17 @@ type Server struct {
 	deliveries  *webhooks.DeliveryCache
 	leMode      string
 	previewHost string
-	dataDir     string // repo mirrors for the deploy-review page
-	dns         dns.Creator // nil disables auto-DNS
+	dataDir     string      // repo mirrors for the deploy-review page
+	dns         dns.Manager // nil disables auto-DNS
 }
 
 // New builds a Server.
-func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost, dataDir string, dnsCreator dns.Creator) *Server {
+func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, leMode, previewHost, dataDir string, dnsManager dns.Manager) *Server {
 	return &Server{
 		store: st, rt: rt, prov: prov, events: events, encKey: encKey, leMode: leMode, previewHost: previewHost,
 		dataDir:    dataDir,
 		deliveries: webhooks.NewDeliveryCache(),
-		dns:        dnsCreator,
+		dns:        dnsManager,
 	}
 }
 

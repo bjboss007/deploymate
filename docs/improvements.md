@@ -77,8 +77,11 @@ change.
   covers them), tunnel ingress + `DEPLOYMATE_PREVIEW_HOST` +
   `DEPLOYMATE_CLOUDFLARE_ZONE_ID` switch over, then flip `previewURL`
   to `https://`.
-- [ ] **Preview DNS cleanup** — deleting an app leaves its preview CNAME
-  (and edge cert) behind; remove the record via the API on app delete.
+- [x] **Preview DNS cleanup** — done: deleting an app removes its preview
+  CNAME via the Cloudflare API (list-by-name then delete; no match or a
+  404 racing the delete is success). Best-effort like creation: deletion
+  never blocks, a failure just flashes a warning on the project redirect
+  (Sep 2026).
 - [ ] **Preview privacy** — preview subdomains are public by design; a
   per-app private toggle + Cloudflare Access is the lock-down path.
 - [x] **Deployment command/timeout** — done: the Deploy button queues a

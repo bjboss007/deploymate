@@ -71,7 +71,10 @@ the DeployMate server POSTs a proxied CNAME
 (`{slug}.{previewHost}` → `{tunnel-id}.cfargotunnel.com`) to the
 Cloudflare API (`internal/dns`, `NewCloudflare`). Error 81053 ("record
 already exists") is treated as success, so manual records and
-delete-and-recreate both work. The manual fallback remains
+delete-and-recreate both work. Deleting an app removes its records the
+same way: a list-by-name GET (`?name={host}`) then a DELETE per id —
+no matching record, or a 404 racing a concurrent delete, is success.
+Best-effort in both directions; the manual fallback remains
 `cloudflared tunnel route dns deploymate <hostname>`.
 
 ## DeployMate side
@@ -85,10 +88,11 @@ delete-and-recreate both work. The manual fallback remains
 - `DEPLOYMATE_CLOUDFLARE_API_TOKEN` + `DEPLOYMATE_CLOUDFLARE_ZONE_ID` +
   `DEPLOYMATE_CLOUDFLARE_TUNNEL_ID` — enable **auto-DNS** (all three
   must be set): each new app's preview CNAME is created via the
-  Cloudflare API on app creation. Token scope: `Zone.DNS:Edit` on the
-  preview zone. Best-effort: failures never block app creation; they
-  are logged, recorded as a `dns_record_failed` event, and surfaced as
-  a warning flash on the redirect.
+  Cloudflare API on app creation and removed on app deletion. Token
+  scope: `Zone.DNS:Edit` on the preview zone. Best-effort in both
+  directions: failures never block app create/delete; they are logged,
+  recorded as a `dns_record_failed` event (create), and surfaced as a
+  warning flash on the redirect.
 - The Host-route middleware is **public by design** (no session) — that
   is the point of a preview URL. Apps without a port, or not running,
   return 404/503.

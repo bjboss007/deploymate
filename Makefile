@@ -43,5 +43,13 @@ e2e-git:
 e2e-manual:
 	./testdata/e2e_manual.sh
 
+# End-to-end auto-DNS lifecycle on a throwaway server with the REAL
+# Cloudflare zone: app create -> CNAME appears, app delete -> CNAME gone
+# (the test deletes the record itself, so nothing lingers). Needs the
+# DEPLOYMATE_CLOUDFLARE_* vars (CLOUD_FLARE_* aliases fall back). Safe to
+# run anytime — never touches the live :8090 server or its apps.
+e2e-dns:
+	./testdata/e2e_dns.sh
+
 clean:
 	rm -rf bin data

@@ -7,6 +7,42 @@
 
 ## Where we stopped
 
+**2026-09-04 (dns-cleanup round)** — **Preview DNS cleanup shipped** (backlog
+item; the "Next up" #2 cleanup slice). Deleting an app now removes its
+preview CNAME via the Cloudflare API instead of leaving it to linger:
+`internal/dns` split into `Creator` + `Deleter` embedded in a `Manager`
+interface (Server field / `New` param / main.go now `dns.Manager`;
+compile-time `var _ Manager = (*Cloudflare)(nil)`). New
+`Cloudflare.RemovePreviewRecord`: list-by-name GET (`?name={host}`, any
+type — also catches human duplicates), DELETE per id; **idempotency
+boundaries**: no matching record is success, and an HTTP 404 racing a
+concurrent delete is success (the v4 `Result` field became
+`json.RawMessage` — an array on LIST, an object on mutations).
+`handleAppDelete` runs it after `store.DeleteApp` under the same gate +
+5s bound as create (`dns != nil && previewHost != ""`); failure only logs
++ flashes a warning on the project redirect — deletion never blocks
+(mirrors create's never-fail rule). No event recorded (the app row is
+gone; `EventAppDeleted` stays a dead constant). Unit tests: 6 new
+cloudflare tests (list-then-delete order/auth/query, no-records, 404
+race, list + delete API errors), fakeDNS gained `RemovePreviewRecord`,
+4 delete-handler tests (removes on delete, failure non-fatal w/ flash,
+nil manager, empty previewHost). **New `make e2e-dns`**
+(`testdata/e2e_dns.sh`): throwaway server (spare port, scratch data dir)
+**with the real Cloudflare vars** — create app via the router → record
+asserted in the real zone (name/type/content/proxied), delete via the
+router → 303 to the project page **without** a warning flash + record
+gone; trap cleans up any leftover record on failure, and the script
+refuses to run against a zone that already has its test hostname.
+**E2e-verified**: full run PASSED against the real API (record
+`dnsdel<epoch>.dm.getmerchanttech.com` created then removed). `make
+test` + `make vet` green (gofmt note: the repo has pre-existing drift in
+~30 files incl. an import-order nit in handlers_apps.go — untouched;
+server.go's struct alignment from the rename is gofmt-clean). Docs
+updated (improvements.md checked off, cloudflare-tunnel.md auto-DNS
+section). Committed + pushed (bjboss007 rule). **The live :8090 server
+runs this binary** (restarted 2026-09-04, pid 65407, `data/server.log`;
+auto-dns enabled, migration 13 current, healthz ok).
+
 **2026-09-04 (worker round)** — **Three backlog items shipped.** (1)
 **Manual deploys now run on the worker queue** ("Deployment
 command/timeout"). (2) **Container command override** (migration 0013:
@@ -395,9 +431,8 @@ real Let's Encrypt issuance.
    `testdata/e2e_manual.sh`, `cmd/deploymate/seed.go`, the verification
    sections in `docs/specs/*.md`, backlog item in `docs/improvements.md`
    (Near-term).
-2. **Preview DNS lifecycle / dedicated domain** — auto-DNS *creates*
-   per-app CNAMEs, but deleting an app leaves its CNAME behind (add
-   API-side cleanup on delete). And **preview https is blocked on the
+2. **Dedicated preview domain** — auto-DNS now *removes* per-app CNAMEs on
+   app delete (Sep 2026), but **preview https is still blocked on the
    current hostnames**: free Universal SSL only covers one wildcard level
    (`*.getmerchanttech.com`; verified via cert SANs + edge alert 40 on
    `*.dm.…`), so `{slug}.dm.getmerchanttech.com` can never get edge certs.

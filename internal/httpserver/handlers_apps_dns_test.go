@@ -16,11 +16,14 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
-// fakeDNS records the hosts asked for and can inject a failure, mirroring
-// the fakeRuntime pattern (handlers_apps_test.go).
+// fakeDNS records the hosts asked for (created and removed) and can inject
+// a failure per direction, mirroring the fakeRuntime pattern
+// (handlers_apps_test.go).
 type fakeDNS struct {
-	hosts []string
-	err   error
+	hosts     []string
+	removed   []string
+	err       error
+	removeErr error
 }
 
 func (f *fakeDNS) EnsurePreviewRecord(_ context.Context, host string) error {
@@ -28,10 +31,17 @@ func (f *fakeDNS) EnsurePreviewRecord(_ context.Context, host string) error {
 	return f.err
 }
 
+func (f *fakeDNS) RemovePreviewRecord(_ context.Context, host string) error {
+	f.removed = append(f.removed, host)
+	return f.removeErr
+}
+
+var _ dns.Manager = (*fakeDNS)(nil)
+
 // newDNSAppServer seeds a store with an owner + project + logged-in session
 // and POSTs an app creation through the real router. Returns the server
 // (for store assertions) and the recorder.
-func newDNSAppServer(t *testing.T, creator dns.Creator, previewHost string) (*Server, *httptest.ResponseRecorder) {
+func newDNSAppServer(t *testing.T, creator dns.Manager, previewHost string) (*Server, *httptest.ResponseRecorder) {
 	t.Helper()
 	st, err := store.Open(filepath.Join(t.TempDir(), "dm.db"))
 	if err != nil {
@@ -51,9 +61,24 @@ func newDNSAppServer(t *testing.T, creator dns.Creator, previewHost string) (*Se
 	}); err != nil {
 		t.Fatalf("create session: %v", err)
 	}
-	s := &Server{store: st, dns: creator, previewHost: previewHost}
+	s := &Server{store: st, rt: &fakeRuntime{}, dns: creator, previewHost: previewHost}
 	form := url.Values{"name": {"My App"}, "csrf_token": {"csrf"}}
 	req := httptest.NewRequest(http.MethodPost, "/projects/test/apps", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	return s, rec
+}
+
+// deleteDNSAppServer creates the app (as newDNSAppServer does) and then
+// POSTs its deletion through the real router. Returns the server (for
+// store assertions) and the recorder.
+func deleteDNSAppServer(t *testing.T, creator dns.Manager, previewHost string) (*Server, *httptest.ResponseRecorder) {
+	t.Helper()
+	s, _ := newDNSAppServer(t, creator, previewHost)
+	form := url.Values{"csrf_token": {"csrf"}}
+	req := httptest.NewRequest(http.MethodPost, "/apps/my-app/delete", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
 	rec := httptest.NewRecorder()
@@ -122,5 +147,61 @@ func TestAppCreateWithoutPreviewHostSkipsDNS(t *testing.T) {
 	}
 	if len(fd.hosts) != 0 {
 		t.Errorf("dns called with %v, want none with empty previewHost", fd.hosts)
+	}
+}
+
+func TestAppDeleteRemovesPreviewDNSRecord(t *testing.T) {
+	fd := &fakeDNS{}
+	s, rec := deleteDNSAppServer(t, fd, "dm.getmerchanttech.com")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if loc := rec.Header().Get("Location"); loc != "/projects/test" {
+		t.Errorf("location = %q, want /projects/test", loc)
+	}
+	if len(fd.removed) != 1 || fd.removed[0] != "my-app.dm.getmerchanttech.com" {
+		t.Errorf("dns removed %v, want [my-app.dm.getmerchanttech.com]", fd.removed)
+	}
+	if _, err := s.store.GetAppBySlug("my-app"); err == nil {
+		t.Error("app should be deleted")
+	}
+}
+
+func TestAppDeleteDNSFailureIsNonFatal(t *testing.T) {
+	fd := &fakeDNS{removeErr: errors.New("cf down")}
+	s, rec := deleteDNSAppServer(t, fd, "dm.getmerchanttech.com")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303 (DNS must not fail app deletion)", rec.Code)
+	}
+	loc := rec.Header().Get("Location")
+	if !strings.HasPrefix(loc, "/projects/test") || !strings.Contains(loc, "flash=") {
+		t.Errorf("location = %q, want /projects/test with a flash", loc)
+	}
+	if _, err := s.store.GetAppBySlug("my-app"); err == nil {
+		t.Error("app should still be deleted despite the DNS failure")
+	}
+}
+
+func TestAppDeleteWithoutDNSCreator(t *testing.T) {
+	s, rec := deleteDNSAppServer(t, nil, "dm.getmerchanttech.com")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if _, err := s.store.GetAppBySlug("my-app"); err == nil {
+		t.Error("app should be deleted without a dns manager")
+	}
+}
+
+func TestAppDeleteWithoutPreviewHostSkipsDNS(t *testing.T) {
+	fd := &fakeDNS{}
+	s, rec := deleteDNSAppServer(t, fd, "")
+	if rec.Code != http.StatusSeeOther {
+		t.Fatalf("status = %d, want 303", rec.Code)
+	}
+	if len(fd.removed) != 0 {
+		t.Errorf("dns removal called with %v, want none with empty previewHost", fd.removed)
+	}
+	if _, err := s.store.GetAppBySlug("my-app"); err == nil {
+		t.Error("app should be deleted")
 	}
 }

@@ -454,6 +454,22 @@ func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// Best-effort cleanup of the preview CNAME auto-DNS created at app
+	// create. Deletion has already happened — a failure only means the
+	// record lingers (the pre-cleanup behavior) — but the flash tells the
+	// human it needs removing by hand. Mirrors create's never-fail rule.
+	if s.dns != nil && s.previewHost != "" {
+		host := app.Slug + "." + s.previewHost
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		err := s.dns.RemovePreviewRecord(ctx, host)
+		cancel()
+		if err != nil {
+			slog.Warn("apps: preview dns cleanup", "app", app.Slug, "host", host, "err", err)
+			project, _ := s.store.GetProjectByID(app.ProjectID)
+			http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("App deleted — but its preview DNS record could not be removed automatically; it will keep resolving until you delete it in Cloudflare."), http.StatusSeeOther)
+			return
+		}
+	}
 	project, _ := s.store.GetProjectByID(app.ProjectID)
 	http.Redirect(w, r, "/projects/"+project.Slug, http.StatusSeeOther)
 }

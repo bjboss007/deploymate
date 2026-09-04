@@ -89,14 +89,15 @@ func serve() error {
 	prov := services.NewProvisioner(st, rt, encKey, httpserver.NetworkName)
 
 	// Auto-DNS: new apps get their preview CNAME via the Cloudflare API
-	// so the edge can issue a per-app cert. Best-effort; nil creator
-	// disables it (logs and config docs never include the token).
-	var dnsCreator dns.Creator
+	// so the edge can issue a per-app cert; deleting an app removes it.
+	// Best-effort; nil manager disables it (logs and config docs never
+	// include the token).
+	var dnsManager dns.Manager
 	if cfg.CloudflareEnabled() {
-		dnsCreator = dns.NewCloudflare(cfg.CloudflareAPIToken, cfg.CloudflareZoneID, cfg.CloudflareTunnelID)
+		dnsManager = dns.NewCloudflare(cfg.CloudflareAPIToken, cfg.CloudflareZoneID, cfg.CloudflareTunnelID)
 		slog.Info("auto-dns enabled", "zone", cfg.CloudflareZoneID, "tunnel", cfg.CloudflareTunnelID)
 	}
-	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsCreator)
+	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsManager)
 
 	// Alert dispatcher: worker + monitor emit catalog events; targets
 	// receive best-effort webhook deliveries.
