@@ -7,6 +7,22 @@
 
 ## Where we stopped
 
+**2026-09-10 (R2 destination round)** — **The live server now has a real
+backup destination.** The owner added a `DEPLOYMATE_BACKUP_DEST_DEFAULT_*`
+block to `~/.zshrc` (s3/R2; exported — the launch inherits them like the
+`CLOUD_FLARE_*` aliases). One field was wrong at first — `TYPE=R2`; TYPE is
+the protocol, **must be `s3`** (or `local`) — fixed in place. Boot success
+is the proof the block parsed: config rejects malformed blocks and
+`NewDestinations` failure aborts `serve()`, so a listening server means the
+destination exists and the service pages' backups settings are unlocked.
+Live server restarted (pid 76381, same env otherwise; no service has been
+opted in yet — schedules/retention are per-service UI settings). Also this
+round: the backups settings form now always renders (disabled + reason when
+no destination is configured) instead of hiding entirely — hiding made the
+service page look like it had no settings at all. Not yet done: a live
+`Back up now` smoke (writes a real object to the owner's bucket — needs
+their pick of service).
+
 **2026-09-04 (service-page redesign round)** — **The service page was
 redesigned as "the appliance front panel"** (owner: the stacked Details +
 Backups layout felt clumsy; UI-only, no handler/route changes). What
