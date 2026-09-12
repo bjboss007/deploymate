@@ -7,6 +7,25 @@
 
 ## Where we stopped
 
+**2026-09-12 (replicas design round)** — **App replicas + load balancing
+spec'd, nothing built** (`docs/specs/app-replicas.md`; backlog entry under
+Medium-term). Owner decisions locked in discussion: (1) health = **any
+replica up**, and the LB must not route to sick ones → Traefik **active
+healthcheck** labels on a shared service + monitor skip/failover in the
+`/preview` proxy; (2) logs **merged** with per-replica drill-down; (3)
+replica count **capped (5)**; (4) rollout **floor ≥ 1 serving**. Key shape:
+`apps.replicas` + `app_replicas` slot table (migration 0015), replicas
+declare the **same** Traefik service name (one router), rolling slot-by-slot
+swaps (N=1 keeps today's priority-swap untouched), scale up/down without
+rebuild, resize ×N. Recorded during design: apps have **no volumes** and
+share service containers, so replicas are data-safe by construction (owner
+insight); app-author notes documented (migration concurrency — locker
+tools serialize, restart policy self-heals, MySQL's non-transactional DDL
+is the one caveat; singleton boot loops; local-FS writes turn intermittent
+under replicas). Axis 2 (multi-node / remote agent) deliberately out of
+scope. Next: implement per the spec's verification section when the owner
+gives the go.
+
 **2026-09-10 (R2 destination round)** — **The live server now has a real
 backup destination.** The owner added a `DEPLOYMATE_BACKUP_DEST_DEFAULT_*`
 block to `~/.zshrc` (s3/R2; exported — the launch inherits them like the
@@ -564,11 +583,20 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **Recurring bindingless containers** — the auto-heal is reactive (on
+3. **App replicas (horizontal scaling)** — spec'd Sep 2026
+   (`docs/specs/app-replicas.md`, decisions locked: any-up health +
+   Traefik active healthcheck pulling sick replicas from rotation, merged
+   logs with per-replica drill-down, cap 5, rollout floor ≥1 serving).
+   Not built. Entry points: `internal/appspec` + `internal/proxy` (shared
+   Traefik service merge), `internal/swap` (rolling slot swaps), migration
+   0015 (`apps.replicas` + `app_replicas` slot table), monitor per-slot
+   probes, `handlers_apps` logs fan-in. Spec's verification section is
+   the build plan.
+4. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if
    it recurs, investigate why starts produce unbound containers.
-4. Anything else: the full ordered backlog is `docs/improvements.md`.
+5. Anything else: the full ordered backlog is `docs/improvements.md`.
 
 **Bigger milestone on the horizon:** first real-server run
 (`deploy/bootstrap.sh` on Ubuntu 24.04, production LE certs) —
