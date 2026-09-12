@@ -23,8 +23,16 @@ insight); app-author notes documented (migration concurrency — locker
 tools serialize, restart policy self-heals, MySQL's non-transactional DDL
 is the one caveat; singleton boot loops; local-FS writes turn intermittent
 under replicas). Axis 2 (multi-node / remote agent) deliberately out of
-scope. Next: implement per the spec's verification section when the owner
-gives the go.
+scope. Spec then went through an adversarial critique pass, folded in:
+**two blocking Traefik-semantics spikes on Linux** (duplicate-router
+merge; healthcheck initial/all-down behavior — the LB scheme is
+unverifiable on macOS), `apps.health_path` promoted to v1 (load-bearing:
+a wrong path ejects all replicas), rollout-honesty downgrade stated for
+N≥2, heal/rollout mutex, deployment-drift surfacing (per-slot deploy
+badge + `scale` deployment rows), probe-allocated preview ports,
+`preview_host_port` deprecation rules, complete touchpoint list, and the
+named N=1-vs-N≥2 swap unification debt. Next: the Linux spikes, then
+implement per the spec's verification section when the owner gives the go.
 
 **2026-09-10 (R2 destination round)** — **The live server now has a real
 backup destination.** The owner added a `DEPLOYMATE_BACKUP_DEST_DEFAULT_*`

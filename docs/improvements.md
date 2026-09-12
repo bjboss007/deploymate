@@ -285,14 +285,17 @@ change.
 ## Medium-term (feature depth)
 
 - [ ] **App replicas (horizontal scaling)** — spec'd
-  (docs/specs/app-replicas.md, Sep 2026), not implemented: `apps.replicas`
-  (1–5, default 1) + `app_replicas` slot table (migration 0015), Traefik
-  shared-service LB with active healthcheck (sick replicas leave rotation),
-  rolling slot-by-slot deploys with a ≥1-serving floor, any-up health,
-  merged logs with per-replica drill-down, preview proxy round-robin with
-  failover. Cheap by construction: apps have no volumes and share service
-  containers, so replicas are data-safe. Axis 2 (multi-node) stays out of
-  scope.
+  (docs/specs/app-replicas.md, Sep 2026; post-critique), not implemented:
+  `apps.replicas` (1–5) + `apps.health_path` + `app_replicas` slot table
+  (migration 0015), Traefik shared-service LB with active healthcheck
+  (sick replicas leave rotation), rolling slot-by-slot deploys with a
+  ≥1-serving floor, any-up health with degraded badge, merged logs with
+  per-replica drill-down, preview proxy round-robin with failover,
+  probe-allocated ports. Cheap by construction: apps have no volumes and
+  share service containers, so replicas are data-safe. **Blocking
+  pre-work:** two Traefik semantics spikes on Linux (duplicate-router
+  merge, healthcheck initial/all-down behavior) — the LB scheme is
+  unverified on macOS. Axis 2 (multi-node) out of scope.
 - [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
   (BuildKit registry cache) so rebuilds across deploys are faster than
   cold.
