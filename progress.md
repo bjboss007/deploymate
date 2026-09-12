@@ -15,13 +15,15 @@ the protocol, **must be `s3`** (or `local`) — fixed in place. Boot success
 is the proof the block parsed: config rejects malformed blocks and
 `NewDestinations` failure aborts `serve()`, so a listening server means the
 destination exists and the service pages' backups settings are unlocked.
-Live server restarted (pid 76381, same env otherwise; no service has been
-opted in yet — schedules/retention are per-service UI settings). Also this
-round: the backups settings form now always renders (disabled + reason when
-no destination is configured) instead of hiding entirely — hiding made the
-service page look like it had no settings at all. Not yet done: a live
-`Back up now` smoke (writes a real object to the owner's bucket — needs
-their pick of service).
+Live server restarted (pid 76381, same env otherwise). **Live smoke done by
+the owner:** `dev-postgres` (shortlink-dev) opted in — `0 2 * * *`, keep 14,
+destination `default` (R2) — with 4 `backup_ok` events so far: two manual
+(Sep 10), then scheduled runs Sep 11 + Sep 12 ~02:00 server-local (the
+1-min scheduler works live, `last_run_at` advancing). Sizes ~1 KB (dev db).
+Live restore deliberately untested (e2e covers it). Also this round: the
+backups settings form now always renders (disabled + reason when no
+destination is configured) instead of hiding entirely — hiding made the
+service page look like it had no settings at all.
 
 **2026-09-04 (service-page redesign round)** — **The service page was
 redesigned as "the appliance front panel"** (owner: the stacked Details +
