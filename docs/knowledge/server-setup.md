@@ -1,7 +1,8 @@
 # Turning a laptop into the DeployMate server
 
 The full path from "old Windows laptop" to "your PaaS runs here". Target
-machine: any Intel/AMD 64-bit laptop, 8 GB+ RAM, SSD, Ethernet cable.
+machine: any Intel/AMD 64-bit laptop, 8 GB+ RAM (4 GB works with swap —
+see the caveats), SSD, Ethernet cable.
 (Apple Silicon MacBooks are not recommended for this — Asahi Linux is not
 server-grade for Docker.)
 
@@ -103,6 +104,19 @@ The reboot test is the one that tells you it's a real server now.
 
 ## Home-server caveats (honest version)
 
+- **4 GB RAM is viable, but only with swap.** The idle stack (Docker +
+  Traefik + deploymate + a couple of Postgres services) fits in 4 GB fine;
+  the risk is *build* time — railpack/BuildKit Node builds (`npm run
+  build`, vite) spike to 1–2 GB, and on 4 GB with no swap the OOM killer
+  shoots the build (or deploymate itself) mid-deploy, which looks like
+  random build failures. `bootstrap.sh` provisions a 4 GB swap file with
+  `vm.swappiness=10` by default (override `SWAP_SIZE_GB`, or `=0` to skip);
+  that lets a build page instead of dying. Other mitigations already in
+  place: the worker builds one app at a time (serial), and per-app memory
+  limits are derived automatically (ADR 0015). Still, **don't run the
+  dev/stage/prod triples from the dogfood demo on a 4 GB box** (that was 12
+  containers) — one or two apps plus their services is the realistic
+  ceiling. 8 GB+ removes the constraint.
 - **No ECC RAM, no redundant power, no IPMI.** A laptop is fine for your
   own projects and demos; it is not a production SLA. If DeployMate ever
   serves paying customers, rent a Hetzner box — the whole stack moves

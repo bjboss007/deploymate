@@ -7,6 +7,30 @@
 
 ## Where we stopped
 
+**2026-09-14 (4GB-server prep round)** — **The first real-server box is
+being assembled** (owner: Ubuntu 24.04 laptop, but one RAM stick is dead
+so it's **4 GB, not 8** — under the doc's target; WiFi works, Ethernet
+cable still to come). Made the bootstrap 4GB-safe (docs-and-script only,
+nothing run on the box yet): `deploy/bootstrap.sh` now provisions a swap
+file right after the firewall step — default **4 GB** (`SWAP_SIZE_GB`
+override, `=0` to skip), `fallocate` with a `dd` fallback, `chmod 600` +
+`mkswap` + `swapon`, persisted to `/etc/fstab`, `vm.swappiness=10` in
+`/etc/sysctl.d`; idempotent (skips if any swap is already active). Reason:
+railpack/BuildKit Node builds spike to 1–2 GB and the OOM killer would
+shoot the build (or deploymate itself) mid-deploy without swap to page
+into; serial worker builds + per-app limits (ADR 0015) are the other
+mitigations. `server-setup.md` RAM target now "8 GB+ (4 GB works with
+swap)" plus a full caveat entry (**don't run the dev/stage/prod triples
+on 4 GB** — that was 12 containers; one or two apps + services is the
+ceiling). Backlogged done in improvements.md. Syntax-checked (`bash -n`),
+**not run on real hardware yet**. Network-shape decision discussed:
+**Shape B (Cloudflare tunnel, made permanent via `cloudflared service
+install`) is the recommended start** — it's what dev already runs, needs
+no CGNAT/port-forward, and **sidesteps the still-unbuilt Traefik
+file-provider routing blocker** (that gap only bites Shape A). Next: run
+the bootstrap on the box, bring up the tunnel as a systemd service, skip
+`DEPLOYMATE_LE_MODE=production`.
+
 **2026-09-12 (replicas design round)** — **App replicas + load balancing
 spec'd, nothing built** (`docs/specs/app-replicas.md`; backlog entry under
 Medium-term). Owner decisions locked in discussion: (1) health = **any

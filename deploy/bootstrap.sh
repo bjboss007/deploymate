@@ -40,6 +40,31 @@ ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
+echo "==> swap file (low-RAM hosts: keeps railpack/BuildKit builds off the OOM killer)"
+# 4 GB boxes are under the 8 GB target; Node/vite builds spike to 1-2 GB and
+# the OOM killer shoots the build (or deploymate itself) without swap to page
+# into. Skip if any swap is already active, or SWAP_SIZE_GB=0 to opt out.
+SWAP_SIZE_GB="${SWAP_SIZE_GB:-4}"
+SWAP_FILE=/swapfile
+if [[ "$SWAP_SIZE_GB" != "0" ]] && [[ -z "$(swapon --show --noheadings)" ]]; then
+  if [[ ! -e "$SWAP_FILE" ]]; then
+    # fallocate can produce a file swapon rejects on some filesystems; dd is safe.
+    fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE" 2>/dev/null \
+      || dd if=/dev/zero of="$SWAP_FILE" bs=1M count="$((SWAP_SIZE_GB * 1024))" status=none
+    chmod 600 "$SWAP_FILE"
+    mkswap "$SWAP_FILE" >/dev/null
+  fi
+  swapon "$SWAP_FILE"
+  grep -qxF "$SWAP_FILE none swap sw 0 0" /etc/fstab \
+    || echo "$SWAP_FILE none swap sw 0 0" >> /etc/fstab
+  # Prefer RAM; only page under real pressure — swap is an OOM backstop, not a workhorse.
+  echo "vm.swappiness=10" > /etc/sysctl.d/99-deploymate-swap.conf
+  sysctl -q vm.swappiness=10
+  echo "    ${SWAP_SIZE_GB}G swap active (vm.swappiness=10)"
+else
+  echo "    swap already present or disabled (SWAP_SIZE_GB=$SWAP_SIZE_GB) — skipping"
+fi
+
 echo "==> service user + data dirs"
 if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
   useradd --system --home-dir "$DATA_DIR" --shell /usr/sbin/nologin "$SERVICE_USER"

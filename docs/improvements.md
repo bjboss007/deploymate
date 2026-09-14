@@ -103,6 +103,17 @@ change.
   `HostRegexp` catch-all would win — exact `Host()` rules on apps would
   lose). **Blocker for the first real-server run (shape A)**. Found Aug
   2026 during deployment planning.
+- [x] **Swap file on low-RAM hosts** — done: `bootstrap.sh` now
+  provisions a swap file (default 4 GB, `SWAP_SIZE_GB` override; skipped
+  if swap already exists or `SWAP_SIZE_GB=0`) with `vm.swappiness=10`,
+  persisted to `/etc/fstab` + `/etc/sysctl.d`. `server-setup.md` gained a
+  "4 GB is viable with swap" addendum. Reason: the first real-server box
+  came in at 4 GB (one RAM stick dead), under the doc's 8 GB target;
+  railpack/BuildKit Node builds spike to 1–2 GB and the OOM killer would
+  shoot the build (or deploymate itself) mid-deploy without swap to page
+  into. Serial worker builds + per-app resource limits (ADR 0015) are the
+  other mitigations; don't run the dev/stage/prod triples on a 4 GB box
+  (Sep 2026).
 - [x] **Deploy-time diff review** — done: the Git panel's one-click deploy
   is now a two-step flow. `GET /apps/{slug}/deploy-preview` shows commits
   + file counts (+/-) vs the currently deployed commit (persistent full
