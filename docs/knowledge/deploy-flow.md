@@ -57,7 +57,10 @@ steps 2–4: no repo, so no clone/build/manifest — the persisted image is
 pulled if missing (bounded at 10 min so a hung registry can't hold the
 serial worker) and the swap runs.
 
-**Failure** anywhere → deployment `failed` + `error`, app `failed`. The
+**Failure** anywhere → deployment `failed` + `error`, app `failed`. A
+failed build's `error` names the cause: out-of-memory kills are reported
+as such (`builder.ErrOutOfMemory`, with what to do), anything else
+quotes the builder's last error line — never a bare "exit status 1". The
 previous container is untouched — a failed build never takes a running
 app down.
 

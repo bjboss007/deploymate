@@ -70,14 +70,17 @@ func BuildRailpack(ctx context.Context, railpackPath, appDir, imageTag string, s
 		return fmt.Errorf("start railpack (is it installed?): %w", err)
 	}
 
+	tail := newOutputTail(log)
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); scanLines(stdout, log) }()
-	go func() { defer wg.Done(); scanLines(stderr, log) }()
+	go func() { defer wg.Done(); scanLines(stdout, tail.Line) }()
+	go func() { defer wg.Done(); scanLines(stderr, tail.Line) }()
 	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("railpack build failed: %w", err)
+		// Say WHY (out of memory, or the builder's own error line) instead
+		// of a bare "exit status 1".
+		return buildError("railpack build failed", tail.Lines(), err)
 	}
 	return nil
 }

@@ -6,6 +6,19 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [x] **Build failures hide their cause** — done 2026-09-30 (found live:
+  the `testing` app's Java/Gradle deploy showed only `railpack build
+  failed: exit status 1`; the real cause, `cannot allocate memory` — a
+  2 GiB Gradle daemon heap in Docker Desktop's 3.8 GiB VM beside ~1.3 GiB
+  of running containers — sat ~150 lines deep in the build log). Both
+  builders (`Build`, `BuildRailpack`) now keep the last 200 output lines
+  (`builder.outputTail`) and on failure `buildError` either reports
+  `ErrOutOfMemory` ("the build was killed for lack of memory (…evidence…)
+  — give Docker more memory, lower the build's memory use (Gradle
+  `org.gradle.jvmargs=-Xmx1g`, Node `--max-old-space-size`), or stop other
+  containers") or quotes the builder's own last error line. The message
+  lands on the deployment row, the build page, and the deploy-failed
+  alert.
 - [x] **README refresh** — done 2026-09-30: Features now cover backups,
   zero-downtime deploys, replicas, auto resource limits, auto-heal,
   releases/stats, the `dev` environment and public preview subdomains;

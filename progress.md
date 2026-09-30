@@ -7,6 +7,28 @@
 
 ## Where we stopped
 
+**2026-09-30 (build-diagnosis round)** — **The owner's `testing` app
+failed to deploy: out of memory.** It builds
+`BeyondCredit/trade-stack-backend` (`development`, Java 21 via
+Railpack/Gradle); Gradle's daemon started with a 2 GiB heap and was
+killed at once — BuildKit: `ResourceExhausted … cannot allocate memory`.
+Docker Desktop's VM has 3.8 GiB + 1 GiB swap, and ~1.3 GiB was already
+held by running containers (incl. non-DeployMate ones:
+`documents-axion-server` ~440 MB, `rabbitmq` 140 MB, `tradestack`/
+`documents`/`autotag` DBs). Not caused by the e2e runs (different time
+window). Owner's options: more Docker memory (6–8 GB), lower the repo's
+Gradle heap (`org.gradle.jvmargs=-Xmx1g`), or stop unrelated containers —
+**not yet chosen; the app is still failed**. Relevant for the 4 GB Ubuntu
+box: JVM builds need ~3 GB free. **Fixed in DeployMate:** the failure
+only said `railpack build failed: exit status 1`. Both builders now keep
+the last 200 output lines and `buildError` reports `ErrOutOfMemory` with
+the evidence + fixes, or quotes the builder's last error line
+(`internal/builder/diagnose.go`). Unit-tested against the real failed
+log (`internal/builder/testdata/gradle_oom.log`), plus a stand-in
+railpack process and a real `docker buildx` failure run from a scratch
+program (message now names the failing RUN and its exit code). `make
+test` + `make vet` green, `-race` clean.
+
 **2026-09-30 (replicas follow-ups round)** — **All six "Replicas
 follow-ups" shipped** (improvements.md item checked off; ADR 0018 +
 deploy-flow updated). (1) **Per-replica metrics** — migration **0016**

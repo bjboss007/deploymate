@@ -62,14 +62,17 @@ func Build(ctx context.Context, checkoutDir, rootDir, imageTag string, log func(
 
 	// The pipes hit EOF when the process exits, so the waitgroup completes
 	// exactly once buildx finishes (or ctx cancels it).
+	tail := newOutputTail(log)
 	var wg sync.WaitGroup
 	wg.Add(2)
-	go func() { defer wg.Done(); scanLines(stdout, log) }()
-	go func() { defer wg.Done(); scanLines(stderr, log) }()
+	go func() { defer wg.Done(); scanLines(stdout, tail.Line) }()
+	go func() { defer wg.Done(); scanLines(stderr, tail.Line) }()
 	wg.Wait()
 
 	if err := cmd.Wait(); err != nil {
-		return fmt.Errorf("build failed: %w", err)
+		// Say WHY (out of memory, or the builder's own error line) instead
+		// of a bare "exit status 1".
+		return buildError("build failed", tail.Lines(), err)
 	}
 	return nil
 }

@@ -1,0 +1,40 @@
+#10 171.9 2026-09-30T20:16:25.635+0000 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Lock acquired on daemon addresses registry.
+#10 171.9 2026-09-30T20:16:25.636+0000 [DEBUG] [org.gradle.cache.internal.DefaultFileLockManager] Releasing lock on daemon addresses registry.
+#10 171.9 2026-09-30T20:16:25.636+0000 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] resetting idle timer
+#10 171.9 2026-09-30T20:16:25.636+0000 [DEBUG] [org.gradle.launcher.daemon.server.DaemonStateCoordinator] daemon is running. Sleeping until state changes.
+#10 171.9 2026-09-30T20:16:25.638+0000 [INFO] [org.gradle.launcher.daemon.server.exec.StartBuildOrRespondWithBusy] Daemon is about to start building Build{id=bd70c8cb-f032-462d-8633-2f98a3d1a625, currentDir=/app}. Dispatching build started information...
+#10 171.9 2026-09-30T20:16:25.638+0000 [DEBUG] [org.gradle.launcher.daemon.server.SynchronizedDispatchConnection] thread 32: dispatching org.gradle.launcher.daemon.protocol.BuildStarted@22c15d08
+#10 171.9 2026-09-30T20:16:25.642+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.EstablishBuildEnvironment] Configuring env variables: [PATH, MISE_CACHE_DIR, TRACEPARENT, MISE_CONFIG_DIR, __MISE_SHIM, OTEL_EXPORTER_OTLP_TRACES_PROTOCOL, OTEL_TRACES_EXPORTER, JAVA_HOME, MISE_SHIMS_DIR, MISE_DATA_DIR, OTEL_EXPORTER_OTLP_TRACES_ENDPOINT, PWD, MISE_INSTALLS_DIR, __MISE_DIFF, HOME]
+#10 171.9 2026-09-30T20:16:25.645+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.LogToClient] About to start relaying all logs to the client via the connection.
+#10 171.9 2026-09-30T20:16:25.645+0000 [INFO] [org.gradle.launcher.daemon.server.exec.LogToClient] The client will now receive all logging from the daemon (pid: 58). The daemon log file: /root/.gradle/daemon/8.12/daemon-58.out.log
+#10 171.9 2026-09-30T20:16:25.647+0000 [INFO] [org.gradle.launcher.daemon.server.exec.LogAndCheckHealth] Starting build in new daemon [memory: 2 GiB]
+#10 171.9 2026-09-30T20:16:25.649+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] The daemon has started executing the build.
+#10 171.9 2026-09-30T20:16:25.649+0000 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] Executing build with daemon context: DefaultDaemonContext[uid=c88aeb6f-6ff9-4d75-8e74-aaf0eb2aa67e,javaHome=/mise/installs/java/21.0.2,javaVersion=21,javaVendor=Oracle Corporation,daemonRegistryDir=/root/.gradle/daemon,pid=58,idleTimeout=10800000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-XX:+HeapDumpOnOutOfMemoryError,-Xmx2g,-Dfile.encoding=UTF-8,-Duser.country=US,-Duser.language=en,-Duser.variant]----- End of the daemon log -----
+#10 171.9 
+#10 172.0 
+#10 172.0 FAILURE: Build failed with an exception.
+#10 172.0 
+#10 172.0 * What went wrong:
+#10 172.0 Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+#10 172.0 
+#10 172.0 * Try:
+#10 172.0 > Run with --stacktrace option to get the stack trace.
+#10 172.0 > Run with --info or --debug option to get more log output.
+#10 172.0 > Run with --scan to get full insights.
+#10 172.0 > Get more help at https://help.gradle.org.
+#10 ERROR: process "./gradlew clean build -x check -x test -Pproduction" did not complete successfully: cannot allocate memory
+------
+ > ./gradlew clean build -x check -x test -Pproduction:
+172.0 FAILURE: Build failed with an exception.
+172.0 
+172.0 * What went wrong:
+172.0 Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+172.0 
+172.0 * Try:
+172.0 > Run with --stacktrace option to get the stack trace.
+172.0 > Run with --info or --debug option to get more log output.
+172.0 > Run with --scan to get full insights.
+172.0 > Get more help at https://help.gradle.org.
+------
+open /var/lib/docker/tmp/docker-import-3495745289/repositories: no such file or directory
+ ERRO failed to solve: failed to solve: ResourceExhausted: process "./gradlew clean build -x check -x test -Pproduction" did not complete successfully: cannot allocate memory
