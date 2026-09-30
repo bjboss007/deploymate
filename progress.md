@@ -50,8 +50,9 @@ unchanged). UI checked in the browser pane on a scratch server.
 snapshot at `data/backups/pre-0015-20260930205817.db`; all 10 apps still
 running/healthy as single replicas, 0 replica rows until each app's next
 deploy/scale; 4 shortlink public URLs 200 via the tunnel, which the owner
-runs in a terminal tab — not yet a service). **Not done:** not
-committed/pushed yet; real
+runs in a terminal tab — not yet a service). Committed + pushed as
+`1be04b5` (bjboss007 — `gh auth switch -u bjboss007` first; the remote
+looks "not found" under the other gh accounts). **Not done:** real
 Traefik LB behavior is covered by the spikes, not the e2e. Follow-ups
 logged under "Replicas follow-ups" in improvements.md (health-path UI —
 Traefik needs 2xx/3xx where the monitor accepts <500; per-slot metrics;
