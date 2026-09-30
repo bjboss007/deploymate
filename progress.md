@@ -35,8 +35,12 @@ and PASSED (per-replica metrics + filter, heal event recorded for the
 stopped replica, an open log stream picked up r3 after scale 2→3,
 rolling deploy still 0/52 failed with the drain); `e2e_manual.sh` +
 `e2e_git.sh` pass. Legacy relabel is unit-tested only (an e2e needs a
-pre-replicas container). **Live server not restarted** on this build yet
-(would apply migration 16).
+pre-replicas container). **Live server restarted** on this build
+(pid 28001, env unchanged; migration 16 applied — snapshot
+`data/backups/pre-0016-20260930215116.db`); all apps running/healthy,
+4 shortlink URLs 200. Noticed: an owner-created app `testing` whose
+only (git) deploy failed with `railpack build failed: exit status 1` at
+20:10Z — unrelated to the restart, not investigated.
 
 **2026-09-30 (health-path round)** — **Health path form control
 shipped** (Replicas follow-up). A "Health path" field in the Replicas panel
