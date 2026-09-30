@@ -51,6 +51,14 @@ func (s *Store) UpdateAppReplicas(id string, n int) error {
 	return err
 }
 
+// UpdateAppHealthPath sets the path the monitor probes every replica at
+// and the Traefik healthcheck uses (the latter from the next deploy — docker
+// labels are immutable). The caller validates the path.
+func (s *Store) UpdateAppHealthPath(id, path string) error {
+	_, err := s.db.Exec(`UPDATE apps SET health_path = ? WHERE id = ?`, path, id)
+	return err
+}
+
 // UpsertAppReplica records a slot after a swap (insert or replace by
 // app+slot). Status resets to empty — a fresh container has not been probed.
 func (s *Store) UpsertAppReplica(r AppReplica) error {

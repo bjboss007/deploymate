@@ -83,6 +83,10 @@ slot 1 — `appspec.Slots` is the single resolver every reader uses.
   active healthcheck on `apps.health_path`.
 - **Health:** the monitor probes every slot at `health_path`; the app is
   healthy when any slot answers (the page shows "2/3 replicas up").
+  `health_path` is set in the Replicas panel (`POST
+  /apps/{slug}/health-path`): saving probes every running replica and
+  warns about any that don't return 2xx/3xx — Traefik's healthcheck
+  (which gets the new path on the next deploy) would eject them.
   Per-slot heal (start, rebind, or recreate a vanished extra slot from
   slot 1's image) never runs while a deployment is queued/building.
 - **Lifecycle:** start/stop/restart/delete fan out to every slot.

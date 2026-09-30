@@ -7,6 +7,25 @@
 
 ## Where we stopped
 
+**2026-09-30 (health-path round)** — **Health path form control
+shipped** (Replicas follow-up). A "Health path" field in the Replicas panel
+posts to `POST /apps/{slug}/health-path` (new `handlers_health_path.go`):
+`normalizeHealthPath` requires a leading `/`, rejects hosts/`//host`,
+whitespace/control chars, `#` fragments, >200 chars; empty resets to `/`.
+Saving records `health_path_changed` and **probes every running replica
+at the new path right away** (3s each, redirects not followed) — the flash
+reports `r1 200, r2 200` or names the replicas that would fail Traefik's
+2xx/3xx rule (the monitor keeps accepting < 500). The monitor uses the
+path from its next probe; Traefik's healthcheck label changes on the next
+deploy (labels are immutable). Unit-tested (validation table; handler:
+invalid rejected + not saved, mixed 200/404 replicas flagged, all-good
+message, stopped app skips the probe, event). **E2e:** `make
+e2e-replicas` extended and PASSED — `/health` saved with both replicas
+200, `//evil.test` rejected, and the next rolling deploy moved both slots
+to one new config-hash service carrying `healthcheck.path=/health`, with
+0 of 52 preview requests failing during that config-changing rollout.
+`make test` + `make vet` green.
+
 **2026-09-30 (docs round)** — **README refreshed** against what has
 actually shipped (backlog item checked off): Features gained backups,
 zero-downtime deploys, replicas, automatic resource limits + auto-resize,
@@ -683,10 +702,10 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **Replicas follow-ups** — shipped 2026-09-30 (ADR 0018). Next:
-   a health-path form control (load-bearing once Traefik fronts apps —
-   see improvements.md "Replicas follow-ups"), and re-run the Traefik
-   spike harness on the real Linux box when it's up.
+3. **Replicas follow-ups** — shipped 2026-09-30 (ADR 0018), health-path
+   control done the same day. Next: per-slot metrics (improvements.md
+   "Replicas follow-ups"), and re-run the Traefik spike harness on the
+   real Linux box when it's up.
 4. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if

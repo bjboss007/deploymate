@@ -21,6 +21,8 @@ const (
 	EventAppHealed       = "app_healed"
 	// EventAppScaled records a replica-count change (docs/specs/app-replicas.md).
 	EventAppScaled = "app_scaled"
+	// EventHealthPathChanged records an edit of apps.health_path.
+	EventHealthPathChanged = "health_path_changed"
 	EventResourceUpdate  = "resource_update"
 	EventResourceResized = "resource_resized"
 	EventEnvChanged      = "env_changed"

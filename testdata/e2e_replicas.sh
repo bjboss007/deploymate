@@ -174,7 +174,15 @@ ONE="$(curl -s -N -b "$JAR" --max-time 3 "$BASE/apps/$SLUG/logs?replica=r2" || t
 echo "$ONE" | grep -q '^data: \[r2\]' && ! echo "$ONE" | grep -q '^data: \[r1\]' || fail "?replica=r2 must narrow to slot 2"
 log "logs merged with [rN] prefixes; ?replica=r2 narrows"
 
-# 6. Rolling redeploy at N=2 under preview load: never a non-200.
+# 6a. Health path: saved + checked on every replica right away.
+FLASH="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "health_path=/health&csrf_token=$(csrf "$BASE/apps/$SLUG")" "$BASE/apps/$SLUG/health-path")"
+echo "$FLASH" | grep -q "r1+200" && echo "$FLASH" | grep -q "r2+200" || fail "health path check must report r1/r2 200 (flash: $FLASH)"
+[ "$(db "SELECT health_path FROM apps WHERE slug='$SLUG'")" = "/health" ] || fail "health path not saved"
+BADP="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "health_path=//evil.test&csrf_token=$(csrf "$BASE/apps/$SLUG")" "$BASE/apps/$SLUG/health-path")"
+[ "$(db "SELECT health_path FROM apps WHERE slug='$SLUG'")" = "/health" ] || fail "invalid health path must be rejected ($BADP)"
+log "health path /health saved and checked on both replicas; //evil.test rejected"
+
+# 6b. Rolling redeploy at N=2 under preview load: never a non-200.
 ( while :; do
     curl -s -o /dev/null -w '%{http_code}\n' -b "$JAR" --max-time 5 "$BASE/preview/$SLUG/"
     sleep 0.1
@@ -191,6 +199,13 @@ ON_NEW="$(db "SELECT COUNT(*) FROM app_replicas r JOIN apps a ON a.id=r.app_id W
 [ "$ON_NEW" = "2" ] || fail "both slots must record the new deployment (got $ON_NEW)"
 grep -q "replica 2/2" <<<"$(db "SELECT line FROM build_logs WHERE deployment_id='$D2'")" || fail "build log must show the per-replica rollout"
 log "rolling deploy $D2: $TOTAL preview requests during rollout, 0 failed; both slots on it"
+# The new health path reaches Traefik on this deploy: a new config-hash
+# service, shared by both slots, with healthcheck.path=/health.
+L1="$(labels "dm-$SLUG")"; L2="$(labels "dm-$SLUG-r2")"
+NS1="$(echo "$L1" | grep '\.service=' | cut -d= -f2)"; NS2="$(echo "$L2" | grep '\.service=' | cut -d= -f2)"
+[ "$NS1" = "$NS2" ] && [ "$NS1" != "$S1" ] || fail "redeploy must move both slots to one new service (old $S1, got $NS1 / $NS2)"
+echo "$L1" | grep -q "^traefik\.http\.services\.$NS1\.loadbalancer\.healthcheck\.path=/health$" || fail "healthcheck label must carry /health"
+log "redeploy moved both slots to service $NS1 with healthcheck.path=/health"
 
 # 7. Scale 2 → 3 → 1, cap rejected.
 S3="$(post_to "/apps/$SLUG/replicas" "replicas=3")"

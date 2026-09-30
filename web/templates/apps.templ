@@ -509,6 +509,13 @@ templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
 			</label>
 			<button class="btn btn-primary" type="submit">Scale</button>
 		</form>
+		<form method="post" action={ "/apps/" + app.Slug + "/health-path" } class="deploy-form health-path-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<label>Health path
+				<input type="text" name="health_path" placeholder="/" value={ ri.HealthPath } maxlength="200" pattern="/.*" title="A path on the app, starting with / (e.g. /healthz)"/>
+			</label>
+			<button class="btn btn-ghost" type="submit">Save</button>
+		</form>
 		if len(ri.Slots) > 0 {
 			<table class="deploy-table replica-table">
 				<thead>
@@ -552,6 +559,7 @@ templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
 				{ fmt.Sprintf("%d desired, %d running — applied on the next deploy or scale.", ri.Desired, len(ri.Slots)) }<br/>
 			}
 			One address, up to { fmt.Sprint(ri.Max) } identical containers behind it: the load balancer skips replicas failing the health path <span class="mono">{ ri.HealthPath }</span>, and deploys roll one replica at a time so at least one always serves.
+			The health path must answer 2xx/3xx on every replica — Traefik removes replicas that don't (saving checks it now; Traefik picks it up on the next deploy).
 			if app.MemLimitMB > 0 && ri.Desired > 1 {
 				Limits are per replica — total ask <span class="mono">{ fmt.Sprintf("%d MB · %s CPU", app.MemLimitMB*ri.Desired, fmtCPU(app.CPULimit*float64(ri.Desired))) }</span>.
 			}

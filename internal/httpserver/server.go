@@ -128,6 +128,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/start", am.CheckCSRF(s.handleAppStart))
 		r.Post("/apps/{slug}/restart", am.CheckCSRF(s.handleAppRestart))
 		r.Post("/apps/{slug}/replicas", am.CheckCSRF(s.handleAppReplicas))
+		r.Post("/apps/{slug}/health-path", am.CheckCSRF(s.handleAppHealthPath))
 		r.Post("/apps/{slug}/delete", am.CheckCSRF(s.handleAppDelete))
 		r.Post("/apps/{slug}/env", am.CheckCSRF(s.handleEnvVarCreate))
 		r.Post("/apps/{slug}/env/{id}/delete", am.CheckCSRF(s.handleEnvVarDelete))

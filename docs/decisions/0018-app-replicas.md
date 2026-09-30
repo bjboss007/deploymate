@@ -77,7 +77,9 @@ the spec's "Spike results" addendum; the ones that shaped this ADR:
 - The Traefik healthcheck requires 2xx/3xx on `health_path`, while the
   monitor probe accepts anything below 500. An app whose `/` returns 404
   is "healthy" to the monitor but ejected by Traefik — set a real health
-  path (the UI control is a follow-up; the column exists).
+  path. The Replicas panel's Health path field (added the same day)
+  probes every replica on save and flags any that would fail Traefik's
+  2xx/3xx rule.
 - Metrics, resource detection, and restart alerts still sample slot 1
   only; limits are per container, so slot 1 is a fair proxy, but a sick
   non-canonical replica's resource usage is invisible (backlogged).

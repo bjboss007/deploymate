@@ -315,10 +315,13 @@ change.
   tests + `make e2e-replicas` (0 failed requests across a rolling deploy
   at N=2). Follow-ups below.
 - [ ] **Replicas follow-ups** (from the 2026-09-30 build, ADR 0018):
-  - **Health path UI** — `apps.health_path` ships (default `/`) with no
-    form control. It now feeds the Traefik healthcheck, which needs
-    2xx/3xx (the monitor accepts <500): an API whose `/` 404s would be
-    ejected by Traefik once Traefik fronts it.
+  - ~~**Health path UI**~~ — done 2026-09-30: a Health path field in the
+    Replicas panel (`POST /apps/{slug}/health-path`; must start with `/`,
+    no host/whitespace/fragment, ≤200 chars; empty resets to `/`). Saving
+    probes every running replica at the new path and the flash names any
+    that don't answer 2xx/3xx (what Traefik requires; the monitor still
+    accepts < 500). Monitor uses it immediately; the Traefik label changes
+    on the next deploy. `health_path_changed` event.
   - **Per-slot metrics** — stats sampling, resource detection, pressure
     auto-resize, and restart alerts read slot 1 only; a sick r2's memory
     or restart loop is invisible outside its health badge.

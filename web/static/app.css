@@ -239,6 +239,7 @@ select { cursor: pointer; }
 .filter-row { display: flex; gap: 8px; margin-bottom: 14px; }
 .panel-hint { font-size: 13px; margin-top: 12px; }
 .replica-table { margin-top: 16px; }
+.health-path-form { margin-top: 12px; }
 .replica-table .badge { margin-left: 6px; }
 .log-filter {
   float: right; font-family: var(--font-mono); font-size: 12px;

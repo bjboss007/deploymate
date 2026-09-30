@@ -192,7 +192,7 @@ The full ordered backlog lives in
 - First real-server run (Ubuntu 24.04, production certs) and server-side
   dashboard routing via Traefik's file provider
 - Horizontal autoscaling (load-based replica count, scale-to-zero)
-- Health-path control and per-replica metrics for replicas
+- Per-replica metrics
 - Build cache export for Railpack builds (`--cache-to/--cache-from`)
 - Per-runtime build/start command overrides
 - Deploy previews per PR / per branch
