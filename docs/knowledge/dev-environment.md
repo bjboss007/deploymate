@@ -67,12 +67,19 @@ make e2e-git # git-deploy path on a self-contained throwaway server (see below)
 
 ## Known macOS-only limitations
 
-- **Traefik can't be tested locally**: Docker Desktop cannot mount
-  `~/.docker/run/docker.sock` into containers, so the docker provider
-  never sees the daemon. `deploy/traefik/dev.yml` exists for Linux dev
-  boxes. On macOS, verify the label contract via `docker inspect` (the
-  unit tests in `internal/proxy` cover generation) and do the real
-  router/cert test on the server.
+- **Traefik on Docker Desktop: mount the VM socket, not the host one.**
+  `~/.docker/run/docker.sock` can't be mounted into containers, but
+  `-v /var/run/docker.sock:/var/run/docker.sock` (the path inside
+  Docker Desktop's VM) works, and the docker provider sees every
+  container. That's how the replicas label scheme was spiked (2026-09-30,
+  `traefik:v3.3` + `traefik/whoami`; see docs/specs/app-replicas.md
+  "Spike results"). Recipe: `docker network create spike-net`, run
+  `traefik:v3.3` on it with `--providers.docker.network=spike-net
+  --providers.docker.exposedbydefault=false --entrypoints.web.address=:80
+  --api.insecure=true`, publish 80/8080 on loopback, then read
+  `/api/http/routers` and `/api/http/services` for status. The
+  `deploy/traefik/dev.yml` config still assumes a Linux box. TLS/cert
+  issuance remains a server-only test.
 - Let's Encrypt issuance requires a public IP + DNS anyway — staging or
   production.
 

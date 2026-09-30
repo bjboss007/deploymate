@@ -7,6 +7,21 @@
 
 ## Where we stopped
 
+**2026-09-30 (docs round)** — **README refreshed** against what has
+actually shipped (backlog item checked off): Features gained backups,
+zero-downtime deploys, replicas, automatic resource limits + auto-resize,
+auto-heal, releases/history/stats, the `dev` environment, and public
+preview subdomains with auto-DNS; the config table gained the
+`DEPLOYMATE_BACKUP_DEST_<ID>_*` block; the dev quickstart's `setup-admin`
+example was **wrong** (`DEPLOYMATE_EMAIL`/`_PASSWORD` — the command reads
+`DEPLOYMATE_SETUP_EMAIL`/`_SETUP_PASSWORD`) and is fixed; Development
+lists every `make e2e-*` suite; the Roadmap now points at
+`docs/improvements.md` with current highlights instead of shipped items.
+Environment note: the Cloudflare tunnel is currently run by hand in a
+terminal tab (`cloudflared tunnel run f6a3a4b6-…`) — it dies with the tab;
+public preview URLs need it. The gh CLI's active account is now
+**bjboss007** (the only account that can see the repo).
+
 **2026-09-30 (replicas build round)** — **App replicas shipped** (ADR
 0018; spec `docs/specs/app-replicas.md` now implemented, with "Spike
 results" + "As built" addenda). **Spikes first:** both blocking Traefik
@@ -644,15 +659,17 @@ real Let's Encrypt issuance.
 
 ## Next up (ordered)
 
-1. **Real e2e suite (continue)** — git-deploy path is now automated
-   (`make e2e-git`), manual-deploy path too (`make e2e-manual`, Sep 2026);
-   still unautomated: env injection + manifest services, rollback, Traefik
-   labels, metric/uptime assertions, the three Railpack runtimes. Next
-   slices: extend `e2e_git.sh` to assert env injection via a manifest
-   service, and add a rollback assertion. Longer-term: wire the e2e
-   scripts into CI on a Linux runner (Traefik + railpack work there).
-   Entry: `testdata/e2e_git.sh`, `testdata/e2e.sh`,
-   `testdata/e2e_manual.sh`, `cmd/deploymate/seed.go`, the verification
+1. **Real e2e suite (continue)** — automated today, each on a throwaway
+   server: `make e2e-git` (webhook → build → swap), `make e2e-manual`
+   (image deploys, command overrides, /stats storage), `make e2e-replicas`
+   (scale, Traefik label contract, LB/failover, heal, merged logs, rolling
+   deploy under load), `make e2e-backup`, `make e2e-dns` (real
+   Cloudflare). Still unautomated: env injection + manifest services,
+   rollback, metric/uptime assertions, the Railpack runtimes. Next slices:
+   extend `e2e_git.sh` to assert env injection via a manifest service,
+   and add a rollback assertion. Longer-term: wire the e2e scripts into
+   CI on a Linux runner (Traefik + railpack work there). Entry:
+   `testdata/e2e_*.sh`, `cmd/deploymate/seed.go`, the verification
    sections in `docs/specs/*.md`, backlog item in `docs/improvements.md`
    (Near-term).
 2. **Dedicated preview domain** — auto-DNS now *removes* per-app CNAMEs on
@@ -768,6 +785,18 @@ real Let's Encrypt issuance.
 - **`go build ./cmd/deploymate` writes `./deploymate`, not `bin/`** — use
   `make build` (outputs `bin/deploymate`); a stale `bin/` binary runs old
   code silently. The e2e scripts `make build` unless `DM_BIN` is set.
+- **Traefik CAN run on Docker Desktop** — mount the VM socket
+  `-v /var/run/docker.sock:/var/run/docker.sock` (it's only the host path
+  `~/.docker/run/docker.sock` that can't be mounted). Used for the
+  replicas spikes (traefik:v3.3 + `traefik/whoami`); the label contract
+  is verifiable locally, not just on the server.
+- **Never let two containers define the same Traefik router or service
+  name differently** — Traefik drops it and every request 404s. That's why
+  each container owns a unique router and services are config-hash named
+  (ADR 0018). Any new label must keep service labels byte-identical per
+  service name.
+- **Push as bjboss007** — `gh auth switch -u bjboss007` before
+  fetch/push; the other gh accounts see "Repository not found".
 - Docs live in `docs/` — ADRs, knowledge, specs, improvements. Update them
   with the code, not later.
 - Never silently fix a gap in scope — backlog it first (see above).

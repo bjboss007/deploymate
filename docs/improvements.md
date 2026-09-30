@@ -6,9 +6,13 @@ change.
 
 ## Near-term (high value, low risk)
 
-- [ ] **README Roadmap is stale** — still lists "Backups for database
-  volumes" and "Disk usage dashboard", both shipped (Sep 2026); refresh
-  the Features/Roadmap split. (Noticed 2026-09-30 while adding Replicas.)
+- [x] **README refresh** — done 2026-09-30: Features now cover backups,
+  zero-downtime deploys, replicas, auto resource limits, auto-heal,
+  releases/stats, the `dev` environment and public preview subdomains;
+  the backup env vars joined the config table; the `setup-admin` example
+  used the wrong env names (`DEPLOYMATE_EMAIL` → `DEPLOYMATE_SETUP_EMAIL`);
+  the e2e suites are listed; the Roadmap points at this backlog instead
+  of repeating shipped items.
 - [x] **Reap stale `building` deployments** — done: the worker fails
   in-flight rows on startup (Aug 2026).
 - [x] **Preview URLs** — done: `/preview/{slug}` on the dashboard

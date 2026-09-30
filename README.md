@@ -24,7 +24,9 @@ One Go binary, one server, Docker as the compute substrate.
 - **Apps** — deploy a container image in seconds, or connect a git repo
 - **Git deploys** — deploy key + webhook (GitHub/GitLab/Gitea), every push to
   your branch builds and deploys automatically, with live build logs and
-  one-click rollback (last 5 images kept). Build from a **Dockerfile** or
+  one-click rollback (last 5 images kept). Dashboard deploys go through a
+  **review page** (commits + changed files since the live commit) and pin
+  the reviewed SHA. Build from a **Dockerfile** or
   select a **runtime** — Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno,
   Elixir, .NET, static sites — built with Railpack, no Dockerfile needed,
   optionally version-pinned
@@ -34,16 +36,27 @@ One Go binary, one server, Docker as the compute substrate.
   auto-provision a new one — then injects the connection URLs. Entries can
   pin images (`postgres:17`; no tag means `latest`). Services are never
   deleted for you.
-- **Environments** — every app runs in `production` or `staging`. Each
-  environment resolves its own services (`staging-postgres` vs `postgres`,
-  separate data volumes) and can carry a `deploymate.{env}.yml` overlay
-  that replaces the base service list for that environment.
+- **Environments** — every app runs in `dev`, `staging`, or `production`.
+  Each environment resolves its own services (`dev-postgres`,
+  `staging-postgres`, `postgres` — separate data volumes) and can carry a
+  `deploymate.{env}.yml` overlay that replaces the base service list for
+  that environment.
+- **Zero-downtime deploys** — the new container starts beside the old one
+  and only takes over after passing a readiness probe; a failed deploy
+  leaves the previous version serving
 - **Databases & caches** — one-click Postgres 16, MySQL 8, Redis 7 with
   generated passwords (encrypted at rest), named volumes, readiness checks,
   and automatic connection-string injection (`DATABASE_URL`, `MYSQL_URL`,
   `REDIS_URL`) into every app in the project
+- **Database backups** — opt-in per Postgres service: scheduled (cron)
+  `pg_dump` snapshots, gzip + encrypted with a per-service key, uploaded to
+  any S3-compatible bucket (Cloudflare R2) with keep-newest-N retention,
+  "Back up now", and typed-confirm restore from the service page
 - **Environment variables** — per-app, encrypted at rest, secrets masked in
-  the UI
+  the UI; values can reference injected URLs (`DATABASE_URL=${MYSQL_URL}`)
+- **Automatic resource limits** — CPU/memory limits are derived from each
+  app's own usage (P90 over 24h, doubled for headroom), and an app that
+  sustains 80% of its limit is resized and redeployed automatically
 - **Domains & HTTPS** — automatic Let's Encrypt via Traefik (staging
   resolver by default), label-driven routing with zero proxy restarts
 - **Replicas** — run 1–5 identical containers per app behind one address:
@@ -51,22 +64,31 @@ One Go binary, one server, Docker as the compute substrate.
   at least one replica serving, scale up/down without a rebuild, and
   merged logs with a per-replica filter
 - **Preview URLs** — every running app gets `/preview/<slug>` on the
-  dashboard instantly, before any domain exists
-- **Healthchecks** — every running app is probed every 30s; unhealthy
-  state shows on cards and app pages
+  dashboard instantly, before any domain exists; with a preview host and
+  a Cloudflare tunnel, a public `{slug}.{host}` subdomain whose DNS record
+  is created and removed with the app
+- **Healthchecks & auto-heal** — every running replica is probed every
+  30s; unhealthy state shows on cards and app pages (with the reason), and
+  containers that stop or lose their port binding are restarted/recreated
 - **Alerts** — webhook notifications (Slack-compatible) for deploy
   failures/successes, unhealthy/recovered apps, uptime transitions,
   container restarts, and docker storage growth, with delivery history
   in the dashboard
 - **Monitoring** — CPU/memory charts (5s sampling), live container logs over
-  SSE, and 30s uptime probes per domain with history
+  SSE (last output kept for stopped containers), and 30s uptime probes per
+  domain with history
+- **Releases, history & stats** — per-app releases list with filters and
+  one-click rollback, an event timeline, and a fleet `/stats` page (30-day
+  build success/duration, deploys per day, docker disk usage incl.
+  untracked volumes)
 
 ## Run locally (dev)
 
 ```sh
-make dev                      # http://127.0.0.1:8090 (Docker Desktop)
-DEPLOYMATE_EMAIL=you@example.com DEPLOYMATE_PASSWORD=secret \
-  ./bin/deploymate setup-admin   # or: make build first
+make build
+DEPLOYMATE_SETUP_EMAIL=you@example.com DEPLOYMATE_SETUP_PASSWORD=secret \
+  ./bin/deploymate setup-admin   # prompts for anything not set
+make dev                         # http://127.0.0.1:8090 (Docker Desktop)
 ```
 
 Or one-shot bootstrap:
@@ -116,6 +138,9 @@ off a dev machine.
 | `DEPLOYMATE_CLOUDFLARE_API_TOKEN` | — | auto-DNS: Cloudflare API token (scope `Zone.DNS:Edit`) that creates each new app's preview CNAME; requires the two vars below |
 | `DEPLOYMATE_CLOUDFLARE_ZONE_ID` | — | auto-DNS: zone that owns the preview host |
 | `DEPLOYMATE_CLOUDFLARE_TUNNEL_ID` | — | auto-DNS: named tunnel the preview CNAMEs target (`{id}.cfargotunnel.com`) |
+| `DEPLOYMATE_BACKUP_DEST_<ID>_TYPE` | — | backups: registers destination `<id>` (`DEFAULT` = the default one); `s3` or `local` (dev/e2e only). No destination = backups UI disabled |
+| `DEPLOYMATE_BACKUP_DEST_<ID>_ENDPOINT` / `_BUCKET` / `_ACCESS_KEY` / `_SECRET_KEY` | — | backups, `s3` type: bucket credentials (Cloudflare R2 works) |
+| `DEPLOYMATE_BACKUP_DEST_<ID>_DIR` | — | backups, `local` type: target directory |
 
 ## Architecture notes
 
@@ -125,6 +150,9 @@ off a dev machine.
   dir. Deploy keys, webhook secrets, env values, DB passwords.
 - **Multi-server path**: everything above `internal/runtime` talks to the
   `Runtime` interface; a remote-agent impl is the future escape hatch.
+- **Replicas** share one Traefik service named by a hash of its config,
+  with a unique router per container — Traefik drops a router or service
+  that two containers define differently (ADR 0018).
 - **Security posture**: only Traefik publishes ports; app/db containers live
   on an internal bridge; webhooks verify HMAC + dedupe delivery IDs; the
   dashboard never executes user code on the host.
@@ -132,11 +160,19 @@ off a dev machine.
 ## Development
 
 ```sh
-make gen    # regenerate templ files
-make test   # unit tests
+make gen           # regenerate templ files
+make test          # unit tests
 make vet
-make e2e    # API smoke test against a running server
+make e2e           # API smoke test against a running server
+make e2e-manual    # image deploys (throwaway server)
+make e2e-git       # webhook → build → swap (throwaway server)
+make e2e-replicas  # scale, LB/failover, heal, rolling deploy
+make e2e-backup    # backup → restore → retention (local destination)
+make e2e-dns       # auto-DNS create/remove (needs real Cloudflare vars)
 ```
+
+The `e2e-*` suites start their own throwaway server on a spare port with a
+scratch data dir, and clean up after themselves.
 
 **Handoff:** [progress.md](progress.md) is the project's checkpoint file —
 where work stopped, what's next, and the reading path for anyone (human or
@@ -145,13 +181,20 @@ agent) picking the project up. Read it before anything else.
 Layout: `cmd/deploymate` (binary), `internal/` (auth, store, runtime,
 builder, jobs, services, proxy, monitor, sse, webhooks, crypto, config),
 `web/` (Templ templates + vendored static assets), `deploy/` (bootstrap.sh,
-systemd unit, Traefik config), `testdata/` (fixture repos + e2e script).
+systemd unit, Traefik config), `testdata/` (fixture repos + e2e scripts),
+`docs/` (ADRs, knowledge base, specs, the backlog in `improvements.md`).
 
 ## Roadmap
 
+The full ordered backlog lives in
+[docs/improvements.md](docs/improvements.md). Highlights:
+
+- First real-server run (Ubuntu 24.04, production certs) and server-side
+  dashboard routing via Traefik's file provider
+- Horizontal autoscaling (load-based replica count, scale-to-zero)
+- Health-path control and per-replica metrics for replicas
 - Build cache export for Railpack builds (`--cache-to/--cache-from`)
 - Per-runtime build/start command overrides
+- Deploy previews per PR / per branch
+- MySQL/Redis backups (Postgres ships today)
 - Remote servers (the `Runtime` interface seam)
-- Scheduled/periodic deployments, deploy previews per PR
-- Backups for database volumes
-- Disk usage dashboard (`docker system df`)
