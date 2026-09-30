@@ -1,6 +1,9 @@
 package proxy
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAppLabels(t *testing.T) {
 	labels := AppLabels(AppLabelsOpts{Slug: "mysite", Port: 8080, Domains: []string{"example.com", "www.example.com"}, LEResolver: "staging"})
@@ -10,7 +13,8 @@ func TestAppLabels(t *testing.T) {
 		"traefik.http.routers.mysite.entrypoints":             "websecure",
 		"traefik.http.routers.mysite.tls":                     "true",
 		"traefik.http.routers.mysite.tls.certresolver":        "staging",
-		"traefik.http.services.mysite.loadbalancer.server.port": "8080",
+		"traefik.http.routers.mysite.service":                 ServiceName("mysite", 8080, ""),
+		"traefik.http.services." + ServiceName("mysite", 8080, "") + ".loadbalancer.server.port": "8080",
 	}
 	for k, v := range want {
 		if labels[k] != v {
@@ -31,7 +35,7 @@ func TestAppLabelsRouterNameAndPriority(t *testing.T) {
 		"traefik.http.routers.mysite-abc123.rule",
 		"traefik.http.routers.mysite-abc123.tls.certresolver",
 		"traefik.http.routers.mysite-abc123.priority",
-		"traefik.http.services.mysite-abc123.loadbalancer.server.port",
+		"traefik.http.routers.mysite-abc123.service",
 	} {
 		if labels[k] == "" {
 			t.Errorf("missing label %s in %v", k, labels)
@@ -61,5 +65,59 @@ func TestResolverForLEMode(t *testing.T) {
 	}
 	if got := ResolverForLEMode("bogus"); got != "staging" {
 		t.Errorf("unknown mode should default to staging, got %q", got)
+	}
+}
+
+// TestAppLabelsReplicasShareService is the replica LB contract: two slots
+// of the same deploy own distinct routers but point at ONE service whose
+// labels are byte-identical — Traefik merges them into one backend. The
+// healthcheck labels come from the app's health path.
+func TestAppLabelsReplicasShareService(t *testing.T) {
+	opts := func(router string) AppLabelsOpts {
+		return AppLabelsOpts{Slug: "api", RouterName: router, Port: 8080, HealthPath: "/healthz",
+			Domains: []string{"api.example.com"}, LEResolver: "staging", Priority: 42}
+	}
+	r1, r2 := AppLabels(opts("api-d1")), AppLabels(opts("api-d1-r2"))
+	svc := ServiceName("api", 8080, "/healthz")
+	if r1["traefik.http.routers.api-d1.service"] != svc || r2["traefik.http.routers.api-d1-r2.service"] != svc {
+		t.Fatalf("routers must point at the shared service %s: %v / %v", svc, r1, r2)
+	}
+	if _, ok := r2["traefik.http.routers.api-d1.rule"]; ok {
+		t.Error("slot 2 must not declare slot 1's router (a shared router name conflicts in Traefik)")
+	}
+	for _, k := range []string{".loadbalancer.server.port", ".loadbalancer.healthcheck.path",
+		".loadbalancer.healthcheck.interval", ".loadbalancer.healthcheck.timeout"} {
+		key := "traefik.http.services." + svc + k
+		if r1[key] == "" || r1[key] != r2[key] {
+			t.Errorf("service label %s must be present and identical: %q vs %q", key, r1[key], r2[key])
+		}
+	}
+	if r1["traefik.http.services."+svc+".loadbalancer.healthcheck.path"] != "/healthz" {
+		t.Error("healthcheck path must come from the app's health path")
+	}
+}
+
+// TestServiceNameIsConfigAddressed: a different port or health path yields a
+// different service — never a conflicting redefinition of the same name
+// (which makes Traefik drop the service: spike 2c).
+func TestServiceNameIsConfigAddressed(t *testing.T) {
+	base := ServiceName("api", 8080, "/")
+	if ServiceName("api", 8080, "/") != base {
+		t.Fatal("service name must be deterministic")
+	}
+	if ServiceName("api", 9090, "/") == base || ServiceName("api", 8080, "/healthz") == base {
+		t.Error("port or health path change must change the service name")
+	}
+	if ServiceName("web", 8080, "/") == base {
+		t.Error("service names must be per app")
+	}
+}
+
+func TestAppLabelsNoHealthPathNoHealthcheck(t *testing.T) {
+	labels := AppLabels(AppLabelsOpts{Slug: "s", Port: 80, Domains: []string{"s.dev"}})
+	for k := range labels {
+		if strings.Contains(k, "healthcheck") {
+			t.Errorf("unexpected healthcheck label %s without a health path", k)
+		}
 	}
 }

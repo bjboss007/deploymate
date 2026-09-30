@@ -28,6 +28,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
+	"github.com/habibmuhammad/deploymate/internal/swap"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
 
@@ -50,23 +51,31 @@ func deployPort(form string, stored int) int {
 	return stored
 }
 
-// appSpec assembles the container spec for an image app through the shared
-// appspec builder: full env, labels, preview port binding, limits, and
-// domain routing. Used by manual deploys, start-heal, and ensureBinding —
-// the canonical-name + stored-port shape (zero-downtime deploys build
-// their own staged spec).
-func (s *Server) appSpec(app store.App, image string, port int) runtime.Spec {
+// appSpec assembles the container spec for one replica slot through the
+// shared appspec builder: full env, labels, the slot's preview port binding,
+// limits, and domain routing. Used by start-heal and ensureBinding — the
+// in-place slot-name + stored-port shape (zero-downtime deploys build their
+// own staged spec).
+func (s *Server) appSpec(app store.App, image string, port int, slot appspec.Slot) runtime.Spec {
 	env := s.AppEnv(app)
 	if port <= 0 {
 		// Port-less image apps still get the platform's $PORT convention.
 		env = append(env, fmt.Sprintf("PORT=%d", effectivePort(port)))
 	}
+	// Slot 1 keeps the pre-replicas router name (the slug); extra slots own
+	// their own — Traefik drops a router two containers define differently.
+	router := ""
+	if slot.Slot > 1 {
+		router = app.Slug + "-r" + strconv.Itoa(slot.Slot)
+	}
 	return appspec.BuildSpec(app, appspec.Options{
 		Image:      image,
-		Name:       dmContainerName(app.Slug),
+		Name:       slot.Name,
 		Port:       port,
-		HostPort:   appspec.ResolvedPreviewPort(app),
+		HostPort:   slot.HostPort,
 		Env:        env,
+		RouterName: router,
+		Slot:       slot.Slot,
 		Domains:    s.domainHostnames(app),
 		LEResolver: proxy.ResolverForLEMode(s.leMode),
 		// Start/restart/heal rebuild from the row, so the stored overrides
@@ -103,44 +112,105 @@ func healthReasonFor(info runtime.Info) string {
 	return "container is running but failing health probes on its preview port — check the log panel, restart, or redeploy"
 }
 
-// startApp starts the app's container, healing a container that was
-// created without its preview port binding (older deploys, manual docker
-// runs) by recreating it from the current spec so the health probe can
-// reach it.
-func (s *Server) startApp(ctx context.Context, app store.App) error {
-	name := dmContainerName(app.Slug)
-	if err := s.rt.Start(ctx, name); err != nil {
-		return err
+// appSlots resolves the app's replicas (see appspec.Slots): the recorded
+// slots, or a synthetic slot 1 for apps not redeployed since replicas.
+func (s *Server) appSlots(app store.App) []appspec.Slot {
+	rows, err := s.store.ListAppReplicas(app.ID)
+	if err != nil {
+		slog.Error("apps: list replicas", "app", app.Slug, "err", err)
 	}
-	if app.Port <= 0 {
-		return nil
-	}
-	_, err := s.ensureBinding(ctx, app, name)
-	return err
+	return appspec.Slots(app, rows)
 }
 
-// HealApp is the monitor's auto-heal entrypoint: it ensures a running
-// app's container has its preview port binding, recreating it from the
-// shared spec when missing — the same heal a manual restart performs,
-// minus the human. It reports whether a recreation happened so the
-// monitor can record the heal. Image apps recreate from app.Image;
-// git-source apps have none, so their container's own (worker-built)
-// image is used — the ground truth of what is deployed.
-func (s *Server) HealApp(ctx context.Context, app store.App) (bool, error) {
+// startApp starts every replica, healing a container that was created
+// without its preview port binding (older deploys, manual docker runs) by
+// recreating it from the current spec so the health probe can reach it.
+// Slot 1's error is returned (ErrContainerNotFound → "deploy it again");
+// a missing extra slot is left to the monitor's heal.
+func (s *Server) startApp(ctx context.Context, app store.App) error {
+	for _, sl := range s.appSlots(app) {
+		err := s.rt.Start(ctx, sl.Name)
+		if err == nil && app.Port > 0 {
+			_, err = s.ensureBinding(ctx, app, sl)
+		}
+		if err != nil {
+			if sl.Slot == 1 {
+				return err
+			}
+			slog.Warn("apps: start replica", "app", app.Slug, "slot", sl.Slot, "err", err)
+		}
+	}
+	return nil
+}
+
+// stopApp stops every replica. A container that is already gone is fine.
+func (s *Server) stopApp(ctx context.Context, app store.App, timeoutSec int) error {
+	var first error
+	for _, sl := range s.appSlots(app) {
+		if err := s.rt.Stop(ctx, sl.Name, timeoutSec); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) && first == nil {
+			first = err
+		}
+	}
+	return first
+}
+
+// HealApp is the monitor's auto-heal entrypoint for one replica: it starts
+// the slot's container and ensures it has its preview port binding,
+// recreating it from the shared spec when missing — the same heal a manual
+// restart performs, minus the human. An extra slot (2..N) whose container
+// is gone entirely is recreated from slot 1's image; a missing slot 1 stays
+// a human redeploy (the UI says so). It reports whether a recreation
+// happened so the monitor can record the heal. Image apps recreate from
+// app.Image; git-source apps have none, so a container's own
+// (worker-built) image is used — the ground truth of what is deployed.
+func (s *Server) HealApp(ctx context.Context, app store.App, slot appspec.Slot) (bool, error) {
 	if app.Port <= 0 {
 		return false, nil
 	}
-	name := dmContainerName(app.Slug)
-	if err := s.rt.Start(ctx, name); err != nil {
+	if err := s.rt.Start(ctx, slot.Name); err != nil {
+		if errors.Is(err, runtime.ErrContainerNotFound) && slot.Slot > 1 {
+			return s.recreateSlot(ctx, app, slot)
+		}
 		return false, err
 	}
-	return s.ensureBinding(ctx, app, name)
+	return s.ensureBinding(ctx, app, slot)
 }
 
-// ensureBinding inspects the app's container and, when it is running
+// recreateSlot rebuilds a vanished extra replica from slot 1's image on the
+// slot's recorded port (a fresh loopback port when none was recorded).
+func (s *Server) recreateSlot(ctx context.Context, app store.App, slot appspec.Slot) (bool, error) {
+	image := app.Image
+	if image == "" {
+		info, err := s.rt.Inspect(ctx, appspec.SlotName(app.Slug, 1))
+		if err != nil {
+			return false, fmt.Errorf("replica %d is gone and slot 1 has no image to copy: %w", slot.Slot, err)
+		}
+		image = info.Image
+	}
+	if slot.HostPort == 0 {
+		port, err := swap.ReserveLoopbackPort()
+		if err != nil {
+			return false, err
+		}
+		slot.HostPort = port
+	}
+	slog.Warn("apps: replica container missing; recreating", "app", app.Slug, "slot", slot.Slot, "image", image)
+	if _, err := s.rt.Create(ctx, s.appSpec(app, image, app.Port, slot)); err != nil {
+		return false, err
+	}
+	if err := s.rt.Start(ctx, slot.Name); err != nil {
+		return false, err
+	}
+	return true, s.store.UpsertAppReplica(store.AppReplica{
+		AppID: app.ID, Slot: slot.Slot, ContainerName: slot.Name, HostPort: slot.HostPort, DeployID: slot.DeployID,
+	})
+}
+
+// ensureBinding inspects a replica's container and, when it is running
 // without any published port, recreates it from the spec. Returns whether
 // a recreation happened.
-func (s *Server) ensureBinding(ctx context.Context, app store.App, name string) (bool, error) {
+func (s *Server) ensureBinding(ctx context.Context, app store.App, slot appspec.Slot) (bool, error) {
+	name := slot.Name
 	info, err := s.rt.Inspect(ctx, name)
 	if err != nil {
 		return false, err
@@ -155,12 +225,12 @@ func (s *Server) ensureBinding(ctx context.Context, app store.App, name string) 
 	if image == "" {
 		return false, fmt.Errorf("no image to recreate %s from", name)
 	}
-	slog.Warn("apps: container has no published port; recreating from spec", "app", app.Slug, "port", app.Port, "image", image)
+	slog.Warn("apps: container has no published port; recreating from spec", "app", app.Slug, "slot", slot.Slot, "port", app.Port, "image", image)
 	_ = s.rt.Stop(ctx, name, 5)
 	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
 		return false, err
 	}
-	if _, err := s.rt.Create(ctx, s.appSpec(app, image, app.Port)); err != nil {
+	if _, err := s.rt.Create(ctx, s.appSpec(app, image, app.Port, slot)); err != nil {
 		return false, err
 	}
 	return true, s.rt.Start(ctx, name)
@@ -301,7 +371,35 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs))
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs, s.replicasInfo(app)))
+}
+
+// replicasInfo builds the app page's replicas panel from the replica table.
+// An app with no rows (not redeployed since replicas) shows no slot table —
+// its single container is the whole story until the next deploy or scale.
+func (s *Server) replicasInfo(app store.App) templates.ReplicasInfo {
+	ri := templates.ReplicasInfo{
+		Desired:    store.ClampReplicas(app.Replicas),
+		Max:        store.MaxReplicas,
+		Target:     app.CurrentDeploymentID,
+		HealthPath: appspec.HealthPath(app),
+	}
+	rows, err := s.store.ListAppReplicas(app.ID)
+	if err != nil {
+		slog.Error("apps: list replicas", "app", app.Slug, "err", err)
+	}
+	for _, r := range rows {
+		v := templates.ReplicaView{Slot: r.Slot, Name: r.ContainerName, Status: r.Status, DeployID: r.DeployID,
+			OnTarget: r.DeployID == app.CurrentDeploymentID}
+		if v.Status == "healthy" {
+			ri.Healthy++
+		}
+		if v.OnTarget {
+			ri.OnTarget++
+		}
+		ri.Slots = append(ri.Slots, v)
+	}
+	return ri
 }
 
 // mustDecrypt decrypts or returns "" (best-effort display helper).
@@ -362,7 +460,7 @@ func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if err := s.rt.Stop(r.Context(), dmContainerName(app.Slug), 10); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+	if err := s.stopApp(r.Context(), app, 10); err != nil {
 		slog.Error("apps: stop", "err", err)
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Stop failed: "+err.Error()), http.StatusSeeOther)
 		return
@@ -416,8 +514,7 @@ func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	name := dmContainerName(app.Slug)
-	_ = s.rt.Stop(ctx, name, 10)
+	_ = s.stopApp(ctx, app, 10)
 	if err := s.startApp(ctx, app); err != nil {
 		if errors.Is(err, runtime.ErrContainerNotFound) {
 			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."), http.StatusSeeOther)
@@ -444,10 +541,20 @@ func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	name := dmContainerName(app.Slug)
-	_ = s.rt.Stop(ctx, name, 5)
-	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
-		slog.Error("apps: remove container", "err", err)
+	// Every replica goes, plus any slot container the table does not know
+	// about (a crashed rollout's leftovers above the recorded set).
+	names := map[string]bool{}
+	for _, sl := range s.appSlots(app) {
+		names[sl.Name] = true
+	}
+	for slot := 1; slot <= store.MaxReplicas; slot++ {
+		names[appspec.SlotName(app.Slug, slot)] = true
+	}
+	for name := range names {
+		_ = s.rt.Stop(ctx, name, 5)
+		if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+			slog.Error("apps: remove container", "container", name, "err", err)
+		}
 	}
 	if err := s.store.DeleteApp(app.ID); err != nil {
 		slog.Error("apps: delete", "err", err)
@@ -475,13 +582,16 @@ func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 // handleAppLogs streams container logs to the browser over SSE. Each
-// connection tails its own docker stream; closing the connection closes the
-// tail.
+// connection tails its own docker streams; closing the connection closes
+// the tails. With replicas the slots' streams are merged into one SSE, each
+// line prefixed with its slot ("[r2] …"); ?replica=r2 narrows the stream to
+// one slot (replicas spec, decision 2). The slot set is resolved when the
+// panel connects — reload after scaling.
 //
-// The connection NEVER closes on its own while the browser is open: if the
-// container is missing or stopped, the handler sends a waiting event every
-// few seconds and keeps the stream alive. Closing would make the browser's
-// EventSource reconnect in a tight loop — constant reload churn.
+// The connection NEVER closes on its own while the browser is open: if a
+// container is missing or stopped, the handler sends a waiting event and
+// keeps the stream alive. Closing would make the browser's EventSource
+// reconnect in a tight loop — constant reload churn.
 func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
@@ -494,10 +604,73 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ctx := r.Context()
-	name := dmContainerName(app.Slug)
 
-	go sse.Heartbeat(ctx.Done(), w, flusher)
+	// One lock serializes every write to the response: the slot streams and
+	// the heartbeat all share it, so events never interleave mid-frame.
+	var mu sync.Mutex
+	emit := func(line string) {
+		mu.Lock()
+		defer mu.Unlock()
+		_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: line})
+	}
+	go func() {
+		t := time.NewTicker(15 * time.Second)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				mu.Lock()
+				_, err := fmt.Fprint(w, ": ping\n\n")
+				if err == nil {
+					flusher.Flush()
+				}
+				mu.Unlock()
+				if err != nil {
+					return
+				}
+			}
+		}
+	}()
 
+	slots := s.appSlots(app)
+	multi := len(slots) > 1
+	if want := r.URL.Query().Get("replica"); want != "" {
+		var only []appspec.Slot
+		for _, sl := range slots {
+			if "r"+strconv.Itoa(sl.Slot) == want {
+				only = append(only, sl)
+			}
+		}
+		if len(only) == 0 {
+			emit("no replica " + want + " — this app runs " + strconv.Itoa(len(slots)) + " replica(s)")
+			<-ctx.Done()
+			return
+		}
+		slots = only
+	}
+
+	var wg sync.WaitGroup
+	for _, sl := range slots {
+		prefix := ""
+		if multi {
+			prefix = "[r" + strconv.Itoa(sl.Slot) + "] "
+		}
+		slotEmit := func(line string) { emit(prefix + line) }
+		wg.Add(1)
+		go func(name string) {
+			defer wg.Done()
+			s.followContainerLogs(ctx, name, slotEmit)
+		}(sl.Name)
+	}
+	wg.Wait()
+}
+
+// followContainerLogs tails one container until ctx ends, re-attaching
+// across restarts and recreations (deploy swaps rename a new container into
+// the name).
+func (s *Server) followContainerLogs(ctx context.Context, name string, emit func(string)) {
 	emitted := false
 	for {
 		info, err := s.rt.Inspect(ctx, name)
@@ -512,11 +685,11 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 				// container is then started while the panel stays open.
 				if err == nil {
 					if snap, serr := s.rt.Logs(ctx, name, false, 200); serr == nil {
-						writeContainerLogs(w, snap)
+						writeContainerLogs(emit, snap)
 						snap.Close()
 					}
 				}
-				_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: "waiting for the container — deploy or start the app to see logs"})
+				emit("waiting for the container — deploy or start the app to see logs")
 				emitted = true
 			}
 			select {
@@ -543,7 +716,7 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 			rc.Close()
 		}()
 
-		writeContainerLogs(w, rc)
+		writeContainerLogs(emit, rc)
 		rc.Close()
 
 		// The container exited or was recreated; loop back and re-inspect.
@@ -555,10 +728,10 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeContainerLogs demuxes a docker log stream (stdout/stderr multiplexed
-// by stdcopy) and writes each line to the SSE response, tagging stderr. It
-// blocks until the reader is exhausted: a follow stream ends when its reader
-// is closed (on disconnect), a snapshot ends at EOF.
-func writeContainerLogs(w http.ResponseWriter, rc io.Reader) {
+// by stdcopy) and emits each line, tagging stderr. It blocks until the
+// reader is exhausted: a follow stream ends when its reader is closed (on
+// disconnect), a snapshot ends at EOF. emit must be safe for concurrent use.
+func writeContainerLogs(emit func(string), rc io.Reader) {
 	stdoutR, stdoutW := io.Pipe()
 	stderrR, stderrW := io.Pipe()
 	go func() {
@@ -568,15 +741,12 @@ func writeContainerLogs(w http.ResponseWriter, rc io.Reader) {
 	}()
 
 	var wg sync.WaitGroup
-	var mu sync.Mutex
 	scan := func(rd io.Reader, prefix string) {
 		defer wg.Done()
 		sc := bufio.NewScanner(rd)
 		sc.Buffer(make([]byte, 64*1024), 1024*1024)
 		for sc.Scan() {
-			mu.Lock()
-			_ = sse.WriteEvent(w, sse.Event{Name: "log", Data: prefix + sc.Text()})
-			mu.Unlock()
+			emit(prefix + sc.Text())
 		}
 	}
 	wg.Add(2)
@@ -686,4 +856,60 @@ func effectivePort(port int) int {
 		return 8080
 	}
 	return port
+}
+
+// handleAppReplicas sets the app's replica count (1..MaxReplicas). A running
+// app with a deployed image gets a `scale` deployment queued — the worker
+// starts missing slots from the current image or removes the highest ones,
+// no build, no downtime. Anything else (stopped, never deployed) just
+// records the count: the next deploy converges the replica set.
+func (s *Server) handleAppReplicas(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	back := "/apps/" + app.Slug
+	n, err := strconv.Atoi(strings.TrimSpace(r.FormValue("replicas")))
+	if err != nil || n < 1 || n > store.MaxReplicas {
+		http.Redirect(w, r, back+"?flash="+flashURL(fmt.Sprintf("Replicas must be a number from 1 to %d.", store.MaxReplicas)), http.StatusSeeOther)
+		return
+	}
+	from := store.ClampReplicas(app.Replicas)
+	if err := s.store.UpdateAppReplicas(app.ID, n); err != nil {
+		slog.Error("apps: update replicas", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if n == from {
+		http.Redirect(w, r, back, http.StatusSeeOther)
+		return
+	}
+	_ = s.store.RecordEvent(app.ID, store.EventAppScaled, fmt.Sprintf("replicas %d → %d", from, n))
+
+	image := ""
+	if app.CurrentDeploymentID != "" {
+		if cur, err := s.store.GetDeployment(app.CurrentDeploymentID); err == nil {
+			image = cur.ImageTag
+		}
+	}
+	if image == "" {
+		// Legacy rows may lack the tag; the running slot-1 container is the
+		// ground truth of what is deployed.
+		if info, err := s.rt.Inspect(r.Context(), appspec.SlotName(app.Slug, 1)); err == nil && info.Running {
+			image = info.Image
+		}
+	}
+	if app.Status != "running" || image == "" {
+		http.Redirect(w, r, back+"?flash="+flashURL(fmt.Sprintf("Replicas set to %d — applied on the next deploy.", n)), http.StatusSeeOther)
+		return
+	}
+	d, err := s.store.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "scale", Status: "queued", Trigger: "scale", ImageTag: image,
+	})
+	if err != nil {
+		slog.Error("apps: queue scale", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
 }

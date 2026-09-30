@@ -46,6 +46,10 @@ One Go binary, one server, Docker as the compute substrate.
   the UI
 - **Domains & HTTPS** — automatic Let's Encrypt via Traefik (staging
   resolver by default), label-driven routing with zero proxy restarts
+- **Replicas** — run 1–5 identical containers per app behind one address:
+  load-balanced with unhealthy replicas skipped, rolling deploys that keep
+  at least one replica serving, scale up/down without a rebuild, and
+  merged logs with a per-replica filter
 - **Preview URLs** — every running app gets `/preview/<slug>` on the
   dashboard instantly, before any domain exists
 - **Healthchecks** — every running app is probed every 30s; unhealthy

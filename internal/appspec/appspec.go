@@ -26,6 +26,68 @@ func CanonicalName(slug string) string { return "dm-" + slug }
 // to the running one.
 func StagedName(slug, deployID string) string { return "dm-" + slug + "-" + deployID }
 
+// SlotName is the container name of replica slot n (1-based). Slot 1 is the
+// canonical dm-{slug} container, so a single-replica app — and every
+// container that predates replicas — needs no rename; extra slots are
+// dm-{slug}-r{n}.
+func SlotName(slug string, slot int) string {
+	if slot <= 1 {
+		return CanonicalName(slug)
+	}
+	return CanonicalName(slug) + "-r" + strconv.Itoa(slot)
+}
+
+// StagedSlotName is the temp name a rollout starts beside slot n.
+func StagedSlotName(slug string, slot int, deployID string) string {
+	if slot <= 1 {
+		return StagedName(slug, deployID)
+	}
+	return SlotName(slug, slot) + "-" + deployID
+}
+
+// RouterName is the per-container Traefik router for slot n of a deploy.
+// Unique per container: Traefik drops a router that two containers define
+// differently (see internal/proxy). Slot 1 keeps the pre-replicas name.
+func RouterName(slug string, slot int, deployID string) string {
+	if slot <= 1 {
+		return slug + "-" + deployID
+	}
+	return slug + "-" + deployID + "-r" + strconv.Itoa(slot)
+}
+
+// Slot is one resolved replica: its number, container name, and the loopback
+// host port it publishes, plus the monitor's last verdict.
+type Slot struct {
+	Slot     int
+	Name     string
+	HostPort int
+	Status   string // healthy | unhealthy | ''
+	DeployID string
+}
+
+// Slots resolves an app's replicas from the replica table. An app with no
+// rows (never redeployed since replicas shipped) resolves to one synthetic
+// slot 1 on ResolvedPreviewPort — the pre-replicas behavior. Every reader
+// (preview proxy, monitor, logs, lifecycle) goes through this.
+func Slots(app store.App, rows []store.AppReplica) []Slot {
+	if len(rows) == 0 {
+		return []Slot{{Slot: 1, Name: CanonicalName(app.Slug), HostPort: ResolvedPreviewPort(app)}}
+	}
+	out := make([]Slot, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, Slot{Slot: r.Slot, Name: r.ContainerName, HostPort: r.HostPort, Status: r.Status, DeployID: r.DeployID})
+	}
+	return out
+}
+
+// HealthPath returns the app's probe path, defaulting to "/".
+func HealthPath(app store.App) string {
+	if app.HealthPath == "" {
+		return store.DefaultHealthPath
+	}
+	return app.HealthPath
+}
+
 // ResolvedPreviewPort returns the loopback host port the app's current
 // container publishes: the stored port when a swap recorded one, else the
 // deterministic per-slug hash. The preview proxy and the monitor probe
@@ -66,6 +128,9 @@ type Options struct {
 	// (callers get these from the app row via SplitArgs).
 	Entrypoint []string
 	Cmd        []string
+	// Slot is the replica number (1-based; 0 = 1). Recorded as the
+	// deploymate.slot label so a container says which slot it serves.
+	Slot int
 }
 
 // BuildSpec assembles the container spec for an app deploy.
@@ -89,8 +154,13 @@ func BuildSpec(app store.App, o Options) runtime.Spec {
 	if o.Port > 0 {
 		labels["deploymate.port"] = strconv.Itoa(o.Port)
 	}
+	slot := o.Slot
+	if slot < 1 {
+		slot = 1
+	}
+	labels["deploymate.slot"] = strconv.Itoa(slot)
 	for k, v := range proxy.AppLabels(proxy.AppLabelsOpts{
-		Slug: app.Slug, RouterName: o.RouterName, Port: o.Port,
+		Slug: app.Slug, RouterName: o.RouterName, Port: o.Port, HealthPath: HealthPath(app),
 		Domains: o.Domains, LEResolver: o.LEResolver, Priority: o.Priority,
 	}) {
 		labels[k] = v

@@ -66,7 +66,9 @@ function attachLogStream(panel) {
   const src = panel.dataset.logSrc;
   if (!src) return;
 
+  if (panel._logStream) panel._logStream.close(); // re-attach (replica filter)
   const es = new EventSource(src);
+  panel._logStream = es;
   let gotFirst = false;
   let pending = [];
   let flushScheduled = false;
@@ -172,6 +174,18 @@ function loadFleetChart() {
 
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("[data-log-src]").forEach(attachLogStream);
+  // Replica filter: narrow a merged replica log stream to one slot
+  // (?replica=r2) by re-attaching the panel to the filtered source.
+  document.querySelectorAll("[data-log-filter]").forEach((sel) => {
+    const panel = document.getElementById(sel.dataset.logFilter);
+    if (!panel) return;
+    const base = panel.dataset.logSrc;
+    sel.addEventListener("change", () => {
+      panel.dataset.logSrc = sel.value ? base + "?replica=" + encodeURIComponent(sel.value) : base;
+      panel.replaceChildren();
+      attachLogStream(panel);
+    });
+  });
   loadFleetChart();
 
   const slug = document.body.dataset.appSlug;

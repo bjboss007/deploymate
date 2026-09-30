@@ -14,9 +14,9 @@ type Deployment struct {
 	AppID         string
 	CommitSHA     string
 	CommitMessage string
-	Kind          string   // deploy | rollback | manual
+	Kind          string   // deploy | rollback | manual | resize | scale
 	Status        string   // queued | building | running | failed
-	Trigger       string   // dashboard | webhook | manual | rollback | resize; '' for legacy rows
+	Trigger       string   // dashboard | webhook | manual | rollback | resize | scale; '' for legacy rows
 	ImageTag      string
 	Error         string
 	StartedAt     string

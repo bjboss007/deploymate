@@ -52,7 +52,9 @@
    `docker buildx build --load` with every line appended to `build_logs`
    and fanned out to the SSE topic `deploy:<slug>`.
 4. Tag `deploymate/apps/<slug>:<deployment_id>`; record in `images`.
-5. Swap: stop/remove `dm-<slug>` → create+start with full env (service
+5. Swap, slot by slot (1–5 replicas, ADR 0018): stage beside the old
+   container → probe → record the port in `app_replicas` → remove old →
+   rename into `dm-<slug>` / `dm-<slug>-r<n>`, with full env (service
    URLs + app vars + `GIT_SHA`) and Traefik labels → `running`.
 6. Prune images beyond the newest 5 per app.
 

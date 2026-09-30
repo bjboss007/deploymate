@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sync"
 	"time"
 
 	"strings"
@@ -37,6 +38,7 @@ type Server struct {
 	dataDir     string       // repo mirrors for the deploy-review page
 	dns         dns.Manager  // nil disables auto-DNS
 	backups     *backup.Manager // nil disables the backups UI/actions
+	previewRR   sync.Map        // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
 // New builds a Server.
@@ -125,6 +127,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/stop", am.CheckCSRF(s.handleAppStop))
 		r.Post("/apps/{slug}/start", am.CheckCSRF(s.handleAppStart))
 		r.Post("/apps/{slug}/restart", am.CheckCSRF(s.handleAppRestart))
+		r.Post("/apps/{slug}/replicas", am.CheckCSRF(s.handleAppReplicas))
 		r.Post("/apps/{slug}/delete", am.CheckCSRF(s.handleAppDelete))
 		r.Post("/apps/{slug}/env", am.CheckCSRF(s.handleEnvVarCreate))
 		r.Post("/apps/{slug}/env/{id}/delete", am.CheckCSRF(s.handleEnvVarDelete))

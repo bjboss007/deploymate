@@ -7,6 +7,56 @@
 
 ## Where we stopped
 
+**2026-09-30 (replicas build round)** — **App replicas shipped** (ADR
+0018; spec `docs/specs/app-replicas.md` now implemented, with "Spike
+results" + "As built" addenda). **Spikes first:** both blocking Traefik
+spikes ran on **Traefik v3.3 on Docker Desktop** — mounting the VM path
+`-v /var/run/docker.sock:/var/run/docker.sock` works (only the host
+`~/.docker/run/docker.sock` can't be mounted). Findings that changed the
+design: identical router+service labels merge fine, but a router **or**
+service name defined differently by two containers is **dropped → every
+request 404s** (a domain edit or port/health-path change mid-rollout
+would have been an outage); new servers start healthy; all-down = 503,
+self-recovering. **Adopted scheme:** unique router per container →
+`.service=` a config-hash service `{slug}-{crc32(port|health_path|…)}`
+with active healthcheck labels — verified live before building. What
+shipped: migration **0015** (`apps.replicas` 1–5, `apps.health_path`
+default `/`, `app_replicas` slot table); slot 1 stays `dm-{slug}` (no
+rename of any live container), extra slots `dm-{slug}-r{n}`;
+`appspec.Slots` is the single resolver (no rows → synthetic slot 1);
+worker rolls one `swap.Swap` per slot (N=1 is the old path verbatim),
+halts on a failed slot with per-slot drift, converges extra slots away;
+no-build **`scale`** deployments (`POST /apps/{slug}/replicas`) that
+never touch slot 1 or `current_deployment_id`; monitor probes every slot
+at `health_path`, any-up = healthy, per-slot verdicts stored, per-slot
+heal (start/rebind/recreate a vanished extra slot) **gated while a
+deployment is queued/building**; start/stop/restart/delete fan out;
+`/preview` + public subdomain round-robin with skip-unhealthy and
+dial-error failover; merged logs `[rN]` + `?replica=` filter (panel
+select); app page Replicas panel (count, per-slot health + deploy badge,
+drift/degraded notes, per-replica × N limits) and a "2/3 replicas up"
+badge. Tests: new unit tests across store/appspec/proxy/jobs/monitor/
+httpserver (rollout ordering, halted rollout, scale up/down, convergence,
+any-up, heal mutex, LB/failover, handler cap, merged logs); `make test` +
+`make vet` green, `-race` clean on touched packages. **E2e-verified:
+`make e2e-replicas` PASSED** (throwaway :18096; whoami: scale 1→2 →
+label contract on both slots → preview round-robin → stopped slot 2:
+8/8 still 200 + monitor heal → merged/filtered logs → rolling redeploy at
+N=2 under preview load **52 requests, 0 failed** → scale 2→3→1 → cap →
+delete removes all), and `e2e_manual.sh` + `e2e_git.sh` still pass (N=1
+unchanged). UI checked in the browser pane on a scratch server.
+**Live server restarted on the replicas binary** the same day (pid
+19831, `data/server.log`, env unchanged; migration 15 applied — pre-migration
+snapshot at `data/backups/pre-0015-20260930205817.db`; all 10 apps still
+running/healthy as single replicas, 0 replica rows until each app's next
+deploy/scale; 4 shortlink public URLs 200 via the tunnel, which the owner
+runs in a terminal tab — not yet a service). **Not done:** not
+committed/pushed yet; real
+Traefik LB behavior is covered by the spikes, not the e2e. Follow-ups
+logged under "Replicas follow-ups" in improvements.md (health-path UI —
+Traefik needs 2xx/3xx where the monitor accepts <500; per-slot metrics;
+etc.).
+
 **2026-09-14 (4GB-server prep round)** — **The first real-server box is
 being assembled** (owner: Ubuntu 24.04 laptop, but one RAM stick is dead
 so it's **4 GB, not 8** — under the doc's target; WiFi works, Ethernet
@@ -615,15 +665,10 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **App replicas (horizontal scaling)** — spec'd Sep 2026
-   (`docs/specs/app-replicas.md`, decisions locked: any-up health +
-   Traefik active healthcheck pulling sick replicas from rotation, merged
-   logs with per-replica drill-down, cap 5, rollout floor ≥1 serving).
-   Not built. Entry points: `internal/appspec` + `internal/proxy` (shared
-   Traefik service merge), `internal/swap` (rolling slot swaps), migration
-   0015 (`apps.replicas` + `app_replicas` slot table), monitor per-slot
-   probes, `handlers_apps` logs fan-in. Spec's verification section is
-   the build plan.
+3. **Replicas follow-ups** — shipped 2026-09-30 (ADR 0018). Next:
+   a health-path form control (load-bearing once Traefik fronts apps —
+   see improvements.md "Replicas follow-ups"), and re-run the Traefik
+   spike harness on the real Linux box when it's up.
 4. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if

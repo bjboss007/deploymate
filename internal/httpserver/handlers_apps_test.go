@@ -14,6 +14,7 @@ import (
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/store"
@@ -463,7 +464,7 @@ func TestHealApp(t *testing.T) {
 		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
 		s := &Server{store: st, rt: fake}
 
-		healed, err := s.HealApp(context.Background(), app)
+		healed, err := s.HealApp(context.Background(), app, appspec.Slots(app, nil)[0])
 		if err != nil {
 			t.Fatalf("HealApp: %v", err)
 		}
@@ -483,7 +484,7 @@ func TestHealApp(t *testing.T) {
 		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: []string{"8080/tcp"}}}
 		s := &Server{store: st, rt: fake}
 
-		healed, err := s.HealApp(context.Background(), app)
+		healed, err := s.HealApp(context.Background(), app, appspec.Slots(app, nil)[0])
 		if err != nil {
 			t.Fatalf("HealApp: %v", err)
 		}
@@ -507,7 +508,7 @@ func TestHealApp(t *testing.T) {
 		}}
 		s := &Server{store: st, rt: fake}
 
-		healed, err := s.HealApp(context.Background(), app)
+		healed, err := s.HealApp(context.Background(), app, appspec.Slots(app, nil)[0])
 		if err != nil {
 			t.Fatalf("HealApp: %v", err)
 		}
@@ -524,7 +525,7 @@ func TestHealApp(t *testing.T) {
 		fake := &fakeRuntime{info: runtime.Info{Running: true, Restarts: 0, PublishedPorts: nil}}
 		s := &Server{store: st, rt: fake}
 
-		if _, err := s.HealApp(context.Background(), app); err == nil {
+		if _, err := s.HealApp(context.Background(), app, appspec.Slots(app, nil)[0]); err == nil {
 			t.Error("HealApp must fail when neither app.Image nor the container image is known")
 		}
 		if fake.created != 0 {

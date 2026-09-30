@@ -6,6 +6,9 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **README Roadmap is stale** — still lists "Backups for database
+  volumes" and "Disk usage dashboard", both shipped (Sep 2026); refresh
+  the Features/Roadmap split. (Noticed 2026-09-30 while adding Replicas.)
 - [x] **Reap stale `building` deployments** — done: the worker fails
   in-flight rows on startup (Aug 2026).
 - [x] **Preview URLs** — done: `/preview/{slug}` on the dashboard
@@ -295,18 +298,57 @@ change.
 
 ## Medium-term (feature depth)
 
-- [ ] **App replicas (horizontal scaling)** — spec'd
-  (docs/specs/app-replicas.md, Sep 2026; post-critique), not implemented:
-  `apps.replicas` (1–5) + `apps.health_path` + `app_replicas` slot table
-  (migration 0015), Traefik shared-service LB with active healthcheck
-  (sick replicas leave rotation), rolling slot-by-slot deploys with a
-  ≥1-serving floor, any-up health with degraded badge, merged logs with
-  per-replica drill-down, preview proxy round-robin with failover,
-  probe-allocated ports. Cheap by construction: apps have no volumes and
-  share service containers, so replicas are data-safe. **Blocking
-  pre-work:** two Traefik semantics spikes on Linux (duplicate-router
-  merge, healthcheck initial/all-down behavior) — the LB scheme is
-  unverified on macOS. Axis 2 (multi-node) out of scope.
+- [x] **App replicas (horizontal scaling)** — done 2026-09-30 (ADR 0018;
+  spec docs/specs/app-replicas.md incl. spike results). 1–5 slots per app
+  (migration 0015: `apps.replicas`, `apps.health_path`, `app_replicas`),
+  unique-router + config-hash-service Traefik labels with active
+  healthcheck (spiked on Traefik v3.3 first — a shared router/service name
+  defined two ways drops it and 404s everything), rolling slot-by-slot
+  swaps (one `swap.Swap` per slot; N=1 unchanged), no-build `scale`
+  deployments, any-up health with "2/3 replicas up", per-slot heal gated
+  on in-flight deployments, `/preview` round-robin + skip-unhealthy +
+  dial failover, merged logs with `[rN]` + `?replica=` filter. Unit
+  tests + `make e2e-replicas` (0 failed requests across a rolling deploy
+  at N=2). Follow-ups below.
+- [ ] **Replicas follow-ups** (from the 2026-09-30 build, ADR 0018):
+  - **Health path UI** — `apps.health_path` ships (default `/`) with no
+    form control. It now feeds the Traefik healthcheck, which needs
+    2xx/3xx (the monitor accepts <500): an API whose `/` 404s would be
+    ejected by Traefik once Traefik fronts it.
+  - **Per-slot metrics** — stats sampling, resource detection, pressure
+    auto-resize, and restart alerts read slot 1 only; a sick r2's memory
+    or restart loop is invisible outside its health badge.
+  - **Heal of a stopped slot isn't recorded** — `HealApp` restarting a
+    stopped replica reports "not healed" (no recreate), so no
+    `app_healed` event/alert (pre-existing for slot 1 too).
+  - **Legacy-labeled slot 1 + scale-up under Traefik** — a container from
+    before this change has the old label shape; scaling up before its
+    next redeploy leaves it in a different Traefik service (dashboard LB
+    unaffected; the next deploy converges).
+  - **Logs panel slot set is fixed at connect** — reload after scaling.
+  - **Connection drain** on slot removal (pre-existing; replicas multiply
+    the surface).
+- [ ] **Horizontal autoscaling (load-based replica count, scale-to-zero)**
+  — not spec'd, not implemented; builds on App replicas above (shipped
+  2026-09-30 with a manual count only — the spec excluded autoscaling). **Vertical**
+  autoscaling already exists (ADR 0015): hourly P90 limit detection plus
+  the monitor's `checkResourcePressure` auto-resize (>80% of the applied
+  limit → bump + no-build `resize` redeploy, 30-min cooldown) — but it is
+  one always-on container per app, capped at 4 GB / 4 CPU, and only
+  auto-resizes *up*. Gap surfaced by the InstaCloud comparison (Sep
+  2026), which sells auto-scale + scale-to-zero when idle. Two separable
+  pieces:
+  (1) **load-based replica count** — a controller on the monitor tick
+  that moves `apps.replicas` within per-app min/max bounds from sampled
+  CPU (already collected) or request rate, with cooldowns/hysteresis to
+  avoid flapping, reusing the replicas scale-up/down path (no rebuild);
+  (2) **scale-to-zero** — stop idle apps after N minutes without
+  requests and cold-start on the next hit (the `/preview` proxy / a
+  Traefik fallback must hold the request while the container boots and
+  probes healthy). Open questions: request-rate signal source (Traefik
+  metrics vs proxy counters), cold-start latency budget, interaction
+  with the monitor's auto-heal (a scaled-to-zero app must not be
+  "healed" back up), and RAM headroom on small (4 GB) hosts.
 - [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
   (BuildKit registry cache) so rebuilds across deploys are faster than
   cold.

@@ -1,6 +1,10 @@
 package templates
 
-import "github.com/habibmuhammad/deploymate/internal/store"
+import (
+	"fmt"
+
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
 
 // GitInfo is the connected-repo data shown on the app page.
 type GitInfo struct {
@@ -10,6 +14,38 @@ type GitInfo struct {
 	PublicKey     string
 	WebhookPath   string
 	WebhookSecret string
+}
+
+// ReplicaView is one replica slot as the app page shows it.
+type ReplicaView struct {
+	Slot     int
+	Name     string
+	Status   string // healthy | unhealthy | '' (not yet probed)
+	DeployID string
+	OnTarget bool // runs the app's current (target) deployment
+}
+
+// ReplicasInfo is the app page's replicas panel: the desired count, the
+// slots actually recorded, and the aggregates behind the degraded/drift
+// notes.
+type ReplicasInfo struct {
+	Desired    int
+	Max        int
+	Slots      []ReplicaView
+	Healthy    int
+	OnTarget   int
+	Target     string // current_deployment_id — the rollout target
+	HealthPath string
+}
+
+// Degraded reports some-but-not-all replicas answering the probe.
+func (ri ReplicasInfo) Degraded() bool {
+	return len(ri.Slots) > 1 && ri.Healthy < len(ri.Slots)
+}
+
+// Drifted reports slots running different deployments (a halted rollout).
+func (ri ReplicasInfo) Drifted() bool {
+	return ri.Target != "" && ri.OnTarget < len(ri.Slots)
 }
 
 // statusDot renders a colored state dot followed by its text label. The label
@@ -116,12 +152,15 @@ templ AppHeadActions(vc ViewCtx, app store.App) {
 	</div>
 }
 
-templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string) {
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ app.Name }</h1>
 				@healthBadge(app.Health)
+				if replicas.Degraded() {
+					<span class="badge badge-accent">{ fmt.Sprintf("%d/%d replicas up", replicas.Healthy, len(replicas.Slots)) }</span>
+				}
 				@envBadge(app.Environment)
 				if healthReason != "" {
 					<p class="muted health-reason">{ healthReason }</p>
@@ -167,6 +206,8 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 			</table>
 			<p class="muted panel-hint">Works the moment the app is running — add a domain below for a real URL with TLS.</p>
 		</div>
+
+		@replicasPanel(vc, app, replicas)
 
 		<div class="panel">
 			<div class="panel-title">Domains</div>
@@ -387,7 +428,16 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 		</div>
 
 		<div class="panel">
-			<div class="panel-title">Logs</div>
+			<div class="panel-title">Logs
+				if len(replicas.Slots) > 1 {
+					<select class="log-filter" data-log-filter="logs" aria-label="Replica">
+						<option value="">all replicas</option>
+						for _, sl := range replicas.Slots {
+							<option value={ fmt.Sprintf("r%d", sl.Slot) }>{ fmt.Sprintf("r%d only", sl.Slot) }</option>
+						}
+					</select>
+				}
+			</div>
 			<div id="logs" class="log-panel" data-log-src={ "/apps/" + app.Slug + "/logs" }>
 				<span class="log-wait">connecting…</span>
 			</div>
@@ -430,7 +480,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 								<td>{ d.Kind }</td>
 								<td class="mono muted">{ shortTime(d.CreatedAt) }</td>
 								<td class="env-actions">
-									if d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" {
+									if d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" && d.Kind != "scale" {
 										<form method="post" action={ "/deployments/" + d.ID + "/rollback" }>
 											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 											<button class="btn btn-ghost btn-sm" type="submit">Rollback</button>
@@ -444,4 +494,67 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 			</div>
 		}
 	}
+}
+
+// replicasPanel shows the replica count control and each slot's state: its
+// probe verdict and which deployment it runs (drift is surfaced, not
+// hidden — a halted rollout leaves slots on different images).
+templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
+	<div class="panel">
+		<div class="panel-title">Replicas</div>
+		<form method="post" action={ "/apps/" + app.Slug + "/replicas" } class="deploy-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<label>Replicas
+				<input class="port-input" type="number" name="replicas" min="1" max={ fmt.Sprint(ri.Max) } value={ fmt.Sprint(ri.Desired) } required/>
+			</label>
+			<button class="btn btn-primary" type="submit">Scale</button>
+		</form>
+		if len(ri.Slots) > 0 {
+			<table class="deploy-table replica-table">
+				<thead>
+					<tr><th>Replica</th><th>Container</th><th>Health</th><th>Deployment</th></tr>
+				</thead>
+				<tbody>
+					for _, sl := range ri.Slots {
+						<tr>
+							<td class="mono">{ fmt.Sprintf("r%d", sl.Slot) }</td>
+							<td class="mono">{ sl.Name }</td>
+							<td>
+								switch sl.Status {
+									case "healthy":
+										<span class="badge badge-running">@statusDot("running", "healthy")</span>
+									case "unhealthy":
+										<span class="badge badge-failed">@statusDot("failed", "unhealthy")</span>
+									default:
+										<span class="muted">not probed yet</span>
+								}
+							</td>
+							<td class="mono">
+								if sl.DeployID == "" {
+									<span class="muted">—</span>
+								} else {
+									<a class="deploy-link" href={ templ.SafeURL("/deployments/" + sl.DeployID) }>{ shortDeployID(sl.DeployID) }</a>
+									if ri.Target != "" && !sl.OnTarget {
+										<span class="badge badge-accent">not current</span>
+									}
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		}
+		<p class="muted panel-hint">
+			if ri.Drifted() {
+				<strong>{ fmt.Sprintf("%d/%d replicas on the current deployment %s", ri.OnTarget, len(ri.Slots), shortDeployID(ri.Target)) }</strong> — a rollout halted part-way; redeploy or roll back to converge.<br/>
+			}
+			if ri.Desired != len(ri.Slots) && len(ri.Slots) > 0 {
+				{ fmt.Sprintf("%d desired, %d running — applied on the next deploy or scale.", ri.Desired, len(ri.Slots)) }<br/>
+			}
+			One address, up to { fmt.Sprint(ri.Max) } identical containers behind it: the load balancer skips replicas failing the health path <span class="mono">{ ri.HealthPath }</span>, and deploys roll one replica at a time so at least one always serves.
+			if app.MemLimitMB > 0 && ri.Desired > 1 {
+				Limits are per replica — total ask <span class="mono">{ fmt.Sprintf("%d MB · %s CPU", app.MemLimitMB*ri.Desired, fmtCPU(app.CPULimit*float64(ri.Desired))) }</span>.
+			}
+		</p>
+	</div>
 }

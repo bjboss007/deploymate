@@ -2,14 +2,17 @@ package httpserver
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/store"
@@ -39,17 +42,21 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 		return
 	}
 
-	// The app's container publishes its port on 127.0.0.1 only — reachable
-	// from this host process on Linux servers AND Docker Desktop, and never
-	// from the internet. The port resolves through the stored preview port
-	// (zero-downtime swaps flip it), falling back to the per-slug hash.
-	target, err := url.Parse("http://127.0.0.1:" + strconv.Itoa(appspec.ResolvedPreviewPort(app)))
+	// The app's containers publish their port on 127.0.0.1 only —
+	// reachable from this host process on Linux servers AND Docker
+	// Desktop, and never from the internet. With replicas this is the
+	// dashboard-side load balancer: one preview URL, round-robin over the
+	// slots (unhealthy ones last), failing over to the next slot on a dial
+	// error (see failoverTransport).
+	hosts := s.previewHosts(app)
+	target, err := url.Parse("http://" + hosts[0])
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
 
 	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.Transport = &failoverTransport{base: http.DefaultTransport, hosts: hosts}
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {
 		originalDirector(req)
@@ -69,11 +76,14 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 	}
 	// Apps that redirect with absolute URLs back to their loopback port
 	// (Spring Security logins, trailing-slash redirects) must stay inside
-	// the preview path.
-	loopbackPrefix := "http://127.0.0.1:" + strconv.Itoa(appspec.ResolvedPreviewPort(app))
+	// the preview path — whichever replica answered.
 	proxy.ModifyResponse = func(resp *http.Response) error {
-		if loc := resp.Header.Get("Location"); strings.HasPrefix(loc, loopbackPrefix) {
-			resp.Header.Set("Location", "/preview/"+app.Slug+strings.TrimPrefix(loc, loopbackPrefix))
+		loc := resp.Header.Get("Location")
+		for _, h := range hosts {
+			if loopbackPrefix := "http://" + h; strings.HasPrefix(loc, loopbackPrefix) {
+				resp.Header.Set("Location", "/preview/"+app.Slug+strings.TrimPrefix(loc, loopbackPrefix))
+				break
+			}
 		}
 		// SPAs emit absolute-path asset URLs (src="/assets/…", href="/…")
 		// that resolve to the dashboard root and 404 outside the preview
@@ -98,6 +108,78 @@ func (s *Server) proxyToApp(w http.ResponseWriter, r *http.Request, app store.Ap
 		return nil
 	}
 	proxy.ServeHTTP(w, r)
+}
+
+// previewHosts orders the app's replica loopback addresses for one request:
+// the start rotates per request (round-robin), slots the monitor last saw
+// unhealthy go to the back (skipped while any other slot is up, still tried
+// when every slot is down), and port-less slots are dropped.
+func (s *Server) previewHosts(app store.App) []string {
+	slots := s.appSlots(app)
+	v, _ := s.previewRR.LoadOrStore(app.ID, new(atomic.Uint64))
+	start := int(v.(*atomic.Uint64).Add(1)-1) % len(slots)
+	var healthy, sick []string
+	for i := range slots {
+		sl := slots[(start+i)%len(slots)]
+		if sl.HostPort <= 0 {
+			continue
+		}
+		h := "127.0.0.1:" + strconv.Itoa(sl.HostPort)
+		if sl.Status == "unhealthy" {
+			sick = append(sick, h)
+		} else {
+			healthy = append(healthy, h)
+		}
+	}
+	hosts := append(healthy, sick...)
+	if len(hosts) == 0 {
+		// No recorded port at all: the pre-replicas resolution.
+		hosts = []string{"127.0.0.1:" + strconv.Itoa(appspec.ResolvedPreviewPort(app))}
+	}
+	return hosts
+}
+
+// failoverTransport sends a proxied request to the first replica and, when
+// the connection cannot even be dialed (container restarting, killed,
+// between swaps), retries the next one. Only dial errors fail over — the
+// request never reached an app, so a retry cannot double-apply it — and a
+// request body is only replayed when it can be re-read.
+type failoverTransport struct {
+	base  http.RoundTripper
+	hosts []string
+}
+
+func (t *failoverTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	var lastErr error
+	for i, h := range t.hosts {
+		r := req
+		if i > 0 {
+			if req.Body != nil && req.Body != http.NoBody {
+				if req.GetBody == nil {
+					break // body already consumed; cannot replay safely
+				}
+				body, err := req.GetBody()
+				if err != nil {
+					break
+				}
+				r = req.Clone(req.Context())
+				r.Body = body
+			} else {
+				r = req.Clone(req.Context())
+			}
+		}
+		r.URL.Host, r.Host = h, h
+		resp, err := t.base.RoundTrip(r)
+		if err == nil {
+			return resp, nil
+		}
+		lastErr = err
+		var opErr *net.OpError
+		if !errors.As(err, &opErr) || opErr.Op != "dial" {
+			return nil, err
+		}
+	}
+	return nil, lastErr
 }
 
 // rewritePreviewURLs prefixes absolute-path src/href values with the

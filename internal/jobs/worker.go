@@ -105,6 +105,17 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 	w.publish(topic, "deploy", fmt.Sprintf("deployment %s started (%s)", shortID(d.ID), d.Kind))
 
 	switch d.Kind {
+	case "scale":
+		if err := w.runScale(ctx, app, d); err != nil {
+			w.fail(d, err)
+			w.publish(topic, "deploy", "failed: "+err.Error())
+			w.alerts.Notify(alerts.EventDeployFailed,
+				fmt.Sprintf("scale failed: %s", app.Name),
+				fmt.Sprintf("deployment %s: %s", shortID(d.ID), err.Error()))
+			return
+		}
+		w.publish(topic, "deploy", "scaled ✓")
+		return
 	case "rollback", "resize":
 		err = w.runRollback(ctx, app, d)
 	case "manual":
@@ -336,6 +347,7 @@ func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Dep
 
 // runRollback redeploys an existing image tag without building. Also
 // serves resize deployments: same swap, with the freshly detected limits.
+// Both roll every replica (a resize is a rollout — limits are per container).
 func (w *Worker) runRollback(ctx context.Context, app store.App, d store.Deployment) error {
 	if d.ImageTag == "" {
 		return errors.New("target has no image tag")
@@ -352,12 +364,19 @@ func (w *Worker) runRollback(ctx context.Context, app store.App, d store.Deploym
 	return w.finish(d, app.ID)
 }
 
-// runContainer starts the app's next container BESIDE the running one (a
-// staged name + its own loopback host port + its own Traefik router with a
-// higher priority) and swaps it in only after it passes the readiness
-// probe: probe → flip the stored preview port → remove the old container →
-// rename the staged one to the canonical name. A failed deploy leaves the
-// old container serving.
+// runContainer rolls the app's replicas onto a new image, slot by slot
+// (docs/specs/app-replicas.md). Each slot gets the same zero-downtime swap a
+// single-container app always had: start the next container BESIDE the
+// running one (a staged name + its own loopback host port + its own Traefik
+// router), probe it, record its port, remove the old container, rename the
+// staged one into the slot. A slot is never removed before its replacement
+// is healthy, so on N >= 2 at least N-1 replicas serve throughout; N = 1 is
+// exactly the pre-replicas swap.
+//
+// A failed slot halts the rollout: slots already replaced keep the new image,
+// the rest keep the old one (drift is visible per slot on the app page), and
+// the app keeps serving. Slots above the desired count are removed at the
+// end, so a deploy converges the replica set.
 func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deployment, imageTag string, extraEnv map[string]string) error {
 	if err := w.rt.EnsureNetwork(ctx, w.network); err != nil {
 		return err
@@ -368,54 +387,209 @@ func (w *Worker) runContainer(ctx context.Context, app store.App, d store.Deploy
 		port = 8080 // platform convention; railpack apps read $PORT
 		_ = w.store.UpdateAppPort(app.ID, port)
 	}
+	replicas := store.ClampReplicas(app.Replicas)
+	domains := w.appDomains(app)
+	// One priority for the whole deploy: every slot's router points at the
+	// same service, and this deploy's routers outrank the previous deploy's.
+	priority := time.Now().UnixNano()
+
+	for slot := 1; slot <= replicas; slot++ {
+		if replicas > 1 {
+			msg := fmt.Sprintf("replica %d/%d: rolling onto %s", slot, replicas, imageTag)
+			w.log(d, "system", msg)
+			w.publish("deploy:"+app.Slug, "log", msg)
+		}
+		err := w.swapSlot(ctx, app, slot, slotOptions{
+			image: imageTag, port: port, env: env, extraEnv: extraEnv,
+			deployID: d.ID, routerDeployID: d.ID, domains: domains, priority: priority,
+		})
+		if err != nil {
+			if errors.Is(err, swap.ErrStagedFailed) {
+				msg := "new container failed its health probe — the previous container is still serving"
+				if replicas > 1 {
+					msg = fmt.Sprintf("replica %d/%d failed its health probe — rollout halted; replicas before it run the new image, the rest keep serving the previous one", slot, replicas)
+				}
+				w.log(d, "system", msg)
+				w.publish("deploy:"+app.Slug, "log", msg)
+			}
+			return err
+		}
+	}
+	w.removeSlotsAbove(ctx, app, replicas)
+	return nil
+}
+
+// slotOptions is what differs between swapping a slot for a deploy and
+// adding one for a scale-up.
+type slotOptions struct {
+	image          string
+	port           int
+	env            []string
+	extraEnv       map[string]string
+	deployID       string // deploymate.deploy label + replica row: the deployment whose image runs
+	routerDeployID string // makes the router name unique (the deployment row doing the work)
+	domains        []string
+	priority       int64
+}
+
+// swapSlot starts a staged container for one slot and swaps it in
+// (swap.Swap: probe → record port → remove old → rename). The replica row is
+// written in OnFlip, before the old container goes away, so the preview
+// proxy never resolves a slot to a refused port.
+func (w *Worker) swapSlot(ctx context.Context, app store.App, slot int, o slotOptions) error {
 	// The staged container needs its OWN host port while the old one still
-	// publishes the canonical binding.
+	// publishes the slot's binding.
 	hostPort := 0
-	if port > 0 {
+	if o.port > 0 {
 		var err error
 		if hostPort, err = swap.ReserveLoopbackPort(); err != nil {
 			return err
 		}
 	}
 	spec := appspec.BuildSpec(app, appspec.Options{
-		Image:      imageTag,
-		Name:       appspec.StagedName(app.Slug, d.ID),
-		Port:       port,
+		Image:      o.image,
+		Name:       appspec.StagedSlotName(app.Slug, slot, o.routerDeployID),
+		Port:       o.port,
 		HostPort:   hostPort,
-		Env:        env,
-		ExtraEnv:   extraEnv,
-		DeployID:   d.ID,
+		Env:        o.env,
+		ExtraEnv:   o.extraEnv,
+		DeployID:   o.deployID,
 		Network:    w.network,
-		Domains:    w.appDomains(app),
-		RouterName: app.Slug + "-" + d.ID,
-		Priority:   time.Now().UnixNano(),
+		Domains:    o.domains,
+		RouterName: appspec.RouterName(app.Slug, slot, o.routerDeployID),
+		Priority:   o.priority,
 		LEResolver: proxy.ResolverForLEMode(w.leMode),
 		// Manual deploys/rollbacks/resizes inherit the stored overrides from
 		// the row; git apps always have empty columns (nil = image default).
 		Entrypoint: appspec.SplitArgs(app.Entrypoint),
 		Cmd:        appspec.SplitArgs(app.Command),
+		Slot:       slot,
 	})
-	slog.Info("worker: container spec", "app", app.Slug, "mem_limit_mb", app.MemLimitMB, "cpu", app.CPULimit, "kind", d.Kind)
+	slog.Info("worker: container spec", "app", app.Slug, "slot", slot, "mem_limit_mb", app.MemLimitMB, "cpu", app.CPULimit)
 	w.publish("deploy:"+app.Slug, "deploy", "starting staged container "+spec.Name)
 	if _, err := w.rt.Create(ctx, spec); err != nil {
 		return fmt.Errorf("create container: %w", err)
 	}
-	if err := swap.Swap(ctx, w.rt, appspec.CanonicalName(app.Slug), spec, swap.Options{
+	slotName := appspec.SlotName(app.Slug, slot)
+	return swap.Swap(ctx, w.rt, slotName, spec, swap.Options{
 		OnFlip: func(hostPort int) error {
-			return w.store.UpdateAppPreviewPort(app.ID, hostPort)
+			if slot == 1 {
+				// Dual-write for one release: a binary rollback resolves
+				// previews through apps.preview_host_port.
+				if err := w.store.UpdateAppPreviewPort(app.ID, hostPort); err != nil {
+					return err
+				}
+			}
+			return w.store.UpsertAppReplica(store.AppReplica{
+				AppID: app.ID, Slot: slot, ContainerName: slotName, HostPort: hostPort, DeployID: o.deployID,
+			})
 		},
 		ProbeURL:      w.probeURL,
 		ProbeAttempts: w.probeAttempts,
 		ProbeInterval: w.probeInterval,
-	}); err != nil {
-		if errors.Is(err, swap.ErrStagedFailed) {
-			msg := "new container failed its health probe — the previous container is still serving"
-			w.log(d, "system", msg)
-			w.publish("deploy:"+app.Slug, "log", msg)
+	})
+}
+
+// removeSlotsAbove stops and removes every slot container above keep and
+// drops their replica rows. Best-effort per container: a container that is
+// already gone is the desired state.
+func (w *Worker) removeSlotsAbove(ctx context.Context, app store.App, keep int) {
+	for slot := keep + 1; slot <= store.MaxReplicas; slot++ {
+		name := appspec.SlotName(app.Slug, slot)
+		_ = w.rt.Stop(ctx, name, 10)
+		if err := w.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+			slog.Warn("worker: remove extra replica", "app", app.Slug, "container", name, "err", err)
 		}
+	}
+	if err := w.store.DeleteAppReplicasAbove(app.ID, keep); err != nil {
+		slog.Error("worker: delete replica rows", "app", app.Slug, "err", err)
+	}
+}
+
+// runScale converges the running replica set to apps.replicas WITHOUT a
+// build or a new image: missing slots start from the current deployment's
+// image (d.ImageTag, copied from it at queue time) with the app row's
+// current env/limits; slots above the count are stopped and removed. Slot 1
+// is never touched. Documented skew: if the app's env changed since the
+// current deployment, new slots boot with the newer env — a redeploy
+// converges.
+func (w *Worker) runScale(ctx context.Context, app store.App, d store.Deployment) error {
+	target := store.ClampReplicas(app.Replicas)
+	if d.ImageTag == "" {
+		return errors.New("no current image to scale — deploy the app first")
+	}
+	if err := w.rt.EnsureNetwork(ctx, w.network); err != nil {
 		return err
 	}
-	return nil
+	rows, err := w.store.ListAppReplicas(app.ID)
+	if err != nil {
+		return fmt.Errorf("list replicas: %w", err)
+	}
+	// An app deployed before replicas has no rows; record its canonical
+	// container as slot 1 so the preview proxy and monitor see the whole set.
+	if len(rows) == 0 {
+		s1 := appspec.Slots(app, nil)[0]
+		if err := w.store.UpsertAppReplica(store.AppReplica{
+			AppID: app.ID, Slot: 1, ContainerName: s1.Name, HostPort: s1.HostPort, DeployID: app.CurrentDeploymentID,
+		}); err != nil {
+			return fmt.Errorf("record slot 1: %w", err)
+		}
+	}
+	have := map[int]bool{}
+	for _, r := range rows {
+		if info, err := w.rt.Inspect(ctx, r.ContainerName); err == nil && info.Running {
+			have[r.Slot] = true
+		}
+	}
+
+	port := app.Port
+	if port == 0 {
+		port = 8080
+	}
+	var extraEnv map[string]string
+	if app.CurrentDeploymentID != "" {
+		if cur, err := w.store.GetDeployment(app.CurrentDeploymentID); err == nil && cur.CommitSHA != "" {
+			extraEnv = map[string]string{"GIT_SHA": cur.CommitSHA}
+		}
+	}
+	env := w.buildEnv(app)
+	domains := w.appDomains(app)
+	added := 0
+	for slot := 2; slot <= target; slot++ {
+		if have[slot] {
+			continue
+		}
+		msg := fmt.Sprintf("replica %d/%d: starting from %s", slot, target, d.ImageTag)
+		w.log(d, "system", msg)
+		w.publish("deploy:"+app.Slug, "log", msg)
+		// Priority 0: a scale slot joins the current deploy's shared service
+		// and never outranks its routers.
+		if err := w.swapSlot(ctx, app, slot, slotOptions{
+			image: d.ImageTag, port: port, env: env, extraEnv: extraEnv,
+			deployID: app.CurrentDeploymentID, routerDeployID: d.ID, domains: domains,
+		}); err != nil {
+			if errors.Is(err, swap.ErrStagedFailed) {
+				w.log(d, "system", fmt.Sprintf("replica %d failed its health probe — removed; the running replicas are untouched", slot))
+			}
+			return err
+		}
+		added++
+	}
+	removed := 0
+	for _, r := range rows {
+		if r.Slot > target {
+			removed++
+		}
+	}
+	w.removeSlotsAbove(ctx, app, target)
+	w.log(d, "system", fmt.Sprintf("scaled to %d replica(s): %d started, %d removed", target, added, removed))
+
+	d.Status = "running"
+	d.Error = ""
+	d.FinishedAt = store.Now()
+	// A scale is not a release: current_deployment_id keeps pointing at the
+	// deployment whose image the replicas run.
+	return w.store.UpdateDeployment(d)
 }
 
 // appDomains returns the app's routed hostnames for the Traefik labels.
@@ -484,14 +658,25 @@ func (w *Worker) fail(d store.Deployment, err error) {
 		slog.Error("worker: mark failed", "err", uerr)
 	}
 	if app, aerr := w.store.GetAppByID(d.AppID); aerr == nil {
-		// With zero-downtime swaps the old container usually keeps serving
-		// after a failed deploy — only mark the APP failed when nothing is
+		// With zero-downtime swaps the old containers usually keep serving
+		// after a failed deploy — only mark the APP failed when no replica is
 		// running for it.
-		if info, ierr := w.rt.Inspect(context.Background(), appspec.CanonicalName(app.Slug)); ierr != nil || !info.Running {
+		if !w.anySlotRunning(app) {
 			_ = w.store.UpdateAppStatus(app.ID, "failed")
 		}
 	}
 	slog.Error("worker: deployment failed", "deployment", d.ID, "err", err)
+}
+
+// anySlotRunning reports whether at least one of the app's replicas runs.
+func (w *Worker) anySlotRunning(app store.App) bool {
+	rows, _ := w.store.ListAppReplicas(app.ID)
+	for _, sl := range appspec.Slots(app, rows) {
+		if info, err := w.rt.Inspect(context.Background(), sl.Name); err == nil && info.Running {
+			return true
+		}
+	}
+	return false
 }
 
 func (w *Worker) log(d store.Deployment, stream, line string) {

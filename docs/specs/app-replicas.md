@@ -1,10 +1,10 @@
 # App replicas + load balancing — specification
 
-**Status:** design (Sep 2026) — decisions locked with the owner, went
-through one adversarial review pass (critique folded in below), **not
-implemented**. Two Traefik semantics questions are **blocking spikes** —
-the design's LB mechanism cannot be verified on macOS dev and must be
-proven on Linux before the rest is built. Backlog: "App replicas
+**Status:** **implemented 2026-09-30** (ADR 0018). Decisions locked with
+the owner, one adversarial review pass, and the two blocking Traefik
+spikes were run first — their results changed the label scheme and a few
+mechanics; see **Spike results** and **As built** at the end. Where this
+document and ADR 0018 disagree, the ADR wins. Backlog: "App replicas
 (horizontal scaling)" in `docs/improvements.md`. Related:
 `docs/knowledge/architecture.md`, `internal/appspec`, `internal/proxy`,
 `internal/swap`.
@@ -254,3 +254,69 @@ server run owns it.
 - Graceful connection drain on slot removal (pre-existing: the N=1 swap
   force-removes after flip; replicas multiply the surface but don't
   introduce it — revisit per follow-ups).
+
+## Spike results (2026-09-30)
+
+Run against **Traefik v3.3** (the `deploy/bootstrap.sh` pin) with the
+docker provider. Docker Desktop *can* host this after all: mounting the
+VM path `-v /var/run/docker.sock:/var/run/docker.sock` works (only the
+host-side `~/.docker/run/docker.sock` path cannot be mounted — the
+dev-environment.md limitation). Test servers: `traefik/whoami` (echoes
+its hostname; `POST /health` flips its health status) and `nginx:alpine`.
+
+1. **Merge semantics.**
+   - (a) N containers with **identical** router + service labels → one
+     router, one service with N servers, round-robin (10/10 over 20).
+   - (b) Two containers defining the **same router name with a different
+     rule** (a domain edited mid-rollout) → Traefik **drops the router;
+     every request 404s.**
+   - (c) Slot-1-owns-router fallback → works, but each service-only
+     container gets an auto-generated router `Host(<container-name>)`.
+   - (d) **Same service name, different healthcheck path** → the service
+     is **dropped; every request 404s.** Service labels must be
+     byte-identical wherever a name is shared.
+   - (e) **Adopted scheme:** unique router per container + explicit
+     `.service=` pointing at a config-hash service name: identical config
+     merges (one service, all servers); a domain change on the newest
+     router coexists (both hosts served, no conflict); a config change
+     yields a second service and the newest (highest-priority) router
+     wins — the single-container blue/green behavior.
+2. **Healthcheck behavior.**
+   - (a) A new server is **UP immediately** and receives its share of
+     traffic until its first failed check (nginx failing `/missing`:
+     served every other request for ~10s, then `DOWN` and ejected).
+   - (b) **All servers down → 503**; one recovering → back to 200 within
+     one interval, automatically.
+   - (c) Identical healthcheck labels across containers merge cleanly;
+     differing ones → see 1(d).
+
+## As built (deviations from the design above)
+
+- **Label scheme:** spike 1(e), not the shared router or the slot-1
+  fallback (ADR 0018 §1).
+- **Slot names:** slot 1 stays `dm-{slug}` (no rename of any existing
+  container); extra slots `dm-{slug}-r{n}`; staged
+  `dm-{slug}-r{n}-{deployID}` (slot 1 keeps `dm-{slug}-{deployID}`).
+- **Ports:** OS-reserved per swap (`swap.ReserveLoopbackPort`, which
+  every swap already used) and stored in `app_replicas.host_port`; no
+  hash/linear-probe allocator. `preview_host_port` dual-written with
+  slot 1's port.
+- **Swap:** one `swap.Swap` per slot, looped — no separate N≥2 path, so
+  the "unify the N=1 and N≥2 swap paths" debt does not exist.
+- **Scale rows** record the *current* deployment as each new slot's
+  `deploy_id` (no false drift) and leave `current_deployment_id` alone;
+  they are excluded from build stats and cannot be rolled back to.
+- **Drift badge** says "not current" rather than "older image": after a
+  halted rollout the replaced slots run a *newer* deployment than the
+  target.
+- **Metrics/resource detection/restart alerts** still read slot 1 only
+  (backlogged).
+- **Logs:** the panel resolves the slot set when it connects — reload
+  after scaling.
+- **Verification:** unit tests per the list above; `make e2e-replicas`
+  (throwaway server) covers scale 1→2→3→1 + `scale` rows, the label
+  contract on both slots, `/preview` round-robin, stopped-slot failover
+  (8/8 200s) + monitor heal, merged/filtered logs, a rolling redeploy at
+  N=2 under preview load with **0 failed requests**, cap rejection, and
+  delete removing every slot. Real-Traefik LB behavior is covered by the
+  spikes above, not the e2e.

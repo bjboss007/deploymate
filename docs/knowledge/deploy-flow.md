@@ -36,8 +36,12 @@ every build line with sequence numbers.
    Every line → `build_logs` + SSE topic `deploy:<slug>` (the deployment
    page replays history on connect, so a reload loses nothing).
 4. **Record** — deployment gets `image_tag`; an `images` row is created.
-5. **Swap** — stop + remove `dm-<slug>`, create + start a new container
-   with:
+5. **Swap** — per replica slot, in order (1 = `dm-<slug>`, then
+   `dm-<slug>-r2…r5`): stage a new container beside the slot's old one,
+   probe it, record its port in `app_replicas`, remove the old one, and
+   rename the staged one into the slot. A failed slot halts the rollout
+   (earlier slots keep the new image — drift shows per slot). Slots above
+   `apps.replicas` are removed at the end. Each new container gets:
    - env = service connection URLs from the app's **environment** only
      (0003/0010/0017) + app env vars (decrypted) + `GIT_SHA`;
    - labels = ownership + Traefik routing (if domains exist);
@@ -56,6 +60,34 @@ serial worker) and the swap runs.
 **Failure** anywhere → deployment `failed` + `error`, app `failed`. The
 previous container is untouched — a failed build never takes a running
 app down.
+
+## Replicas (1–5 per app)
+
+ADR 0018, spec `docs/specs/app-replicas.md`. `apps.replicas` is the
+desired slot count; `app_replicas` records each running slot (container,
+loopback port, last probe verdict, deployment it runs). An app with no
+rows (not redeployed since replicas shipped) resolves to one synthetic
+slot 1 — `appspec.Slots` is the single resolver every reader uses.
+
+- **Scale** (`POST /apps/{slug}/replicas`, 1–5): a running deployed app
+  queues a no-build `kind=scale` deployment — missing slots start from the
+  current deployment's image, extra slots are stopped and removed; slot 1
+  and `current_deployment_id` are never touched. Otherwise the count is
+  just recorded and the next deploy converges.
+- **Deploy/rollback/resize** roll every slot, one at a time (≥ N-1 serve
+  throughout; N = 1 is the old swap exactly).
+- **Routing:** the dashboard `/preview` and public-subdomain proxy
+  round-robins over the slots, skips ones the monitor marked unhealthy
+  (unless all are), and fails over on dial errors. Under Traefik each
+  container owns a router pointing at a shared config-hash service with an
+  active healthcheck on `apps.health_path`.
+- **Health:** the monitor probes every slot at `health_path`; the app is
+  healthy when any slot answers (the page shows "2/3 replicas up").
+  Per-slot heal (start, rebind, or recreate a vanished extra slot from
+  slot 1's image) never runs while a deployment is queued/building.
+- **Lifecycle:** start/stop/restart/delete fan out to every slot.
+- **Logs:** one SSE merging every slot with `[rN]` prefixes;
+  `?replica=r2` (the panel's filter) narrows to one slot.
 
 ## Manual (image) deploys
 

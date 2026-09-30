@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
@@ -159,5 +160,65 @@ func TestResolvedPreviewPort(t *testing.T) {
 	app.PreviewHostPort = 27123
 	if got := ResolvedPreviewPort(app); got != 27123 {
 		t.Fatalf("stored port = %d, want 27123", got)
+	}
+}
+
+// TestSlotNaming: slot 1 keeps the pre-replicas names (so single-replica
+// apps and existing containers need no rename); extra slots get -r{n}.
+// Router names are unique per container.
+func TestSlotNaming(t *testing.T) {
+	cases := []struct{ got, want string }{
+		{SlotName("web", 1), "dm-web"},
+		{SlotName("web", 3), "dm-web-r3"},
+		{StagedSlotName("web", 1, "d1"), StagedName("web", "d1")},
+		{StagedSlotName("web", 2, "d1"), "dm-web-r2-d1"},
+		{RouterName("web", 1, "d1"), "web-d1"},
+		{RouterName("web", 2, "d1"), "web-d1-r2"},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Errorf("got %q, want %q", c.got, c.want)
+		}
+	}
+}
+
+// TestSlotsFallback: an app with no replica rows resolves to one synthetic
+// slot 1 on its resolved preview port; recorded rows win otherwise.
+func TestSlotsFallback(t *testing.T) {
+	app := store.App{Slug: "web", PreviewHostPort: 24567}
+	s := Slots(app, nil)
+	if len(s) != 1 || s[0].Slot != 1 || s[0].Name != "dm-web" || s[0].HostPort != 24567 {
+		t.Fatalf("fallback = %+v", s)
+	}
+	rows := []store.AppReplica{
+		{Slot: 1, ContainerName: "dm-web", HostPort: 1111, Status: "healthy", DeployID: "d"},
+		{Slot: 2, ContainerName: "dm-web-r2", HostPort: 2222, Status: "unhealthy", DeployID: "d"},
+	}
+	s = Slots(app, rows)
+	if len(s) != 2 || s[1].Name != "dm-web-r2" || s[1].HostPort != 2222 || s[1].Status != "unhealthy" {
+		t.Errorf("rows = %+v", s)
+	}
+}
+
+// TestBuildSpecSlotAndHealthcheck: the slot label is recorded and the
+// Traefik healthcheck path comes from the app row (default "/").
+func TestBuildSpecSlotAndHealthcheck(t *testing.T) {
+	app := store.App{Slug: "api", HealthPath: "/healthz"}
+	spec := BuildSpec(app, Options{
+		Image: "api:1", Name: "dm-api-r2", Port: 8080, Slot: 2,
+		Domains: []string{"api.example.com"}, RouterName: RouterName("api", 2, "d1"),
+	})
+	if spec.Labels["deploymate.slot"] != "2" {
+		t.Errorf("slot label = %q", spec.Labels["deploymate.slot"])
+	}
+	svc := proxy.ServiceName("api", 8080, "/healthz")
+	if spec.Labels["traefik.http.services."+svc+".loadbalancer.healthcheck.path"] != "/healthz" {
+		t.Errorf("healthcheck label missing: %v", spec.Labels)
+	}
+	if spec.Labels["traefik.http.routers.api-d1-r2.service"] != svc {
+		t.Errorf("router must target the shared service: %v", spec.Labels)
+	}
+	if HealthPath(store.App{}) != "/" {
+		t.Error("empty health path must default to /")
 	}
 }

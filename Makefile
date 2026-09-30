@@ -2,7 +2,7 @@ GO      ?= go
 BIN     := bin/deploymate
 TEMPL   := $(shell go env GOPATH)/bin/templ
 
-.PHONY: build gen dev test vet e2e e2e-backup clean
+.PHONY: build gen dev test vet e2e e2e-backup e2e-replicas clean
 
 build: gen
 	$(GO) build -o $(BIN) ./cmd/deploymate
@@ -57,6 +57,11 @@ e2e-dns:
 # run anytime.
 e2e-backup:
 	./testdata/e2e_backup.sh
+
+# App replicas: scale, shared Traefik labels, /preview LB + failover, heal,
+# merged logs, zero-failure rolling deploy — on a throwaway server (:18096).
+e2e-replicas:
+	./testdata/e2e_replicas.sh
 
 clean:
 	rm -rf bin data

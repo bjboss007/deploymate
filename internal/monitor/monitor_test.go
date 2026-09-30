@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
@@ -70,14 +71,14 @@ func newTestMonitor(t *testing.T) (*Monitor, *store.Store, store.App) {
 	// preview port for the test slug could be occupied by a real
 	// container on this host, which would make the probe succeed and
 	// the heal path never run.
-	m.probeURLFn = func(string) string { return "http://127.0.0.1:1/" }
+	m.probeURLFn = func(string, int) string { return "http://127.0.0.1:1/" }
 	return m, st, app
 }
 
 func TestAutoHealBindinglessContainer(t *testing.T) {
 	m, st, app := newTestMonitor(t)
 	calls := 0
-	m.SetHealer(func(ctx context.Context, a store.App) (bool, error) {
+	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (bool, error) {
 		calls++
 		return true, nil
 	})
@@ -123,7 +124,7 @@ func TestAutoHealSkipsWhenHealSucceedsWithoutRecreate(t *testing.T) {
 	// Heal reports "no recreation needed" (container bound but broken):
 	// the app must fall through to ordinary fail accounting, not flip
 	// healthy.
-	m.SetHealer(func(ctx context.Context, a store.App) (bool, error) {
+	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (bool, error) {
 		return false, nil
 	})
 	m.probeAppHealth(context.Background(), app)
@@ -140,7 +141,7 @@ func TestAutoHealSkipsWhenHealSucceedsWithoutRecreate(t *testing.T) {
 func TestAutoHealFailureIsLoggedAndRateLimited(t *testing.T) {
 	m, st, app := newTestMonitor(t)
 	calls := 0
-	m.SetHealer(func(ctx context.Context, a store.App) (bool, error) {
+	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (bool, error) {
 		calls++
 		return false, errors.New("docker unavailable")
 	})

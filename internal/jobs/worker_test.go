@@ -30,6 +30,19 @@ type fakeRT struct {
 	has     bool                                          // HasImage result
 	info    runtime.Info
 	infoErr error
+	ops     []string // start/stop/remove/rename calls in order (rollout ordering)
+}
+
+func (f *fakeRT) op(s string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ops = append(f.ops, s)
+}
+
+func (f *fakeRT) opLog() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.ops...)
 }
 
 func (f *fakeRT) EnsureNetwork(context.Context, string) error { return nil }
@@ -53,10 +66,10 @@ func (f *fakeRT) Create(_ context.Context, spec runtime.Spec) (string, error) {
 	f.created = append(f.created, spec)
 	return "cid", nil
 }
-func (f *fakeRT) Start(context.Context, string) error          { return nil }
-func (f *fakeRT) Stop(context.Context, string, int) error      { return nil }
-func (f *fakeRT) Remove(context.Context, string) error         { return nil }
-func (f *fakeRT) Rename(context.Context, string, string) error { return nil }
+func (f *fakeRT) Start(_ context.Context, n string) error     { f.op("start " + n); return nil }
+func (f *fakeRT) Stop(_ context.Context, n string, _ int) error { f.op("stop " + n); return nil }
+func (f *fakeRT) Remove(_ context.Context, n string) error    { f.op("remove " + n); return nil }
+func (f *fakeRT) Rename(_ context.Context, a, b string) error { f.op("rename " + a + " " + b); return nil }
 func (f *fakeRT) Inspect(context.Context, string) (runtime.Info, error) {
 	return f.info, f.infoErr
 }

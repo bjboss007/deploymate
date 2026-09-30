@@ -4,9 +4,12 @@ import (
 	"bytes"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/docker/docker/pkg/stdcopy"
+
+	"github.com/habibmuhammad/deploymate/internal/sse"
 )
 
 // TestWriteContainerLogs verifies the shared demux helper splits a docker
@@ -24,7 +27,12 @@ func TestWriteContainerLogs(t *testing.T) {
 	}
 
 	rec := httptest.NewRecorder()
-	writeContainerLogs(rec, &raw)
+	var mu sync.Mutex
+	writeContainerLogs(func(line string) {
+		mu.Lock()
+		defer mu.Unlock()
+		_ = sse.WriteEvent(rec, sse.Event{Name: "log", Data: line})
+	}, &raw)
 
 	body := rec.Body.String()
 	if !strings.Contains(body, "data: listening on :8080") {

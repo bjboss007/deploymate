@@ -19,6 +19,8 @@ const (
 	EventHealthUnhealthy = "health_unhealthy"
 	EventHealthRecovered = "health_recovered"
 	EventAppHealed       = "app_healed"
+	// EventAppScaled records a replica-count change (docs/specs/app-replicas.md).
+	EventAppScaled = "app_scaled"
 	EventResourceUpdate  = "resource_update"
 	EventResourceResized = "resource_resized"
 	EventEnvChanged      = "env_changed"

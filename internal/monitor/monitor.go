@@ -54,16 +54,16 @@ type Monitor struct {
 	http   *http.Client
 	// heal recreates a bindingless app container from its spec; wired by
 	// the server via SetHealer so the recreate matches a deploy exactly.
-	heal func(ctx context.Context, app store.App) (bool, error)
+	heal func(ctx context.Context, app store.App, slot appspec.Slot) (bool, error)
 	// probeURLFn overrides the loopback probe target per slug; tests use
 	// it to point at a port that is always closed (the default preview
 	// port can be occupied by a real container on the host).
-	probeURLFn func(slug string) string
+	probeURLFn func(slug string, slot int) string
 
 	mu             sync.Mutex
 	uptimeState    map[string]bool   // domainID -> last probe ok
 	healthFails    map[string]int    // appID -> consecutive failed probes
-	lastHeal       map[string]time.Time // appID -> last auto-heal attempt
+	lastHeal       map[string]time.Time // healKey(appID, slot) -> last auto-heal attempt
 	restartSeen    map[string]int    // appID -> last RestartCount
 	restartAlertAt map[string]time.Time
 	lastResize     map[string]time.Time
@@ -92,23 +92,23 @@ func New(st *store.Store, rt runtime.Runtime, a *alerts.Dispatcher) *Monitor {
 
 // SetHealer wires the app heal callback used to recreate bindingless
 // containers; called once at startup before Run.
-func (m *Monitor) SetHealer(fn func(ctx context.Context, app store.App) (bool, error)) {
+func (m *Monitor) SetHealer(fn func(ctx context.Context, app store.App, slot appspec.Slot) (bool, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.heal = fn
 }
 
-// healDue reports whether an auto-heal attempt is allowed and reserves
-// one: attempts are stamped so a heal that cannot succeed (e.g. docker is
+// healDue reports whether an auto-heal attempt is allowed for key (an app,
+// or one of its replicas — see healKey) and reserves one: attempts are stamped so a heal that cannot succeed (e.g. docker is
 // mid-restart) retries at most once per healCooldown instead of every
 // probe tick.
-func (m *Monitor) healDue(appID string) bool {
+func (m *Monitor) healDue(key string) bool {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if last, ok := m.lastHeal[appID]; ok && time.Since(last) < healCooldown {
+	if last, ok := m.lastHeal[key]; ok && time.Since(last) < healCooldown {
 		return false
 	}
-	m.lastHeal[appID] = time.Now()
+	m.lastHeal[key] = time.Now()
 	return true
 }
 
@@ -318,43 +318,100 @@ func (m *Monitor) probeAll(ctx context.Context) {
 	}
 }
 
-// probeAppHealth probes every running app with a port over its loopback
-// preview binding, maintaining apps.health with hysteresis and alerting
-// on unhealthy/recovered transitions.
+// probeAppHealth probes every replica of a running app over its loopback
+// preview binding at the app's health path, records each slot's verdict
+// (the preview proxy skips unhealthy slots), and maintains apps.health with
+// hysteresis: the app is up when ANY replica answers (replicas spec,
+// decision 1). Degraded replicas show as a ratio on the app page.
 func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 	if app.Status != "running" || app.Port <= 0 {
 		return
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/", appspec.ResolvedPreviewPort(app))
-	if m.probeURLFn != nil {
-		url = m.probeURLFn(app.Slug)
+	rows, err := m.store.ListAppReplicas(app.ID)
+	if err != nil {
+		slog.Error("monitor: list replicas", "app", app.Slug, "err", err)
+		return
 	}
-	resp, err := m.http.Get(url)
-	ok := err == nil && resp != nil && resp.StatusCode < 500
-	if resp != nil {
-		resp.Body.Close()
+	// Heal/rollout mutex: mid-rollout a "down" slot is being replaced on
+	// purpose; healing it would fight the rollout (duplicate containers,
+	// churn). Heal resumes once the deployment is terminal.
+	rolling, err := m.store.HasActiveDeployment(app.ID)
+	if err != nil {
+		slog.Error("monitor: active deployment check", "app", app.Slug, "err", err)
+		rolling = true // fail safe: never heal on an unknown rollout state
 	}
 
-	// Auto-heal: a running app whose container lost its preview port
-	// binding (leftovers from old binaries, manual docker runs) fails
-	// every probe until the container is recreated. Delegate to the
-	// server's spec builder so the recreate matches a deploy exactly;
-	// the heal reports whether a recreation actually happened.
-	if !ok && m.heal != nil && m.healDue(app.ID) {
-		healed, healErr := m.heal(ctx, app)
-		if healErr != nil {
-			slog.Warn("monitor: auto-heal failed", "app", app.Slug, "err", healErr)
-		} else if healed {
-			m.setHealth(app.ID, "healthy")
-			m.recordEvent(app.ID, store.EventAppHealed,
-				"recreated container missing its preview port binding")
-			m.alerts.Notify(alerts.EventAppRecovered,
-				fmt.Sprintf("app auto-healed: %s", app.Name),
-				fmt.Sprintf("recreated %s's container to restore its preview port binding", app.Name))
-			return
+	slots := appspec.Slots(app, rows)
+	anyOK, healedAny := false, false
+	for _, sl := range slots {
+		url := fmt.Sprintf("http://127.0.0.1:%d%s", sl.HostPort, appspec.HealthPath(app))
+		if m.probeURLFn != nil {
+			url = m.probeURLFn(app.Slug, sl.Slot)
 		}
-	}
+		resp, err := m.http.Get(url)
+		ok := err == nil && resp != nil && resp.StatusCode < 500
+		if resp != nil {
+			resp.Body.Close()
+		}
 
+		// Auto-heal: a replica whose container lost its preview port binding
+		// (leftovers from old binaries, manual docker runs) or stopped
+		// fails every probe until it is restarted/recreated. Delegate to
+		// the server's spec builder so the recreate matches a deploy
+		// exactly; the heal reports whether a recreation happened.
+		if !ok && !rolling && m.heal != nil && m.healDue(healKey(app.ID, sl.Slot)) {
+			healed, healErr := m.heal(ctx, app, sl)
+			if healErr != nil {
+				slog.Warn("monitor: auto-heal failed", "app", app.Slug, "slot", sl.Slot, "err", healErr)
+			} else if healed {
+				ok, healedAny = true, true
+				what := "recreated container missing its preview port binding"
+				if len(slots) > 1 {
+					what = fmt.Sprintf("replica %d: %s", sl.Slot, what)
+				}
+				m.recordEvent(app.ID, store.EventAppHealed, what)
+				m.alerts.Notify(alerts.EventAppRecovered,
+					fmt.Sprintf("app auto-healed: %s", app.Name),
+					fmt.Sprintf("%s: %s", app.Name, what))
+			}
+		}
+		if len(rows) > 0 {
+			status := "unhealthy"
+			if ok {
+				status = "healthy"
+			}
+			if sl.Status != status {
+				if err := m.store.SetAppReplicaStatus(app.ID, sl.Slot, status); err != nil {
+					slog.Error("monitor: set replica status", "app", app.Slug, "slot", sl.Slot, "err", err)
+				}
+			}
+		}
+		anyOK = anyOK || ok
+	}
+	if healedAny {
+		// A fresh container with its binding — declare healthy now (the
+		// deploy/start convention); the probes correct within 90s.
+		m.mu.Lock()
+		delete(m.healthFails, app.ID)
+		m.mu.Unlock()
+		m.setHealth(app.ID, "healthy")
+		return
+	}
+	m.recordAppHealth(app, anyOK)
+}
+
+// healKey scopes the heal cooldown per replica: a sick slot 2 must not use
+// up slot 3's heal attempt. Slot 1 keeps the bare app ID.
+func healKey(appID string, slot int) string {
+	if slot <= 1 {
+		return appID
+	}
+	return fmt.Sprintf("%s#%d", appID, slot)
+}
+
+// recordAppHealth applies the app-level hysteresis to the aggregated
+// (any-replica-up) probe result and alerts on transitions.
+func (m *Monitor) recordAppHealth(app store.App, ok bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if ok {

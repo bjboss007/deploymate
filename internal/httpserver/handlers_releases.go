@@ -69,7 +69,7 @@ func (s *Server) handleAppReleases(w http.ResponseWriter, r *http.Request) {
 			Duration:      deployDuration(d.StartedAt, d.FinishedAt),
 			CommitURL:     url,
 			Current:       d.ID == app.CurrentDeploymentID,
-			Rollbackable:  d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback",
+			Rollbackable:  d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" && d.Kind != "scale",
 		})
 	}
 
