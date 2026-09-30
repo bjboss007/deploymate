@@ -380,6 +380,27 @@ change.
   metrics vs proxy counters), cold-start latency budget, interaction
   with the monitor's auto-heal (a scaled-to-zero app must not be
   "healed" back up), and RAM headroom on small (4 GB) hosts.
+- [ ] **Off-box builds for small servers** (from the `testing` app OOM,
+  2026-09-30) — a JVM build (Gradle daemon 2 GiB heap + compilers +
+  BuildKit ≈ 2.5–3 GB peak) cannot run on a 2–4 GB server, while the
+  same app *runs* in ~0.3–0.6 GB. Split build from run. Approach is being
+  designed (ranked options, not yet decided):
+  - **Registry credentials** — per-project token (GHCR/Docker Hub),
+    encrypted at rest, used by `PullImage` (today `PullOptions{}`: public
+    or already-local images only).
+  - **Image deploy hook** — signed `POST /hooks/image/{id}` with the new
+    tag, queuing the same zero-downtime, replica-aware manual deploy; lets
+    CI (GitHub Actions: build JAR → JRE image → push) drive deploys.
+  - **Remote builder** — point `BUILDKIT_HOST` (railpack) / a buildx
+    remote driver at a bigger machine's buildkitd over mTLS; the image
+    streams back into the server's `docker load`. No workflow change for
+    the user.
+  - **Per-app build env** — pass e.g. `GRADLE_OPTS`/`NODE_OPTIONS` into
+    builds (railpack `--env`/buildx `--build-arg`) to cap on-box build
+    memory.
+  - **Build memory preflight** — estimate free memory before a build
+    (host total − running containers) and fail/queue fast with advice
+    instead of letting the OOM killer decide.
 - [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
   (BuildKit registry cache) so rebuilds across deploys are faster than
   cold.
