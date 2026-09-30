@@ -383,8 +383,20 @@ change.
 - [ ] **Off-box builds for small servers** (from the `testing` app OOM,
   2026-09-30) — a JVM build (Gradle daemon 2 GiB heap + compilers +
   BuildKit ≈ 2.5–3 GB peak) cannot run on a 2–4 GB server, while the
-  same app *runs* in ~0.3–0.6 GB. Split build from run. Approach is being
-  designed (ranked options, not yet decided):
+  same app *runs* in ~0.3–0.6 GB. Split build from run. **Owner
+  constraints (2026-09-30): no builder machine, no container registry.**
+  **Proposed direction — prebuilt artifact deploys:** GitHub Actions builds
+  only the JAR (`upload-artifact`); GitHub's `workflow_run: completed`
+  event arrives on the app's EXISTING webhook; DeployMate downloads the
+  artifact via the GitHub API (per-source fine-grained token, Actions:
+  read, encrypted), wraps it into a local image (`eclipse-temurin:21-jre`
+  + COPY — seconds, ~100 MB RAM, no registry), and runs the usual
+  zero-downtime replica-aware rollout. Pull-based, so Cloudflare's 100 MB
+  request-body cap on the tunnel never applies. App gets a build mode
+  "Prebuilt artifact (GitHub Actions)" + a generated workflow file; Java
+  JARs first, templates for Node dist / Go binaries later. Spec pending
+  owner go-ahead. The registry/remote-builder options below stay recorded
+  but are parked under those constraints:
   - **Registry credentials** — per-project token (GHCR/Docker Hub),
     encrypted at rest, used by `PullImage` (today `PullOptions{}`: public
     or already-local images only).
