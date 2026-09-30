@@ -54,7 +54,8 @@ type Monitor struct {
 	http   *http.Client
 	// heal recreates a bindingless app container from its spec; wired by
 	// the server via SetHealer so the recreate matches a deploy exactly.
-	heal func(ctx context.Context, app store.App, slot appspec.Slot) (bool, error)
+	// It returns what it did ("" = nothing was needed).
+	heal func(ctx context.Context, app store.App, slot appspec.Slot) (string, error)
 	// probeURLFn overrides the loopback probe target per slug; tests use
 	// it to point at a port that is always closed (the default preview
 	// port can be occupied by a real container on the host).
@@ -92,7 +93,7 @@ func New(st *store.Store, rt runtime.Runtime, a *alerts.Dispatcher) *Monitor {
 
 // SetHealer wires the app heal callback used to recreate bindingless
 // containers; called once at startup before Run.
-func (m *Monitor) SetHealer(fn func(ctx context.Context, app store.App, slot appspec.Slot) (bool, error)) {
+func (m *Monitor) SetHealer(fn func(ctx context.Context, app store.App, slot appspec.Slot) (string, error)) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.heal = fn
@@ -185,19 +186,28 @@ func (m *Monitor) checkResourcePressure(ctx context.Context, app store.App) {
 	if app.Status != "running" {
 		return
 	}
-	info, err := m.rt.Inspect(ctx, "dm-"+app.Slug)
-	if err != nil || info.MemLimitMB == 0 && info.CPULimit == 0 {
-		return // no applied limits — nothing to resize against
+	// Any replica sustaining pressure triggers the resize (limits are per
+	// container and a resize rolls every replica): the hottest one decides.
+	var info runtime.Info
+	var memP90 uint64
+	var cpuP90 float64
+	pressured := false
+	for _, sl := range m.appSlots(app) {
+		si, err := m.rt.Inspect(ctx, sl.Name)
+		if err != nil || si.MemLimitMB == 0 && si.CPULimit == 0 {
+			continue // no applied limits — nothing to resize against
+		}
+		mem, cpu, samples, err := m.store.P90SlotMetrics(app.ID, sl.Slot, time.Now().UTC().Add(-pressureWindow))
+		if err != nil || samples < 10 {
+			continue
+		}
+		memHot := si.MemLimitMB > 0 && float64(mem) > resizePressure*float64(si.MemLimitMB<<20)
+		cpuHot := si.CPULimit > 0 && cpu > resizePressure*si.CPULimit*100
+		if (memHot || cpuHot) && (!pressured || mem > memP90 || cpu > cpuP90) {
+			info, memP90, cpuP90, pressured = si, mem, cpu, true
+		}
 	}
-
-	memP90, cpuP90, samples, err := m.store.P90Metrics(app.ID, time.Now().UTC().Add(-pressureWindow))
-	if err != nil || samples < 10 {
-		return
-	}
-
-	memPressure := info.MemLimitMB > 0 && float64(memP90) > resizePressure*float64(info.MemLimitMB<<20)
-	cpuPressure := info.CPULimit > 0 && cpuP90 > resizePressure*info.CPULimit*100
-	if !memPressure && !cpuPressure {
+	if !pressured {
 		return
 	}
 
@@ -241,31 +251,37 @@ func (m *Monitor) checkResourcePressure(ctx context.Context, app store.App) {
 	slog.Info("monitor: resizing app", "app", app.Slug, "mem_mb", newMem, "cpu", newCPU, "deployment", d.ID)
 }
 
-// sampleAll records one stats sample per running app.
+// sampleAll records one stats sample per running replica. Every slot
+// sampled in one tick shares a timestamp, so the app's total footprint can
+// be summed per tick (store.ListMetrics).
 func (m *Monitor) sampleAll(ctx context.Context) {
 	apps, err := m.store.ListAllApps()
 	if err != nil {
 		slog.Error("monitor: list apps", "err", err)
 		return
 	}
+	ts := store.Now()
 	for _, app := range apps {
 		if app.Status != "running" {
 			continue
 		}
-		stats, err := m.rt.Stats(ctx, "dm-"+app.Slug)
-		if err != nil {
-			// Container restarted or vanished between list and sample —
-			// not an error worth logging every 5s.
-			continue
-		}
-		if err := m.store.InsertMetric(app.ID, store.Metric{
-			TS:        store.Now(),
-			CPUPercent: stats.CPUPercent,
-			MemBytes:  stats.MemBytes,
-			NetRx:     stats.NetRx,
-			NetTx:     stats.NetTx,
-		}); err != nil {
-			slog.Error("monitor: insert metric", "err", err)
+		for _, sl := range m.appSlots(app) {
+			stats, err := m.rt.Stats(ctx, sl.Name)
+			if err != nil {
+				// Container restarted or vanished between list and sample —
+				// not an error worth logging every 5s.
+				continue
+			}
+			if err := m.store.InsertMetric(app.ID, store.Metric{
+				Slot:       sl.Slot,
+				TS:         ts,
+				CPUPercent: stats.CPUPercent,
+				MemBytes:   stats.MemBytes,
+				NetRx:      stats.NetRx,
+				NetTx:      stats.NetTx,
+			}); err != nil {
+				slog.Error("monitor: insert metric", "err", err)
+			}
 		}
 	}
 }
@@ -354,18 +370,17 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 			resp.Body.Close()
 		}
 
-		// Auto-heal: a replica whose container lost its preview port binding
-		// (leftovers from old binaries, manual docker runs) or stopped
-		// fails every probe until it is restarted/recreated. Delegate to
-		// the server's spec builder so the recreate matches a deploy
-		// exactly; the heal reports whether a recreation happened.
+		// Auto-heal: a replica whose container stopped, vanished (extra
+		// slots), or lost its preview port binding (leftovers from old
+		// binaries, manual docker runs) fails every probe until it is
+		// started or recreated. Delegate to the server's spec builder so a
+		// recreate matches a deploy exactly; the heal reports what it did.
 		if !ok && !rolling && m.heal != nil && m.healDue(healKey(app.ID, sl.Slot)) {
-			healed, healErr := m.heal(ctx, app, sl)
+			what, healErr := m.heal(ctx, app, sl)
 			if healErr != nil {
 				slog.Warn("monitor: auto-heal failed", "app", app.Slug, "slot", sl.Slot, "err", healErr)
-			} else if healed {
+			} else if what != "" {
 				ok, healedAny = true, true
-				what := "recreated container missing its preview port binding"
 				if len(slots) > 1 {
 					what = fmt.Sprintf("replica %d: %s", sl.Slot, what)
 				}
@@ -398,6 +413,15 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 		return
 	}
 	m.recordAppHealth(app, anyOK)
+}
+
+// appSlots resolves an app's replicas (appspec.Slots; no rows → slot 1).
+func (m *Monitor) appSlots(app store.App) []appspec.Slot {
+	rows, err := m.store.ListAppReplicas(app.ID)
+	if err != nil {
+		slog.Error("monitor: list replicas", "app", app.Slug, "err", err)
+	}
+	return appspec.Slots(app, rows)
 }
 
 // healKey scopes the heal cooldown per replica: a sick slot 2 must not use
@@ -446,29 +470,37 @@ func (m *Monitor) recordAppHealth(app store.App, ok bool) {
 	}
 }
 
-// checkRestarts alerts when a running app's container restart count climbs.
+// checkRestarts alerts when any replica's container restart count climbs
+// (tracked per slot, so a crash-looping r2 alerts like slot 1 always did).
 func (m *Monitor) checkRestarts(ctx context.Context, app store.App) {
-	info, err := m.rt.Inspect(ctx, "dm-"+app.Slug)
-	if err != nil {
-		return
-	}
-	restarts := info.Restarts
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if prev, seen := m.restartSeen[app.ID]; seen && restarts > prev {
-		if last, ok := m.restartAlertAt[app.ID]; !ok || time.Since(last) > restartCooldown {
-			m.restartAlertAt[app.ID] = time.Now()
-			m.alerts.Notify(alerts.EventContainerRestart,
-				fmt.Sprintf("container restarting: %s", app.Name),
-				fmt.Sprintf("%s restarted (count %d) — check its logs", app.Name, restarts))
+	slots := m.appSlots(app)
+	for _, sl := range slots {
+		info, err := m.rt.Inspect(ctx, sl.Name)
+		if err != nil {
+			continue
 		}
+		key := healKey(app.ID, sl.Slot)
+		who := app.Name
+		if len(slots) > 1 {
+			who = fmt.Sprintf("%s (replica %d)", app.Name, sl.Slot)
+		}
+		m.mu.Lock()
+		if prev, seen := m.restartSeen[key]; seen && info.Restarts > prev {
+			if last, ok := m.restartAlertAt[key]; !ok || time.Since(last) > restartCooldown {
+				m.restartAlertAt[key] = time.Now()
+				m.alerts.Notify(alerts.EventContainerRestart,
+					fmt.Sprintf("container restarting: %s", who),
+					fmt.Sprintf("%s restarted (count %d) — check its logs", who, info.Restarts))
+			}
+		}
+		m.restartSeen[key] = info.Restarts
+		m.mu.Unlock()
 	}
-	m.restartSeen[app.ID] = restarts
 }
 
 // detectResources derives per-app resource limits from observed usage:
-// P90 memory and CPU over the last 24h, doubled for headroom, floored and
-// capped to sane bounds. Limits apply at the NEXT deploy (docker requires
+// P90 memory and CPU over the last 24h — of the busiest replica — doubled
+// for headroom, floored and capped to sane bounds. Limits apply at the NEXT deploy (docker requires
 // a recreate to change them) — detection is continuous, application is
 // per-deploy.
 func (m *Monitor) detectResources(ctx context.Context) {
@@ -479,12 +511,30 @@ func (m *Monitor) detectResources(ctx context.Context) {
 	}
 	since := time.Now().UTC().Add(-24 * time.Hour)
 	for _, app := range apps {
-		memP90, cpuP90, samples, err := m.store.P90Metrics(app.ID, since)
-		if err != nil {
-			slog.Error("monitor: p90 metrics", "app", app.Slug, "err", err)
-			continue
+		// Limits are per container: size them for the busiest replica, so
+		// no replica is squeezed by averaging it with quieter ones.
+		var memP90 uint64
+		var cpuP90 float64
+		samples, failed := 0, false
+		for _, sl := range m.appSlots(app) {
+			mem, cpu, n, err := m.store.P90SlotMetrics(app.ID, sl.Slot, since)
+			if err != nil {
+				slog.Error("monitor: p90 metrics", "app", app.Slug, "slot", sl.Slot, "err", err)
+				failed = true
+				break
+			}
+			if n < 10 {
+				continue // this replica has too little history yet
+			}
+			samples += n
+			if mem > memP90 {
+				memP90 = mem
+			}
+			if cpu > cpuP90 {
+				cpuP90 = cpu
+			}
 		}
-		if samples < 10 {
+		if failed || samples < 10 {
 			continue // not enough history yet
 		}
 		memLimitMB := clamp64(int64(memP90)*2/(1<<20), 64, 4096)

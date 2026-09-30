@@ -1,8 +1,8 @@
 // Package swap orchestrates zero-downtime container swaps: the caller
 // creates a staged container (new image, temp loopback host port, its own
 // Traefik router with a higher priority), then Swap starts it, probes it,
-// flips the stored preview port, removes the old container, and renames the
-// staged one to the canonical name. A failed probe removes the staged
+// flips the stored preview port, drains (gracefully stops) and removes the
+// old container, and renames the staged one to the canonical name. A failed probe removes the staged
 // container and leaves the old one serving — a failed deploy never takes
 // the app down.
 //
@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
@@ -40,7 +41,15 @@ type Options struct {
 	ProbeURL      func(hostPort int) string
 	ProbeAttempts int           // default 30
 	ProbeInterval time.Duration // default 2s
+	// DrainTimeoutSec is the graceful-stop window for the OLD container
+	// after the flip: docker sends SIGTERM and waits this long before
+	// SIGKILL, so an app that shuts down gracefully finishes its in-flight
+	// requests instead of having them reset. Default DefaultDrainTimeoutSec.
+	DrainTimeoutSec int
 }
+
+// DefaultDrainTimeoutSec is the old container's SIGTERM grace period.
+const DefaultDrainTimeoutSec = 10
 
 // ReserveLoopbackPort grabs a free loopback port for the staged container.
 // The port is released before Create — another process can steal it in the
@@ -93,7 +102,17 @@ func Swap(ctx context.Context, rt runtime.Runtime, canonical string, spec runtim
 		}
 	}
 
-	// Drop the old container; a first deploy has none.
+	// Drain, then drop the old container (a first deploy has none). The
+	// flip already moved new preview traffic to the staged port; a graceful
+	// stop lets the old one finish what it is serving — a force-remove
+	// would reset those requests.
+	drain := o.DrainTimeoutSec
+	if drain <= 0 {
+		drain = DefaultDrainTimeoutSec
+	}
+	if err := rt.Stop(ctx, canonical, drain); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+		slog.Warn("swap: graceful stop of old container failed; removing anyway", "container", canonical, "err", err)
+	}
 	if err := rt.Remove(ctx, canonical); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
 		return fmt.Errorf("remove old container: %w", err)
 	}

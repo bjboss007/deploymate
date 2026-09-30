@@ -61,8 +61,8 @@ One Go binary, one server, Docker as the compute substrate.
   resolver by default), label-driven routing with zero proxy restarts
 - **Replicas** — run 1–5 identical containers per app behind one address:
   load-balanced with unhealthy replicas skipped, rolling deploys that keep
-  at least one replica serving, scale up/down without a rebuild, and
-  merged logs with a per-replica filter
+  at least one replica serving, scale up/down without a rebuild, merged
+  logs and per-replica metrics, and a health path checked on save
 - **Preview URLs** — every running app gets `/preview/<slug>` on the
   dashboard instantly, before any domain exists; with a preview host and
   a Cloudflare tunnel, a public `{slug}.{host}` subdomain whose DNS record
@@ -192,7 +192,6 @@ The full ordered backlog lives in
 - First real-server run (Ubuntu 24.04, production certs) and server-side
   dashboard routing via Traefik's file provider
 - Horizontal autoscaling (load-based replica count, scale-to-zero)
-- Per-replica metrics
 - Build cache export for Railpack builds (`--cache-to/--cache-from`)
 - Per-runtime build/start command overrides
 - Deploy previews per PR / per branch

@@ -490,19 +490,21 @@ func (w *Worker) swapSlot(ctx context.Context, app store.App, slot int, o slotOp
 	})
 }
 
-// removeSlotsAbove stops and removes every slot container above keep and
-// drops their replica rows. Best-effort per container: a container that is
-// already gone is the desired state.
+// removeSlotsAbove drops the replica rows for slots above keep FIRST — the
+// preview load balancer stops routing new requests to them — then gives
+// each container a graceful stop (SIGTERM + the drain window, so in-flight
+// requests finish) and removes it. Best-effort per container: a container
+// that is already gone is the desired state.
 func (w *Worker) removeSlotsAbove(ctx context.Context, app store.App, keep int) {
+	if err := w.store.DeleteAppReplicasAbove(app.ID, keep); err != nil {
+		slog.Error("worker: delete replica rows", "app", app.Slug, "err", err)
+	}
 	for slot := keep + 1; slot <= store.MaxReplicas; slot++ {
 		name := appspec.SlotName(app.Slug, slot)
-		_ = w.rt.Stop(ctx, name, 10)
+		_ = w.rt.Stop(ctx, name, swap.DefaultDrainTimeoutSec)
 		if err := w.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
 			slog.Warn("worker: remove extra replica", "app", app.Slug, "container", name, "err", err)
 		}
-	}
-	if err := w.store.DeleteAppReplicasAbove(app.ID, keep); err != nil {
-		slog.Error("worker: delete replica rows", "app", app.Slug, "err", err)
 	}
 }
 
@@ -510,7 +512,7 @@ func (w *Worker) removeSlotsAbove(ctx context.Context, app store.App, keep int) 
 // build or a new image: missing slots start from the current deployment's
 // image (d.ImageTag, copied from it at queue time) with the app row's
 // current env/limits; slots above the count are stopped and removed. Slot 1
-// is never touched. Documented skew: if the app's env changed since the
+// is only touched to relabel a routed pre-replicas container (see below). Documented skew: if the app's env changed since the
 // current deployment, new slots boot with the newer env — a redeploy
 // converges.
 func (w *Worker) runScale(ctx context.Context, app store.App, d store.Deployment) error {
@@ -535,13 +537,8 @@ func (w *Worker) runScale(ctx context.Context, app store.App, d store.Deployment
 			return fmt.Errorf("record slot 1: %w", err)
 		}
 	}
-	have := map[int]bool{}
-	for _, r := range rows {
-		if info, err := w.rt.Inspect(ctx, r.ContainerName); err == nil && info.Running {
-			have[r.Slot] = true
-		}
-	}
-
+	env := w.buildEnv(app)
+	domains := w.appDomains(app)
 	port := app.Port
 	if port == 0 {
 		port = 8080
@@ -552,8 +549,33 @@ func (w *Worker) runScale(ctx context.Context, app store.App, d store.Deployment
 			extraEnv = map[string]string{"GIT_SHA": cur.CommitSHA}
 		}
 	}
-	env := w.buildEnv(app)
-	domains := w.appDomains(app)
+
+	// A routed slot 1 created before replicas carries the old Traefik label
+	// shape (its service is named after its own router), so new slots could
+	// never join its service. Relabel it first with the usual zero-downtime
+	// swap — same image, current labels — so every slot shares one service.
+	if len(domains) > 0 {
+		if info, err := w.rt.Inspect(ctx, appspec.SlotName(app.Slug, 1)); err == nil && info.Running && info.Labels["deploymate.slot"] == "" {
+			msg := "replica 1 predates replicas (old Traefik labels) — relabelling it with a zero-downtime swap"
+			w.log(d, "system", msg)
+			w.publish("deploy:"+app.Slug, "log", msg)
+			if err := w.swapSlot(ctx, app, 1, slotOptions{
+				image: d.ImageTag, port: port, env: env, extraEnv: extraEnv,
+				deployID: app.CurrentDeploymentID, routerDeployID: d.ID, domains: domains,
+				priority: time.Now().UnixNano(),
+			}); err != nil {
+				return fmt.Errorf("relabel replica 1: %w", err)
+			}
+		}
+	}
+
+	have := map[int]bool{}
+	for _, r := range rows {
+		if info, err := w.rt.Inspect(ctx, r.ContainerName); err == nil && info.Running {
+			have[r.Slot] = true
+		}
+	}
+
 	added := 0
 	for slot := 2; slot <= target; slot++ {
 		if have[slot] {

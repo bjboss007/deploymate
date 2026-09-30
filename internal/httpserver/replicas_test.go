@@ -247,3 +247,57 @@ func TestLogsMergeReplicas(t *testing.T) {
 		t.Errorf("?replica=r2 must narrow to slot 2:\n%s", body)
 	}
 }
+
+// TestLogsFollowScaling: a panel opened on a 1-replica app picks up a
+// second replica added while it is open (no reload) — the stream switches
+// to [rN] prefixes and says so.
+func TestLogsFollowScaling(t *testing.T) {
+	old := logsResyncInterval
+	logsResyncInterval = 40 * time.Millisecond
+	t.Cleanup(func() { logsResyncInterval = old })
+
+	st, app := replicaTestEnv(t, store.App{Name: "Web", Slug: "web", Status: "running", Port: 8080})
+	setSlots(t, st, app, []int{1}, []string{""})
+	s := &Server{store: st, rt: &logsRuntime{}}
+
+	go func() {
+		time.Sleep(120 * time.Millisecond)
+		_ = st.UpsertAppReplica(store.AppReplica{AppID: app.ID, Slot: 2, ContainerName: "dm-web-r2", HostPort: 2})
+	}()
+	body := getLogs(t, s, "/apps/web/logs")
+	for _, want := range []string{
+		"data: hello from dm-web", // before scaling: unprefixed
+		"replicas changed: now streaming r1, r2",
+		"data: [r2] hello from dm-web-r2", // the new replica joined the stream
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("stream missing %q:\n%s", want, body)
+		}
+	}
+}
+
+// TestMetricsJSONReplicaFilter: the chart feed totals replicas by default,
+// narrows with ?replica=r2, and rejects a malformed filter.
+func TestMetricsJSONReplicaFilter(t *testing.T) {
+	st, app := replicaTestEnv(t, store.App{Name: "Web", Slug: "web", Status: "running", Port: 8080})
+	ts := time.Now().UTC().Format(time.RFC3339Nano)
+	_ = st.InsertMetric(app.ID, store.Metric{Slot: 1, TS: ts, MemBytes: 10 << 20})
+	_ = st.InsertMetric(app.ID, store.Metric{Slot: 2, TS: ts, MemBytes: 30 << 20})
+	s := &Server{store: st}
+	get := func(q string) (int, string) {
+		req := httptest.NewRequest(http.MethodGet, "/apps/web/metrics"+q, nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+	if code, body := get(""); code != 200 || !strings.Contains(body, `"v":40`) {
+		t.Errorf("total = %d %s, want mem 40 MB", code, body)
+	}
+	if code, body := get("?replica=r2"); code != 200 || !strings.Contains(body, `"v":30`) || strings.Contains(body, `"v":40`) {
+		t.Errorf("r2 = %d %s, want mem 30 MB only", code, body)
+	}
+	if code, _ := get("?replica=zz"); code != http.StatusBadRequest {
+		t.Errorf("bad filter = %d, want 400", code)
+	}
+}

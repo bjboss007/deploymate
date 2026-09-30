@@ -135,12 +135,22 @@ function fmtTime(ts) {
   return d.toTimeString().slice(0, 8);
 }
 
-async function loadMetrics(appSlug) {
-  const cpu = lineChart("cpu-chart", "CPU %", CHART_COLORS.cpu);
-  const mem = lineChart("mem-chart", "Memory MB", CHART_COLORS.mem);
+// Charts are created once and refilled on filter changes (Chart.js refuses
+// a second chart on the same canvas).
+let metricsCharts = null;
+
+async function loadMetrics(appSlug, replica) {
+  if (!metricsCharts) {
+    metricsCharts = {
+      cpu: lineChart("cpu-chart", "CPU %", CHART_COLORS.cpu),
+      mem: lineChart("mem-chart", "Memory MB", CHART_COLORS.mem),
+    };
+  }
+  const { cpu, mem } = metricsCharts;
   if (!cpu && !mem) return; // not the app page
 
-  const resp = await fetch(`/apps/${appSlug}/metrics`);
+  const q = replica ? "?replica=" + encodeURIComponent(replica) : "";
+  const resp = await fetch(`/apps/${appSlug}/metrics${q}`);
   if (!resp.ok) return;
   const data = await resp.json();
 
@@ -189,5 +199,11 @@ document.addEventListener("DOMContentLoaded", () => {
   loadFleetChart();
 
   const slug = document.body.dataset.appSlug;
-  if (slug) loadMetrics(slug);
+  if (slug) {
+    loadMetrics(slug);
+    // Replica filter: total across replicas, or one replica's samples.
+    document.querySelectorAll("[data-metrics-filter]").forEach((sel) => {
+      sel.addEventListener("change", () => loadMetrics(slug, sel.value));
+    });
+  }
 });

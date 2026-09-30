@@ -223,3 +223,55 @@ func TestDeployConvergesReplicaSet(t *testing.T) {
 		t.Error("deploy must remove slots above the desired count")
 	}
 }
+
+// TestScaleRelabelsLegacySlotOne: a routed slot 1 created before replicas
+// (no deploymate.slot label → old Traefik label shape) is swapped onto the
+// current labels before new slots start, so they can share its service; a
+// current-shape slot 1 is left alone.
+func TestScaleRelabelsLegacySlotOne(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		labels  map[string]string
+		relabel bool
+	}{
+		{"legacy labels", map[string]string{"traefik.enable": "true"}, true},
+		{"current labels", map[string]string{"deploymate.slot": "1"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, fake, st := newTestWorker(t)
+			app := seedApp(t, st)
+			if _, err := st.CreateDomain(store.Domain{AppID: app.ID, Hostname: "web.example.test", TLSStatus: "pending"}); err != nil {
+				t.Fatal(err)
+			}
+			fake.info = runtime.Info{Running: true, Labels: tc.labels}
+			cur, _ := st.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "manual", Status: "running", ImageTag: "nginx:1"})
+			_ = st.SetAppCurrentDeployment(app.ID, cur.ID)
+			app = setReplicas(t, st, app.ID, 2)
+			up, _ := st.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "scale", Status: "queued", Trigger: "scale", ImageTag: "nginx:1"})
+
+			w.process(context.Background(), up)
+
+			if got, _ := st.GetDeployment(up.ID); got.Status != "running" {
+				t.Fatalf("scale = %q (%s)", got.Status, got.Error)
+			}
+			staged1 := appspec.StagedSlotName("web", 1, up.ID)
+			relabelled := indexOf(fake.opLog(), "rename "+staged1+" dm-web") >= 0
+			if relabelled != tc.relabel {
+				t.Fatalf("slot 1 relabelled = %v, want %v\n%s", relabelled, tc.relabel, strings.Join(fake.opLog(), "\n"))
+			}
+			specs := fake.createdSpecs()
+			if tc.relabel {
+				if len(specs) != 2 || specs[0].Labels["deploymate.slot"] != "1" || specs[0].Image != "nginx:1" {
+					t.Errorf("relabel must recreate slot 1 first from nginx:1 with current labels: %+v", specs)
+				}
+				s1 := specs[0].Labels["traefik.http.routers."+appspec.RouterName("web", 1, up.ID)+".service"]
+				s2 := specs[1].Labels["traefik.http.routers."+appspec.RouterName("web", 2, up.ID)+".service"]
+				if s1 == "" || s1 != s2 {
+					t.Errorf("relabelled slot 1 and new slot 2 must share a service: %q vs %q", s1, s2)
+				}
+			} else if len(specs) != 1 {
+				t.Errorf("current-shape slot 1 must not be recreated: %d specs", len(specs))
+			}
+		})
+	}
+}

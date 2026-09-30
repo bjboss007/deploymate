@@ -4,6 +4,7 @@ import (
 	"errors"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func newReplicaTestApp(t *testing.T) (*Store, App) {
@@ -136,5 +137,44 @@ func TestHasActiveDeployment(t *testing.T) {
 	}
 	if busy, _ := st.HasActiveDeployment(app.ID); busy {
 		t.Error("terminal deployment must not count as active")
+	}
+}
+
+// TestSlotMetrics: samples carry their replica slot; ListMetrics totals a
+// tick across replicas, ListSlotMetrics narrows to one, and the P90 can be
+// taken per slot or across all of them.
+func TestSlotMetrics(t *testing.T) {
+	st, app := newReplicaTestApp(t)
+	base := time.Now().UTC().Add(-time.Minute)
+	for i := 0; i < 12; i++ {
+		ts := base.Add(time.Duration(i) * time.Second).Format(time.RFC3339Nano)
+		if err := st.InsertMetric(app.ID, Metric{Slot: 1, TS: ts, CPUPercent: 10, MemBytes: 100 << 20}); err != nil {
+			t.Fatal(err)
+		}
+		if err := st.InsertMetric(app.ID, Metric{Slot: 2, TS: ts, CPUPercent: 30, MemBytes: 300 << 20}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	total, err := st.ListMetrics(app.ID, 5)
+	if err != nil || len(total) != 5 {
+		t.Fatalf("ListMetrics = %d rows, err %v; want 5 ticks", len(total), err)
+	}
+	if total[0].CPUPercent != 40 || total[0].MemBytes != 400<<20 {
+		t.Errorf("tick total = %v%% / %d, want 40%% / 400 MB", total[0].CPUPercent, total[0].MemBytes)
+	}
+	if total[0].TS >= total[4].TS {
+		t.Error("ListMetrics must return oldest first")
+	}
+	r2, _ := st.ListSlotMetrics(app.ID, 2, 60)
+	if len(r2) != 12 || r2[0].MemBytes != 300<<20 {
+		t.Errorf("slot 2 metrics = %d rows (%v)", len(r2), r2)
+	}
+	mem1, _, n1, _ := st.P90SlotMetrics(app.ID, 1, base.Add(-time.Second))
+	mem2, cpu2, _, _ := st.P90SlotMetrics(app.ID, 2, base.Add(-time.Second))
+	if n1 != 12 || mem1 != 100<<20 || mem2 != 300<<20 || cpu2 != 30 {
+		t.Errorf("per-slot P90: slot1 %d (%d samples), slot2 %d/%v", mem1, n1, mem2, cpu2)
+	}
+	if _, _, all, _ := st.P90Metrics(app.ID, base.Add(-time.Second)); all != 24 {
+		t.Errorf("all-slot sample count = %d, want 24", all)
 	}
 }

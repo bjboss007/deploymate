@@ -386,7 +386,16 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 		</div>
 
 		<div class="panel">
-			<div class="panel-title">Monitoring</div>
+			<div class="panel-title">Monitoring
+				if len(replicas.Slots) > 1 {
+					<select class="log-filter" data-metrics-filter aria-label="Replica metrics">
+						<option value="">all replicas (total)</option>
+						for _, sl := range replicas.Slots {
+							<option value={ fmt.Sprintf("r%d", sl.Slot) }>{ fmt.Sprintf("r%d only", sl.Slot) }</option>
+						}
+					</select>
+				}
+			</div>
 			if len(domains) > 0 {
 				<div class="uptime-strip">
 					for _, dm := range domains {
@@ -418,9 +427,13 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 				</div>
 			</div>
 			<p class="muted panel-hint">
-				Sampled every 5 seconds from the running container. Uptime dots show the last 30 probes (15 minutes).
+				if len(replicas.Slots) > 1 {
+					Sampled every 5 seconds from every replica — charts show the total across replicas, or one replica with the filter. Uptime dots show the last 30 probes (15 minutes).
+				} else {
+					Sampled every 5 seconds from the running container. Uptime dots show the last 30 probes (15 minutes).
+				}
 				if app.MemLimitMB > 0 {
-					<br/>Resource limits: <span class="mono">{ app.MemLimitMB } MB · { fmtCPU(app.CPULimit) } CPU</span> — auto-detected from usage, applied on the next deploy.
+					<br/>Resource limits: <span class="mono">{ app.MemLimitMB } MB · { fmtCPU(app.CPULimit) } CPU</span> per container — auto-detected from usage (the busiest replica's), applied on the next deploy.
 				} else {
 					<br/>Resource limits: not yet detected — they are derived from 24h of usage and applied on the next deploy.
 				}

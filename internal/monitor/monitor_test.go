@@ -78,9 +78,9 @@ func newTestMonitor(t *testing.T) (*Monitor, *store.Store, store.App) {
 func TestAutoHealBindinglessContainer(t *testing.T) {
 	m, st, app := newTestMonitor(t)
 	calls := 0
-	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (bool, error) {
+	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (string, error) {
 		calls++
-		return true, nil
+		return "recreated its container to restore the preview port binding", nil
 	})
 
 	// The probe URL is a closed loopback port: connection refused, so the
@@ -124,8 +124,8 @@ func TestAutoHealSkipsWhenHealSucceedsWithoutRecreate(t *testing.T) {
 	// Heal reports "no recreation needed" (container bound but broken):
 	// the app must fall through to ordinary fail accounting, not flip
 	// healthy.
-	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (bool, error) {
-		return false, nil
+	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (string, error) {
+		return "", nil
 	})
 	m.probeAppHealth(context.Background(), app)
 
@@ -141,9 +141,9 @@ func TestAutoHealSkipsWhenHealSucceedsWithoutRecreate(t *testing.T) {
 func TestAutoHealFailureIsLoggedAndRateLimited(t *testing.T) {
 	m, st, app := newTestMonitor(t)
 	calls := 0
-	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (bool, error) {
+	m.SetHealer(func(ctx context.Context, a store.App, _ appspec.Slot) (string, error) {
 		calls++
-		return false, errors.New("docker unavailable")
+		return "", errors.New("docker unavailable")
 	})
 	m.probeAppHealth(context.Background(), app)
 	got, err := st.GetAppByID(app.ID)

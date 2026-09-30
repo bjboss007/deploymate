@@ -89,9 +89,20 @@ slot 1 — `appspec.Slots` is the single resolver every reader uses.
   (which gets the new path on the next deploy) would eject them.
   Per-slot heal (start, rebind, or recreate a vanished extra slot from
   slot 1's image) never runs while a deployment is queued/building.
-- **Lifecycle:** start/stop/restart/delete fan out to every slot.
+- **Lifecycle:** start/stop/restart/delete fan out to every slot. Swaps
+  and scale-downs drain: the old container gets a 10s SIGTERM grace
+  (`docker stop`) before removal; scale-down drops the replica rows first
+  so the dashboard LB stops routing to the slot before it stops.
 - **Logs:** one SSE merging every slot with `[rN]` prefixes;
-  `?replica=r2` (the panel's filter) narrows to one slot.
+  `?replica=r2` (the panel's filter) narrows to one slot. The stream
+  re-resolves replicas every 5s, so scaling shows up without a reload.
+- **Metrics:** sampled per replica (`metrics.slot`, one timestamp per
+  tick); charts show the total or one replica (`/metrics?replica=r2`);
+  limits are sized from the busiest replica; pressure on any replica
+  triggers the auto-resize; restart alerts are per replica.
+- **Scale on a pre-replicas app:** a routed slot 1 without the
+  `deploymate.slot` label is relabelled (zero-downtime swap) before new
+  slots start, so every slot shares one Traefik service.
 
 ## Manual (image) deploys
 

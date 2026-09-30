@@ -468,8 +468,8 @@ func TestHealApp(t *testing.T) {
 		if err != nil {
 			t.Fatalf("HealApp: %v", err)
 		}
-		if !healed {
-			t.Error("bindingless container must be reported as healed")
+		if healed != HealRebound {
+			t.Errorf("bindingless container heal = %q, want HealRebound", healed)
 		}
 		if fake.created != 1 {
 			t.Fatalf("expected one recreate, got %d", fake.created)
@@ -488,8 +488,8 @@ func TestHealApp(t *testing.T) {
 		if err != nil {
 			t.Fatalf("HealApp: %v", err)
 		}
-		if healed || fake.created != 0 {
-			t.Errorf("bound container must not be recreated (healed=%v created=%d)", healed, fake.created)
+		if healed != "" || fake.created != 0 {
+			t.Errorf("bound container must not be recreated (healed=%q created=%d)", healed, fake.created)
 		}
 	})
 
@@ -512,11 +512,44 @@ func TestHealApp(t *testing.T) {
 		if err != nil {
 			t.Fatalf("HealApp: %v", err)
 		}
-		if !healed || fake.created != 1 {
-			t.Fatalf("bindingless git container must be recreated (healed=%v created=%d)", healed, fake.created)
+		if healed != HealRebound || fake.created != 1 {
+			t.Fatalf("bindingless git container must be recreated (healed=%q created=%d)", healed, fake.created)
 		}
 		if fake.lastSpec.Image != "deploymate/apps/git-heal:abc123" {
 			t.Errorf("recreate used image %q, want the container's own image", fake.lastSpec.Image)
+		}
+	})
+
+	t.Run("stopped container is started and reported", func(t *testing.T) {
+		app := mkApp("stopped-one", 8080, "", "example.com/app:1")
+		fake := &fakeRuntime{info: runtime.Info{Running: false, PublishedPorts: []string{"8080/tcp"}}}
+		s := &Server{store: st, rt: fake}
+
+		healed, err := s.HealApp(context.Background(), app, appspec.Slots(app, nil)[0])
+		if err != nil {
+			t.Fatalf("HealApp: %v", err)
+		}
+		if healed != HealRestarted || fake.started != 1 || fake.created != 0 {
+			t.Errorf("stopped container: healed=%q started=%d created=%d, want HealRestarted/1/0", healed, fake.started, fake.created)
+		}
+	})
+
+	t.Run("vanished extra replica is recreated from slot 1's image", func(t *testing.T) {
+		app := mkApp("gone-r2", 8080, "", "example.com/app:1")
+		fake := &fakeRuntime{inspectErr: runtime.ErrContainerNotFound}
+		s := &Server{store: st, rt: fake}
+
+		slot := appspec.Slot{Slot: 2, Name: appspec.SlotName(app.Slug, 2), HostPort: 45678}
+		healed, err := s.HealApp(context.Background(), app, slot)
+		if err != nil {
+			t.Fatalf("HealApp: %v", err)
+		}
+		if healed != HealRecreated || fake.created != 1 || fake.lastSpec.Name != "dm-gone-r2-r2" || fake.lastSpec.HostPort != 45678 {
+			t.Errorf("heal=%q created=%d spec=%s:%d, want a recreate of dm-gone-r2-r2 on 45678", healed, fake.created, fake.lastSpec.Name, fake.lastSpec.HostPort)
+		}
+		rows, _ := st.ListAppReplicas(app.ID)
+		if len(rows) != 1 || rows[0].Slot != 2 {
+			t.Errorf("replica row not recorded: %+v", rows)
 		}
 	})
 

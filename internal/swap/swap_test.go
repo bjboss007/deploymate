@@ -20,6 +20,7 @@ import (
 type recordingRuntime struct {
 	mu       sync.Mutex
 	started  []string
+	stopped  []string
 	removed  []string
 	renamed  [][2]string
 	removeErr error
@@ -37,7 +38,12 @@ func (f *recordingRuntime) Start(_ context.Context, name string) error {
 	f.started = append(f.started, name)
 	return nil
 }
-func (f *recordingRuntime) Stop(context.Context, string, int) error { return nil }
+func (f *recordingRuntime) Stop(_ context.Context, name string, timeout int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.stopped = append(f.stopped, fmt.Sprintf("%s:%d", name, timeout))
+	return nil
+}
 func (f *recordingRuntime) Remove(_ context.Context, name string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -183,5 +189,30 @@ func TestSwapPortlessSkipsProbe(t *testing.T) {
 	_, _, renamed := rt.calls()
 	if len(renamed) != 1 {
 		t.Fatalf("renamed = %v, want the staged rename", renamed)
+	}
+}
+
+// TestSwapDrainsOldContainer: after the flip the old container gets a
+// graceful stop (SIGTERM + the drain window) BEFORE it is removed, so an
+// app that shuts down cleanly finishes its in-flight requests.
+func TestSwapDrainsOldContainer(t *testing.T) {
+	srv := readyServer()
+	defer srv.Close()
+	rt := &recordingRuntime{}
+	spec := runtime.Spec{Name: "dm-web-new", HostPort: 12345}
+	err := Swap(context.Background(), rt, "dm-web", spec, Options{
+		ProbeURL: func(int) string { return srv.URL }, ProbeAttempts: 1, ProbeInterval: time.Millisecond,
+		DrainTimeoutSec: 7,
+	})
+	if err != nil {
+		t.Fatalf("swap: %v", err)
+	}
+	rt.mu.Lock()
+	defer rt.mu.Unlock()
+	if len(rt.stopped) != 1 || rt.stopped[0] != "dm-web:7" {
+		t.Fatalf("stopped = %v, want the old container drained for 7s", rt.stopped)
+	}
+	if len(rt.removed) != 1 || rt.removed[0] != "dm-web" {
+		t.Fatalf("removed = %v, want the old container after its drain", rt.removed)
 	}
 }

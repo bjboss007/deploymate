@@ -58,6 +58,8 @@ type Info struct {
 	// runs under, which may lag the store's detected values.
 	MemLimitMB int64
 	CPULimit   float64
+	// Labels are the container's docker labels (immutable after create).
+	Labels map[string]string
 }
 
 // Runtime is the compute interface.

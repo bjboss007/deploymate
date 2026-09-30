@@ -151,6 +151,16 @@ N_HOSTS="$(preview_hosts 8 | wc -l | tr -d ' ')"
 [ "$N_HOSTS" = "2" ] || fail "preview must round-robin across 2 replicas, saw $N_HOSTS distinct"
 log "/preview round-robins across both replicas"
 
+# 3b. Per-replica metrics: the monitor samples every replica (5s ticks);
+#     the chart feed totals them and ?replica=r2 narrows to one.
+for i in $(seq 1 20); do
+  [ "$(db "SELECT COUNT(*) FROM metrics m JOIN apps a ON a.id=m.app_id WHERE a.slug='$SLUG' AND m.slot=2")" -gt 0 ] && break
+  sleep 1
+  [ "$i" = 20 ] && fail "no metrics sampled for replica 2"
+done
+curl -sf -b "$JAR" "$BASE/apps/$SLUG/metrics?replica=r2" | grep -q '"mem":\[{' || fail "metrics?replica=r2 must return samples"
+log "metrics sampled per replica; ?replica=r2 feed non-empty"
+
 # 4. Stop slot 2 → preview keeps serving → the monitor's heal restarts it.
 docker stop -t 1 "dm-$SLUG-r2" >/dev/null
 BAD=0
@@ -165,7 +175,12 @@ for i in $(seq 1 75); do
   sleep 1
   [ "$i" = 75 ] && fail "monitor never healed slot 2"
 done
-log "monitor healed slot 2 (container running again)"
+for i in $(seq 1 10); do
+  [ -n "$(db "SELECT 1 FROM events e JOIN apps a ON a.id=e.app_id WHERE a.slug='$SLUG' AND e.kind='app_healed' AND e.data LIKE 'replica 2: restarted%'")" ] && break
+  sleep 1
+  [ "$i" = 10 ] && fail "heal of stopped replica 2 must be recorded as an app_healed event"
+done
+log "monitor healed slot 2 (container running again; app_healed event recorded)"
 
 # 5. Merged logs with prefixes, and the per-replica filter.
 ALL="$(curl -s -N -b "$JAR" --max-time 3 "$BASE/apps/$SLUG/logs" || true)"
@@ -208,8 +223,20 @@ echo "$L1" | grep -q "^traefik\.http\.services\.$NS1\.loadbalancer\.healthcheck\
 log "redeploy moved both slots to service $NS1 with healthcheck.path=/health"
 
 # 7. Scale 2 → 3 → 1, cap rejected.
+# An open log panel must pick up the new replica without a reload.
+( curl -s -N -b "$JAR" --max-time 25 "$BASE/apps/$SLUG/logs" >"$DATA_DIR/logs-live.txt" || true ) &
+LOGS_PID=$!
+sleep 1
 S3="$(post_to "/apps/$SLUG/replicas" "replicas=3")"
 wait_status "$S3" running 90 || fail "scale to 3 failed"
+for i in $(seq 1 20); do
+  grep -q '^data: \[r3\]' "$DATA_DIR/logs-live.txt" 2>/dev/null && break
+  sleep 1
+  [ "$i" = 20 ] && { kill "$LOGS_PID" 2>/dev/null; fail "open log stream never picked up replica 3"; }
+done
+kill "$LOGS_PID" 2>/dev/null; wait "$LOGS_PID" 2>/dev/null || true
+grep -q 'replicas changed: now streaming r1, r2, r3' "$DATA_DIR/logs-live.txt" || fail "log stream must announce the replica change"
+log "open log stream picked up r3 after scale 2→3 (no reload)"
 running "dm-$SLUG-r3" || fail "slot 3 must run after scale 2→3"
 [ "$(preview_hosts 9 | wc -l | tr -d ' ')" = "3" ] || fail "preview must reach 3 replicas"
 S1D="$(post_to "/apps/$SLUG/replicas" "replicas=1")"

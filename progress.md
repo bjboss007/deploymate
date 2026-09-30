@@ -7,6 +7,37 @@
 
 ## Where we stopped
 
+**2026-09-30 (replicas follow-ups round)** — **All six "Replicas
+follow-ups" shipped** (improvements.md item checked off; ADR 0018 +
+deploy-flow updated). (1) **Per-replica metrics** — migration **0016**
+(`metrics.slot`, default 1); `sampleAll` samples every replica with one
+timestamp per tick; `ListMetrics` totals a tick across replicas,
+`ListSlotMetrics`/`P90SlotMetrics` narrow to one;
+`/apps/{slug}/metrics?replica=r2` + a Monitoring-panel select; resource
+detection sizes limits from the **busiest** replica's P90; pressure on
+**any** replica queues the resize; restart alerts keyed per replica. (2)
+**Heals are recorded** — `HealApp` returns what it did
+(`HealRestarted`/`HealRebound`/`HealRecreated`, "" = nothing); the
+monitor records each as `app_healed` + alert (a restarted stopped
+replica used to leave no trace). (3) **Legacy slot 1 relabel** —
+`runtime.Info.Labels` added; a scale on a routed app whose slot 1 lacks
+`deploymate.slot` swaps it onto current labels first. (4) **Logs follow
+scaling** — the SSE re-resolves slots every 5s (`logsResyncInterval`):
+new replicas join, removed stop, prefixes flip on 1↔N, a "replicas
+changed" line announces it; re-attach uses tail 0 (no duplicate
+backlog). (5) **Drain** — `swap.Swap` now `Stop`s the old container
+with a 10s SIGTERM grace (`DefaultDrainTimeoutSec`) before `Remove`;
+`removeSlotsAbove` deletes replica rows first so the dashboard LB stops
+routing before the stop. (6) Health-path UI (earlier today). Tests: new
+unit tests across store/monitor/httpserver/jobs/swap; `make test` +
+`make vet` green, `-race` clean. **E2e:** `make e2e-replicas` extended
+and PASSED (per-replica metrics + filter, heal event recorded for the
+stopped replica, an open log stream picked up r3 after scale 2→3,
+rolling deploy still 0/52 failed with the drain); `e2e_manual.sh` +
+`e2e_git.sh` pass. Legacy relabel is unit-tested only (an e2e needs a
+pre-replicas container). **Live server not restarted** on this build yet
+(would apply migration 16).
+
 **2026-09-30 (health-path round)** — **Health path form control
 shipped** (Replicas follow-up). A "Health path" field in the Replicas panel
 posts to `POST /apps/{slug}/health-path` (new `handlers_health_path.go`):
@@ -702,10 +733,10 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **Replicas follow-ups** — shipped 2026-09-30 (ADR 0018), health-path
-   control done the same day. Next: per-slot metrics (improvements.md
-   "Replicas follow-ups"), and re-run the Traefik spike harness on the
-   real Linux box when it's up.
+3. **Replicas** — shipped 2026-09-30 with all follow-ups (ADR 0018).
+   Remaining: re-run the Traefik spike harness on the real Linux box when
+   it's up; horizontal autoscaling is the next scaling step
+   (improvements.md, Medium-term).
 4. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if

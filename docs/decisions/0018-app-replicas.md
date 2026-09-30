@@ -53,7 +53,8 @@ the spec's "Spike results" addendum; the ones that shaped this ADR:
 5. **Scale is a no-build `scale` deployment** that starts missing slots
    from the current deployment's image (recording the *current*
    deployment as their `deploy_id`, so a scale never looks like drift)
-   and removes the highest slots; it never touches slot 1 and never moves
+   and removes the highest slots; it touches slot 1 only to relabel a
+   pre-replicas container (see Consequences) and never moves
    `current_deployment_id`. Scale slots' routers carry no priority so
    they never outrank the deploy's routers.
 6. **The dashboard proxy is the LB where Traefik is absent** (macOS dev,
@@ -80,13 +81,16 @@ the spec's "Spike results" addendum; the ones that shaped this ADR:
   path. The Replicas panel's Health path field (added the same day)
   probes every replica on save and flags any that would fail Traefik's
   2xx/3xx rule.
-- Metrics, resource detection, and restart alerts still sample slot 1
-  only; limits are per container, so slot 1 is a fair proxy, but a sick
-  non-canonical replica's resource usage is invisible (backlogged).
+- Metrics are per replica (migration 0016, follow-up round): charts total
+  them or show one, limits are sized from the busiest replica, pressure
+  on any replica triggers the resize, and restart alerts are per replica.
 - A container predating this change carries the old label shape (service
-  named after its router). Scaling it up before its first redeploy puts
-  the new slot in a different Traefik service; the next deploy converges
-  everything. The dashboard LB is unaffected.
+  named after its router). A scale-up relabels such a routed slot 1 with
+  a zero-downtime swap before adding slots (detected by the missing
+  `deploymate.slot` label), so all slots share one service.
+- Swaps drain: the old container gets a graceful `docker stop` (10s
+  SIGTERM window) before removal, so apps that shut down cleanly finish
+  in-flight requests.
 
 ## Alternatives
 

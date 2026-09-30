@@ -236,7 +236,17 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		PublishedPorts: ports,
 		MemLimitMB:     ctr.HostConfig.Memory >> 20,
 		CPULimit:       float64(ctr.HostConfig.NanoCPUs) / 1e9,
+		Labels:         labelsOf(ctr),
 	}, nil
+}
+
+// labelsOf returns the container's labels (Config can be nil on odd
+// daemon responses).
+func labelsOf(ctr container.InspectResponse) map[string]string {
+	if ctr.Config == nil {
+		return nil
+	}
+	return ctr.Config.Labels
 }
 
 func (d *Docker) Logs(ctx context.Context, name string, follow bool, tail int) (io.ReadCloser, error) {

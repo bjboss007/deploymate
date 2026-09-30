@@ -314,27 +314,38 @@ change.
   dial failover, merged logs with `[rN]` + `?replica=` filter. Unit
   tests + `make e2e-replicas` (0 failed requests across a rolling deploy
   at N=2). Follow-ups below.
-- [ ] **Replicas follow-ups** (from the 2026-09-30 build, ADR 0018):
-  - ~~**Health path UI**~~ — done 2026-09-30: a Health path field in the
-    Replicas panel (`POST /apps/{slug}/health-path`; must start with `/`,
-    no host/whitespace/fragment, ≤200 chars; empty resets to `/`). Saving
-    probes every running replica at the new path and the flash names any
-    that don't answer 2xx/3xx (what Traefik requires; the monitor still
-    accepts < 500). Monitor uses it immediately; the Traefik label changes
-    on the next deploy. `health_path_changed` event.
-  - **Per-slot metrics** — stats sampling, resource detection, pressure
-    auto-resize, and restart alerts read slot 1 only; a sick r2's memory
-    or restart loop is invisible outside its health badge.
-  - **Heal of a stopped slot isn't recorded** — `HealApp` restarting a
-    stopped replica reports "not healed" (no recreate), so no
-    `app_healed` event/alert (pre-existing for slot 1 too).
-  - **Legacy-labeled slot 1 + scale-up under Traefik** — a container from
-    before this change has the old label shape; scaling up before its
-    next redeploy leaves it in a different Traefik service (dashboard LB
-    unaffected; the next deploy converges).
-  - **Logs panel slot set is fixed at connect** — reload after scaling.
-  - **Connection drain** on slot removal (pre-existing; replicas multiply
-    the surface).
+- [x] **Replicas follow-ups** (from the 2026-09-30 build, ADR 0018) — all
+  done 2026-09-30:
+  - **Health path UI** — a Health path field in the Replicas panel
+    (`POST /apps/{slug}/health-path`; must start with `/`, no
+    host/whitespace/fragment, ≤200 chars; empty resets to `/`). Saving
+    probes every running replica and flags any not answering 2xx/3xx
+    (Traefik's rule; the monitor accepts < 500). Monitor uses it at once;
+    the Traefik label changes on the next deploy.
+  - **Per-slot metrics** — migration 0016 (`metrics.slot`); the monitor
+    samples every replica (one shared timestamp per tick); charts show the
+    total across replicas or one replica (`/metrics?replica=r2` + a
+    Monitoring-panel select); resource detection sizes limits from the
+    busiest replica's P90; pressure auto-resize triggers on any replica;
+    restart alerts are tracked per replica.
+  - **Heals of stopped replicas are recorded** — `HealApp` now returns
+    what it did (restarted a stopped container / rebound the port /
+    recreated a vanished extra slot), and the monitor records every one as
+    `app_healed` + alert.
+  - **Legacy-labeled slot 1 + scale-up** — a routed slot 1 without the
+    `deploymate.slot` label (pre-replicas shape) is relabelled with a
+    zero-downtime swap during the scale, before new slots start, so all
+    slots share one Traefik service. (`runtime.Info` gained `Labels`.)
+  - **Logs panel follows scaling** — the stream re-resolves replicas every
+    5s: new replicas join (with backlog), removed ones stop, prefixes
+    switch on 1↔N, and a "replicas changed" line says so.
+  - **Connection drain** — swaps now `docker stop` the old container with
+    a 10s SIGTERM grace before removing it (was a force-remove), and
+    scale-down drops the replica rows first so the dashboard LB stops
+    routing to a slot before it stops. Caveat: Traefik keeps routing to a
+    container during its SIGTERM window until the stop event/healthcheck
+    removes it — apps should keep serving until SIGTERM handling
+    completes (most frameworks do).
 - [ ] **Horizontal autoscaling (load-based replica count, scale-to-zero)**
   — not spec'd, not implemented; builds on App replicas above (shipped
   2026-09-30 with a manual count only — the spec excluded autoscaling). **Vertical**

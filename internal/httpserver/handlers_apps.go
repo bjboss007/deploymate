@@ -154,54 +154,82 @@ func (s *Server) stopApp(ctx context.Context, app store.App, timeoutSec int) err
 	return first
 }
 
-// HealApp is the monitor's auto-heal entrypoint for one replica: it starts
-// the slot's container and ensures it has its preview port binding,
-// recreating it from the shared spec when missing — the same heal a manual
-// restart performs, minus the human. An extra slot (2..N) whose container
-// is gone entirely is recreated from slot 1's image; a missing slot 1 stays
-// a human redeploy (the UI says so). It reports whether a recreation
-// happened so the monitor can record the heal. Image apps recreate from
-// app.Image; git-source apps have none, so a container's own
-// (worker-built) image is used — the ground truth of what is deployed.
-func (s *Server) HealApp(ctx context.Context, app store.App, slot appspec.Slot) (bool, error) {
+// Heal actions HealApp reports; the monitor records them as app_healed.
+const (
+	HealRestarted = "restarted its stopped container"
+	HealRebound   = "recreated its container to restore the preview port binding"
+	HealRecreated = "recreated its missing container from slot 1's image"
+)
+
+// HealApp is the monitor's auto-heal entrypoint for one replica: a stopped
+// container is started, one running without its preview port binding is
+// recreated from the shared spec, and an extra slot (2..N) whose container
+// is gone entirely is recreated from slot 1's image — the same heals a
+// manual start/restart performs, minus the human. A missing slot 1 stays a
+// human redeploy (the UI says so). It returns what it did (one of the
+// Heal* constants, "" = nothing needed) so the monitor can record it.
+// Image apps recreate from app.Image; git-source apps have none, so a
+// container's own (worker-built) image is used — the ground truth of what
+// is deployed.
+func (s *Server) HealApp(ctx context.Context, app store.App, slot appspec.Slot) (string, error) {
 	if app.Port <= 0 {
-		return false, nil
+		return "", nil
 	}
-	if err := s.rt.Start(ctx, slot.Name); err != nil {
+	info, err := s.rt.Inspect(ctx, slot.Name)
+	if err != nil {
 		if errors.Is(err, runtime.ErrContainerNotFound) && slot.Slot > 1 {
-			return s.recreateSlot(ctx, app, slot)
+			if err := s.recreateSlot(ctx, app, slot); err != nil {
+				return "", err
+			}
+			return HealRecreated, nil
 		}
-		return false, err
+		return "", err
 	}
-	return s.ensureBinding(ctx, app, slot)
+	restarted := false
+	if !info.Running {
+		if err := s.rt.Start(ctx, slot.Name); err != nil {
+			return "", err
+		}
+		restarted = true
+	}
+	rebound, err := s.ensureBinding(ctx, app, slot)
+	switch {
+	case err != nil:
+		return "", err
+	case rebound:
+		return HealRebound, nil
+	case restarted:
+		return HealRestarted, nil
+	}
+	return "", nil
 }
 
 // recreateSlot rebuilds a vanished extra replica from slot 1's image on the
 // slot's recorded port (a fresh loopback port when none was recorded).
-func (s *Server) recreateSlot(ctx context.Context, app store.App, slot appspec.Slot) (bool, error) {
+func (s *Server) recreateSlot(ctx context.Context, app store.App, slot appspec.Slot) error {
 	image := app.Image
 	if image == "" {
 		info, err := s.rt.Inspect(ctx, appspec.SlotName(app.Slug, 1))
 		if err != nil {
-			return false, fmt.Errorf("replica %d is gone and slot 1 has no image to copy: %w", slot.Slot, err)
+			return fmt.Errorf("replica %d is gone and slot 1 has no image to copy: %w", slot.Slot, err)
 		}
 		image = info.Image
 	}
 	if slot.HostPort == 0 {
 		port, err := swap.ReserveLoopbackPort()
 		if err != nil {
-			return false, err
+			return err
 		}
 		slot.HostPort = port
 	}
 	slog.Warn("apps: replica container missing; recreating", "app", app.Slug, "slot", slot.Slot, "image", image)
 	if _, err := s.rt.Create(ctx, s.appSpec(app, image, app.Port, slot)); err != nil {
-		return false, err
+		return err
 	}
 	if err := s.rt.Start(ctx, slot.Name); err != nil {
-		return false, err
+		return err
 	}
-	return true, s.store.UpsertAppReplica(store.AppReplica{
+	return s.store.UpsertAppReplica(store.AppReplica{
 		AppID: app.ID, Slot: slot.Slot, ContainerName: slot.Name, HostPort: slot.HostPort, DeployID: slot.DeployID,
 	})
 }
@@ -585,8 +613,8 @@ func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 // connection tails its own docker streams; closing the connection closes
 // the tails. With replicas the slots' streams are merged into one SSE, each
 // line prefixed with its slot ("[r2] …"); ?replica=r2 narrows the stream to
-// one slot (replicas spec, decision 2). The slot set is resolved when the
-// panel connects — reload after scaling.
+// one slot (replicas spec, decision 2). The slot set is re-resolved every
+// few seconds, so scaling while the panel is open adds/removes streams.
 //
 // The connection NEVER closes on its own while the browser is open: if a
 // container is missing or stopped, the handler sends a waiting event and
@@ -634,43 +662,101 @@ func (s *Server) handleAppLogs(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	slots := s.appSlots(app)
-	multi := len(slots) > 1
-	if want := r.URL.Query().Get("replica"); want != "" {
-		var only []appspec.Slot
-		for _, sl := range slots {
-			if "r"+strconv.Itoa(sl.Slot) == want {
-				only = append(only, sl)
+	// The slot set is re-resolved every logsResyncInterval, so scaling
+	// while the panel is open adds/removes streams without a reload.
+	want := r.URL.Query().Get("replica")
+	type stream struct {
+		cancel   context.CancelFunc
+		prefixed bool
+	}
+	streams := map[int]*stream{}
+	seen := map[int]bool{} // slots streamed before: re-attach with no backlog
+	var wg sync.WaitGroup
+	defer func() {
+		for _, st := range streams {
+			st.cancel()
+		}
+		wg.Wait()
+	}()
+	first, missingNoted := true, false
+	resync := func() {
+		all := s.appSlots(app)
+		multi := len(all) > 1
+		wanted := map[int]appspec.Slot{}
+		for _, sl := range all {
+			if want == "" || "r"+strconv.Itoa(sl.Slot) == want {
+				wanted[sl.Slot] = sl
 			}
 		}
-		if len(only) == 0 {
-			emit("no replica " + want + " — this app runs " + strconv.Itoa(len(slots)) + " replica(s)")
-			<-ctx.Done()
+		if want != "" && len(wanted) == 0 && !missingNoted {
+			emit("no replica " + want + " — this app runs " + strconv.Itoa(len(all)) + " replica(s)")
+			missingNoted = true
+		}
+		changed := false
+		for n, st := range streams {
+			if _, ok := wanted[n]; !ok || st.prefixed != multi {
+				// Removed slot, or the prefix style flipped (1 ↔ N replicas).
+				st.cancel()
+				delete(streams, n)
+				changed = true
+			}
+		}
+		for n, sl := range wanted {
+			if streams[n] != nil {
+				continue
+			}
+			prefix := ""
+			if multi {
+				prefix = "[r" + strconv.Itoa(n) + "] "
+			}
+			tail := 200
+			if seen[n] {
+				tail = 0 // already shown this slot's backlog on this connection
+			}
+			seen[n] = true
+			sctx, cancel := context.WithCancel(ctx)
+			streams[n] = &stream{cancel: cancel, prefixed: multi}
+			slotEmit := func(line string) { emit(prefix + line) }
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				s.followContainerLogs(sctx, name, tail, slotEmit)
+			}(sl.Name)
+			changed = true
+		}
+		if changed && !first {
+			names := make([]string, 0, len(streams))
+			for n := 1; n <= store.MaxReplicas; n++ {
+				if streams[n] != nil {
+					names = append(names, "r"+strconv.Itoa(n))
+				}
+			}
+			emit("— replicas changed: now streaming " + strings.Join(names, ", ") + " —")
+		}
+		first = false
+	}
+	resync()
+	t := time.NewTicker(logsResyncInterval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
 			return
+		case <-t.C:
+			resync()
 		}
-		slots = only
 	}
-
-	var wg sync.WaitGroup
-	for _, sl := range slots {
-		prefix := ""
-		if multi {
-			prefix = "[r" + strconv.Itoa(sl.Slot) + "] "
-		}
-		slotEmit := func(line string) { emit(prefix + line) }
-		wg.Add(1)
-		go func(name string) {
-			defer wg.Done()
-			s.followContainerLogs(ctx, name, slotEmit)
-		}(sl.Name)
-	}
-	wg.Wait()
 }
+
+// logsResyncInterval is how often an open log panel re-resolves the app's
+// replicas (a var so tests can shorten it).
+var logsResyncInterval = 5 * time.Second
 
 // followContainerLogs tails one container until ctx ends, re-attaching
 // across restarts and recreations (deploy swaps rename a new container into
-// the name).
-func (s *Server) followContainerLogs(ctx context.Context, name string, emit func(string)) {
+// the name). tail is the backlog for the first attach; re-attaches after a
+// restart/recreate show the usual 200 lines.
+func (s *Server) followContainerLogs(ctx context.Context, name string, tail int, emit func(string)) {
 	emitted := false
 	for {
 		info, err := s.rt.Inspect(ctx, name)
@@ -700,7 +786,8 @@ func (s *Server) followContainerLogs(ctx context.Context, name string, emit func
 			}
 		}
 
-		rc, err := s.rt.Logs(ctx, name, true, 200)
+		rc, err := s.rt.Logs(ctx, name, true, tail)
+		tail = 200
 		if err != nil {
 			select {
 			case <-ctx.Done():

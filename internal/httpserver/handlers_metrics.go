@@ -4,16 +4,32 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
+	"strings"
+
+	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
 // handleAppMetricsJSON serves chart data for the app's metrics panel:
-// the newest ~60 samples (5 minutes at the 5s cadence).
+// the newest ~60 sampling ticks (5 minutes at the 5s cadence), totalled
+// across replicas — or one replica's samples with ?replica=r2.
 func (s *Server) handleAppMetricsJSON(w http.ResponseWriter, r *http.Request) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
 		return
 	}
-	metrics, err := s.store.ListMetrics(app.ID, 60)
+	var metrics []store.Metric
+	var err error
+	if rep := r.URL.Query().Get("replica"); rep != "" {
+		slot, convErr := strconv.Atoi(strings.TrimPrefix(rep, "r"))
+		if convErr != nil || !strings.HasPrefix(rep, "r") || slot < 1 || slot > store.MaxReplicas {
+			http.Error(w, "replica must be r1..r5", http.StatusBadRequest)
+			return
+		}
+		metrics, err = s.store.ListSlotMetrics(app.ID, slot, 60)
+	} else {
+		metrics, err = s.store.ListMetrics(app.ID, 60)
+	}
 	if err != nil {
 		slog.Error("metrics: list", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
