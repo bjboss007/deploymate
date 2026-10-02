@@ -295,10 +295,28 @@ reads.
   redirect works with Go's client; whether `digest` is populated. **Then
   repeat under the `BeyondCredit` org** — org policy may require approval or
   SSO authorization for fine-grained tokens (owner action).
-- **S2 — wrapper cost on the target box.** `docker buildx build` of the
-  2-line Dockerfile on the 4 GB laptop server: wall time, peak RAM; first
-  `eclipse-temurin:21-jre` pull time and Docker Hub anonymous-limit
-  behavior.
+- **S2 — wrapper cost on the target box.** ~~Run on the dev Mac~~
+  **measured 2026-10-02 (Docker Desktop, arm64, 3.8 GiB VM)** — re-run on
+  the real 4 GB Ubuntu box when it is up (numbers below are dominated by
+  I/O, so expect the same shape):
+  - cold pull of `eclipse-temurin:21-jre`: **42 s, 348 MB image** (once per
+    host; layers are then cached and shared by every Java app);
+  - the wrapper build (the exact `docker buildx build --progress=plain
+    --load` the builder runs; 1 `COPY` layer + `useradd`): **1.4 s**; the
+    engine's resident memory peaked at **~184 MB — no measurable increase**
+    over its ~200 MB idle (sampled every 100 ms from inside the VM);
+  - the wrapped image is the JRE image **plus the JAR** (+6 KB for the
+    fixture; a Spring Boot fat JAR adds its own ~50–100 MB per deploy
+    layer — the existing prune keeps 5 images/app);
+  - the template behaves: runs as non-root `app`, honors `PORT` via
+    `-Dserver.port`, ships `JAVA_OPTS=-XX:MaxRAMPercentage=75`, and the
+    fixture server serves under a **128 MB** container limit using
+    **28 MiB** idle;
+  - Docker Hub anonymous pulls: headers show **100 pulls / 3600 s per IP**
+    (`ratelimit-limit: 100;w=3600`); a wrap needs the base only on the
+    first deploy per host, so the limit is irrelevant at this volume.
+  Caveat: the fixture is a hello-world, not a Spring Boot app — real JVM
+  runtime memory (~300–600 MB) is the app's, not the wrapper's.
 - **S3 — retention accounting.** Confirm `retention-days: 1` keeps an
   80 MB-JAR-per-push workflow comfortably under the Free/Pro shared quota
   and how fast storage is reclaimed (the docs fetched don't say).
@@ -316,8 +334,10 @@ jars, bomb caps); Dockerfile template; GitHub client against an
 401/403/404 messages, digest verify); preflight arithmetic.
 
 E2e (`make e2e-artifact`, throwaway server, no real GitHub): a tiny fake
-GitHub API server + a committed few-KB fixture JAR (a `com.sun.net.httpserver`
-hello-world) → a signed `workflow_run` webhook → worker downloads from the
+GitHub API server + the committed 1.6 KB fixture JAR
+(`testdata/apps/hellojar/hello.jar`, source + `build.sh` alongside — a
+`com.sun.net.httpserver` hello-world answering "deploymate e2e prebuilt jar
+fixture") → a signed `workflow_run` webhook → worker downloads from the
 fake, wraps, runs → `/preview` serves the fixture's body; plus rollback to
 the previous run, a second source with the same delivery GUID, and the
 failure messages. The fake is addressed through a **test-only config var**

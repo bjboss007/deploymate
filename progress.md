@@ -7,6 +7,27 @@
 
 ## Where we stopped
 
+**2026-10-02 (spike S2 + live restart)** — **Live server restarted on
+the P0 webhook-fix build** (pid 72999; snapshot
+`data/backups/pre-p0-20261002122337.db`; no migration; all apps healthy,
+4 shortlink URLs 200, tunnel up). **Prebuilt-deploys spike S2 done** (on
+the dev Mac; re-run on the 4 GB Ubuntu box when it exists): cold pull of
+`eclipse-temurin:21-jre` 42 s / 348 MB (once per host); the wrapper build
+1.4 s with **no measurable engine memory increase** (peak ~184 MB vs ~200 MB
+idle); wrapped template runs non-root, honors `PORT`/`JAVA_OPTS`, serves
+under a 128 MB limit at 28 MiB idle; Docker Hub anonymous limit is 100
+pulls/hour/IP (irrelevant here). Results are in the spec's Spikes section.
+**New fixture:** `testdata/apps/hellojar/` (`Hello.java`, `build.sh` — builds
+`hello.jar` via a JDK container, 1.6 KB committed) for the future
+`make e2e-artifact`. **S1 (real GitHub round trip) and S3 (artifact
+retention quota) are NOT done:** they need a throwaway private GitHub repo
+(`bjboss007` token has `repo`+`workflow` scope, so a repo, the workflow and
+runs can be driven from here) and, for the real least-privilege check, a
+**fine-grained token with Actions: read created by the owner in the
+browser** (GitHub has no API to create PATs), plus the `BeyondCredit` org
+token-policy check (owner action). Waiting on the owner's go-ahead for the
+repo.
+
 **2026-10-02 (P0 webhook fix)** — **The multi-webhook fan-out bug is
 fixed** (P0 of `docs/specs/prebuilt-deploys.md`; improvements.md item
 checked off; ADR 0009 + deploy-flow + troubleshooting updated).
