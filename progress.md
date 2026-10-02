@@ -7,6 +7,34 @@
 
 ## Where we stopped
 
+**2026-10-02 (ERP would not start — service slug collision across projects)**
+— The owner recreated the failed app as `erp` (Acme Starter, build mode, repo
+`bjboss007/tradestack-dm-test`). Its deploy failed: `manifest: service did not
+become ready within 60s`. **Root cause (platform bug):** `services.slug` has
+no UNIQUE index (migration 0003 only added the column), so the documented
+"slugs are globally unique" rule was never enforced. Acme Starter's manifest
+(`deploymate.yml`: `postgres:16-alpine`, `redis:7-alpine`, which I added to the
+test repo) auto-created `dev-postgres`/`dev-redis`; the `shortener` project
+already owned services with those slugs, so `Provision` stopped+removed the
+shortener's containers `dm-svc-dev-postgres`/`dm-svc-dev-redis` and recreated
+them from the pinned images over the **same data volumes**. Redis 7 cannot read
+the volume written by `redis:latest` (RDB v15) -> crash loop -> readiness
+timeout. Postgres 16 happened to match its volume, so it runs, but with acme's
+generated credentials not matching the volume's. **Code fix (committed, tests
+green):** `CreateService` now enforces global slug uniqueness; manifest
+provisioning falls back to `{project-slug}-{env}-{type}` when the env-prefixed
+slug is taken (`TestEnsureDoesNotTakeAnotherProjectsService`,
+`TestCreateServiceSlugUniqueAcrossProjects`). **Live repair NOT done** (an
+action to modify shared containers was refused; owner to decide): shortener's
+`dm-svc-dev-redis` is crash-looping on `redis:7-alpine`; two duplicate rows
+(acme-starter `dev-postgres` id 742719b8…, `dev-redis` id 6bf89616…) still sit in
+`services`. Planned repair: snapshot the DB; recreate `dm-svc-dev-redis` from
+`redis:latest` on `dm-svc-dev-redis-data` (labels as in the service row);
+delete the two acme-starter rows (+ their `service_credentials`); restart the
+live server on the new build; redeploy ERP so it provisions its own services.
+Not yet audited: `GetServiceBySlug` is global, so duplicate slugs also make
+`/services/{slug}` ambiguous until the duplicates are removed.
+
 **2026-10-02 (UI bug: Start on a failed app nested the whole page)** —
 Owner screenshot: clicking **Start** on a failed app whose container is gone
 rendered the full page (layout and all) inside the header buttons. Cause: the
