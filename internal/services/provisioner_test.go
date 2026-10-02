@@ -74,9 +74,11 @@ func (f *fakeRuntime) Stats(ctx context.Context, name string) (runtime.Stats, er
 	return runtime.Stats{}, nil
 }
 func (f *fakeRuntime) StorageUsed(ctx context.Context) (uint64, error) { return 0, nil }
-func (f *fakeRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error) { return runtime.DiskUsage{}, nil }
-func (f *fakeRuntime) ImageSize(context.Context, string) (uint64, error)     { return 0, nil }
-func (f *fakeRuntime) Close() error                                    { return nil }
+func (f *fakeRuntime) DiskUsage(context.Context) (runtime.DiskUsage, error) {
+	return runtime.DiskUsage{}, nil
+}
+func (f *fakeRuntime) ImageSize(context.Context, string) (uint64, error) { return 0, nil }
+func (f *fakeRuntime) Close() error                                      { return nil }
 
 func newTestProvisioner(t *testing.T) (*Provisioner, *store.Store, *fakeRuntime) {
 	t.Helper()
@@ -516,4 +518,62 @@ func TestEnsureStagingReusesOnlyStaging(t *testing.T) {
 	if stagingSecond[0].Service.ID == prodRes[0].Service.ID {
 		t.Fatal("staging reuse matched the production service")
 	}
+}
+
+// TestEnsureDoesNotTakeAnotherProjectsService: container and volume names are
+// global (dm-svc-{slug}), so a second project's manifest-created dev-postgres
+// must get its OWN slug instead of re-provisioning — stop, remove, create
+// over the same name — the first project's container.
+func TestEnsureDoesNotTakeAnotherProjectsService(t *testing.T) {
+	p, st, rt := newTestProvisioner(t)
+	first := testProject(t, st)
+	owner, err := st.GetUserByEmail("owner@test.dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := st.CreateProject(store.Project{UserID: owner.ID, Name: "Acme Starter", Slug: "acme-starter"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r1 := ensureOnceEnv(t, p, first.ID, store.EnvDev, "redis")
+	if r1[0].Service.Slug != "dev-redis" {
+		t.Fatalf("first project's slug = %q", r1[0].Service.Slug)
+	}
+	removedBefore := len(rt.removed)
+	r2 := ensureOnceEnv(t, p, second.ID, store.EnvDev, "redis")
+	for _, n := range rt.removed[removedBefore:] {
+		if n == "dm-svc-dev-redis" {
+			t.Fatal("the second project's deploy removed the first project's container")
+		}
+	}
+	svc := r2[0].Service
+	if svc.Slug != "acme-starter-dev-redis" || svc.VolumeName != "dm-svc-acme-starter-dev-redis-data" {
+		t.Fatalf("second project's service = slug %q volume %q, want its own project-prefixed names", svc.Slug, svc.VolumeName)
+	}
+	names := map[string]bool{}
+	for _, s := range rt.created {
+		names[s.Name] = true
+	}
+	if !names["dm-svc-dev-redis"] || !names["dm-svc-acme-starter-dev-redis"] || len(rt.created) != 2 {
+		t.Fatalf("created containers = %v, want two distinct names", names)
+	}
+	// Re-running the second project's deploy converges on its own service.
+	r3 := ensureOnceEnv(t, p, second.ID, store.EnvDev, "redis")
+	if r3[0].Service.ID != svc.ID {
+		t.Errorf("second Ensure created another service (%q), want to reuse %q", r3[0].Service.Slug, svc.Slug)
+	}
+}
+
+func ensureOnceEnv(t *testing.T, p *Provisioner, projectID, env string, types ...string) []Resolution {
+	t.Helper()
+	decls := make([]ServiceDecl, 0, len(types))
+	for _, typ := range types {
+		decls = append(decls, ServiceDecl{Type: typ})
+	}
+	res, err := p.Ensure(context.Background(), projectID, env, decls)
+	if err != nil {
+		t.Fatalf("Ensure(%s %v) error = %v", env, types, err)
+	}
+	return res
 }

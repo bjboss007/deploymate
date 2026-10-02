@@ -177,11 +177,23 @@ func (p *Provisioner) create(ctx context.Context, projectID, env string, decl Se
 		name = strings.ToUpper(env[:1]) + env[1:] + " " + tpl.Label
 		slug = env + "-" + decl.Type
 	}
-	svc, err := p.st.CreateService(store.Service{
-		ProjectID: projectID, Type: decl.Type, Name: name, Slug: slug,
-		Image: decl.Image(), Status: "stopped", VolumeName: VolumeName(slug), Port: tpl.Port,
-		Environment: env, Origin: store.OriginManifest,
-	})
+	mk := func(name, slug string) (store.Service, error) {
+		return p.st.CreateService(store.Service{
+			ProjectID: projectID, Type: decl.Type, Name: name, Slug: slug,
+			Image: decl.Image(), Status: "stopped", VolumeName: VolumeName(slug), Port: tpl.Port,
+			Environment: env, Origin: store.OriginManifest,
+		})
+	}
+	svc, err := mk(name, slug)
+	if errors.Is(err, store.ErrSlugTaken) {
+		// Another project already owns "dev-postgres": container and volume
+		// names are global, so this project's service must not share them
+		// (that would stop and replace the other project's container).
+		// Prefix the project slug instead.
+		if proj, perr := p.st.GetProjectByID(projectID); perr == nil && proj.Slug != "" {
+			svc, err = mk(name+" ("+proj.Name+")", proj.Slug+"-"+slug)
+		}
+	}
 	if errors.Is(err, store.ErrSlugTaken) {
 		return store.Service{}, fmt.Errorf(
 			"creating %s service: the name %q is already taken by another service — rename or delete it first", decl.Type, slug)

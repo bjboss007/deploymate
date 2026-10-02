@@ -34,6 +34,19 @@ func (s *Store) CreateService(sv Service) (Service, error) {
 	if sv.Origin == "" {
 		sv.Origin = OriginManual
 	}
+	// A service's slug names its docker container and volume (dm-svc-{slug}),
+	// which are global — so the slug must be unique across ALL projects. The
+	// column has no UNIQUE index (older databases may already hold
+	// duplicates), so it is enforced here. Without this a second project's
+	// manifest-created "dev-postgres" silently re-provisioned the first
+	// project's container (stop + remove + create over the same name).
+	var taken int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM services WHERE slug = ?`, sv.Slug).Scan(&taken); err != nil {
+		return sv, err
+	}
+	if taken > 0 {
+		return sv, ErrSlugTaken
+	}
 	_, err := s.db.Exec(
 		`INSERT INTO services (id, project_id, type, name, slug, image, status, volume_name, port, environment, origin, orphaned, created_at)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
