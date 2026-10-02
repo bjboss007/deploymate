@@ -233,6 +233,11 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte("pong"))
 			return
 		case "push", "":
+		case "workflow_run":
+			// Prebuilt deploys: a finished GitHub Actions run (see
+			// handlers_ci.go for the gates).
+			s.handleWorkflowRun(w, gs, body, delivery)
+			return
 		default:
 			// Any other event (workflow_run, issues, …) is not a deploy.
 			slog.Debug("webhook: ignoring non-push event", "source", gs.ID, "event", event)
@@ -265,9 +270,15 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Queue a deployment for the app(s) linked to this source.
-	n := 0
+	n, ciOnly := 0, 0
 	if apps, err := s.store.ListAppsByGitSource(gs.ID); err == nil {
 		for _, app := range apps {
+			if app.DeployMode == store.DeployModeArtifact {
+				// A prebuilt app deploys when its CI run finishes, not on the
+				// push: the artifact doesn't exist yet.
+				ciOnly++
+				continue
+			}
 			_, err := s.store.CreateDeployment(store.Deployment{
 				AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "webhook",
 				CommitSHA: push.CommitSHA, CommitMessage: push.CommitMessage,
@@ -278,6 +289,10 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			}
 			n++
 		}
+	}
+	if n == 0 && ciOnly > 0 {
+		_, _ = w.Write([]byte("ignored: this app deploys from CI runs, not pushes"))
+		return
 	}
 	if n == 0 {
 		slog.Warn("webhook: no apps linked to source", "source", gs.ID)

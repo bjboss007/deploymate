@@ -22,6 +22,21 @@ type Deployment struct {
 	StartedAt     string
 	FinishedAt    string
 	CreatedAt     string
+	// CIRun / CIRunNumber identify the GitHub Actions run a prebuilt
+	// (artifact) deployment came from: the run id (one deployment per run)
+	// and the workflow's monotonic run number (ordering). 0 = not a CI
+	// deployment.
+	CIRun       int64
+	CIRunNumber int
+}
+
+// deploymentColumns is the column list every deployment SELECT reads, in
+// scanDeployment's order.
+const deploymentColumns = `id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at, ci_run, ci_run_number`
+
+func (d *Deployment) scanFields() []any {
+	return []any{&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
+		&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt, &d.CIRun, &d.CIRunNumber}
 }
 
 // CreateDeployment inserts a new deployment and returns it.
@@ -29,10 +44,10 @@ func (s *Store) CreateDeployment(d Deployment) (Deployment, error) {
 	d.ID = NewID()
 	d.CreatedAt = Now()
 	_, err := s.db.Exec(
-		`INSERT INTO deployments (id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO deployments (id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at, ci_run, ci_run_number)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		d.ID, d.AppID, d.CommitSHA, d.CommitMessage, d.Kind, d.Status, d.Trigger, d.ImageTag, d.Error,
-		d.StartedAt, d.FinishedAt, d.CreatedAt,
+		d.StartedAt, d.FinishedAt, d.CreatedAt, d.CIRun, d.CIRunNumber,
 	)
 	return d, err
 }
@@ -50,11 +65,9 @@ func (s *Store) UpdateDeployment(d Deployment) error {
 func (s *Store) GetDeployment(id string) (Deployment, error) {
 	var d Deployment
 	err := s.db.QueryRow(
-		`SELECT id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at
-		 FROM deployments WHERE id = ?`,
+		`SELECT `+deploymentColumns+` FROM deployments WHERE id = ?`,
 		id,
-	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
-		&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt)
+	).Scan(d.scanFields()...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return d, ErrNotFound
 	}
@@ -107,11 +120,9 @@ func (s *Store) FailStaleBuilding() (int64, error) {
 func (s *Store) LatestDeploymentOfKind(appID, kind string) (*Deployment, error) {
 	var d Deployment
 	err := s.db.QueryRow(
-		`SELECT id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at
-		 FROM deployments WHERE app_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1`,
+		`SELECT `+deploymentColumns+` FROM deployments WHERE app_id = ? AND kind = ? ORDER BY created_at DESC LIMIT 1`,
 		appID, kind,
-	).Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
-		&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt)
+	).Scan(d.scanFields()...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -133,8 +144,7 @@ func (d *Deployment) CreatedTime() time.Time {
 // ListDeployments returns an app's deployment history, newest first.
 func (s *Store) ListDeployments(appID string, limit int) ([]Deployment, error) {
 	rows, err := s.db.Query(
-		`SELECT id, app_id, commit_sha, commit_message, kind, status, trigger, image_tag, error, started_at, finished_at, created_at
-		 FROM deployments WHERE app_id = ? ORDER BY created_at DESC LIMIT ?`,
+		`SELECT `+deploymentColumns+` FROM deployments WHERE app_id = ? ORDER BY created_at DESC LIMIT ?`,
 		appID, limit,
 	)
 	if err != nil {
@@ -144,11 +154,36 @@ func (s *Store) ListDeployments(appID string, limit int) ([]Deployment, error) {
 	var out []Deployment
 	for rows.Next() {
 		var d Deployment
-		if err := rows.Scan(&d.ID, &d.AppID, &d.CommitSHA, &d.CommitMessage, &d.Kind, &d.Status, &d.Trigger, &d.ImageTag,
-			&d.Error, &d.StartedAt, &d.FinishedAt, &d.CreatedAt); err != nil {
+		if err := rows.Scan(d.scanFields()...); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
 	}
 	return out, rows.Err()
+}
+
+// HasCIRun reports whether the app already has a NON-FAILED deployment
+// (queued, building, or running) for this GitHub run id — the idempotency
+// check, so a redelivered or replayed workflow_run never deploys twice.
+// A failed deployment does not count: GitHub's "Re-run" keeps the run id
+// (with a new attempt), and that is exactly how a failed deploy is retried.
+func (s *Store) HasCIRun(appID string, runID int64) (bool, error) {
+	var n int
+	err := s.db.QueryRow(
+		`SELECT COUNT(*) FROM deployments WHERE app_id = ? AND ci_run = ? AND status != 'failed'`,
+		appID, runID).Scan(&n)
+	return n > 0, err
+}
+
+// LatestCIRunNumber returns the highest workflow run number among the app's
+// non-failed CI deployments (queued, building, or running); 0 when none.
+// A failed deployment does not count, so a retry of a failed run can deploy
+// again — but a run no newer than one already deployed (or in flight) is
+// stale and must be skipped.
+func (s *Store) LatestCIRunNumber(appID string) (int, error) {
+	var n sql.NullInt64
+	err := s.db.QueryRow(
+		`SELECT MAX(ci_run_number) FROM deployments WHERE app_id = ? AND ci_run > 0 AND status != 'failed'`,
+		appID).Scan(&n)
+	return int(n.Int64), err
 }

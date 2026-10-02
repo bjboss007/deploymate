@@ -7,6 +7,44 @@
 
 ## Where we stopped
 
+**2026-10-02 (prebuilt deploys P1 built)** — **Prebuilt (GitHub Actions
+artifact) deploys are implemented, backend-only** (ADR 0019; spec
+`docs/specs/prebuilt-deploys.md` "As built"; improvements.md P0/P1 checked,
+P2/P3 open). The owner narrowed `DM_ARTIFACT_TOKEN` to the one spike repo
+first (verified: spike repo 200, another private repo 404; note a narrowed
+fine-grained token still lists ALL public repos, so the planned scope
+warning counts **private** repos only — fixed in the spec). **What shipped:**
+migration **0017** (`apps.deploy_mode` default `build` / `workflow_path` /
+`artifact_name`, `git_sources.api_token_enc`, `deployments.ci_run` /
+`ci_run_number`); `internal/githubci` (repo, `OtherPrivateRepos`,
+`ListSuccessfulRuns`, `ListRunArtifacts`, `DownloadArtifact` — 302 followed
+**without** the token, URL never logged); `internal/builder/artifact.go`
+(`ExtractJar` — exactly one `.jar`, never by entry name, caps; `JavaMajor`;
+`JavaWrapperDockerfile`); `handlers_ci.go` (six gates in `ciSkipReason`,
+`handleWorkflowRun`); `jobs/artifact.go` (`runArtifactDeploy`, 7 named
+failure causes, all before the swap); `webhooks.ParseGitHubWorkflowRun`;
+config `DEPLOYMATE_GITHUB_API_URL` (**test only**); `seed-git-source` takes
+`DEPLOYMATE_SEED_MODE/_API_TOKEN/_WORKFLOW/_ARTIFACT`. **Design correction
+found while testing:** idempotency/ordering ignore **failed** deployments
+(GitHub's Re-run keeps the run id, so counting failed ones made a failed
+deploy unretryable). **Existing behavior unchanged:** build-mode is the
+default, pushes still deploy build-mode apps, rollback/replicas/stats/
+prune are shared code. **Tests:** new unit tests for store, githubci,
+builder (zip-slip, symlinks, plain jar, caps), webhooks (parse a real
+captured payload), the 10 gate cases + idempotency/ordering/mode dispatch,
+and the worker (success, Java version, 12 failure cases incl. "previous
+version keeps serving", rollback with GitHub down, build-mode path
+untouched); **`make e2e-artifact` PASSED** against real Docker + a fake
+GitHub (`testdata/fakegithub.py`, fixture `testdata/apps/hellojar/`);
+`e2e_git`/`e2e_manual`/`e2e_replicas` re-run green (e2e_git's P0 assertion
+for "non-push events" moved from `workflow_run` to `issues` since
+`workflow_run` is a real path now); `make test` + `make vet` green, `-race`
+clean. Gotcha: a stale fake GitHub on 18103 (from `kill %1`, which does not
+work in a non-interactive shell) made a run 401 for the wrong reason — the
+e2e now refuses busy ports. **Live server NOT restarted** on this build
+(would apply migration 17 — snapshot first). **Next:** P2 (UI + workflow
+generator + Test connection + Deploy latest successful run), then P3.
+
 **2026-10-02 (spike S1 part B — fine-grained token)** — **Owner created
 a fine-grained token `DM_ARTIFACT_TOKEN`** (exported in `~/.zshrc`; read via
 `zsh -c 'source ~/.zshrc …'`, never printed/written). Results (spec
@@ -885,14 +923,14 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **Prebuilt deploys** — spec'd 2026-10-02
-   (`docs/specs/prebuilt-deploys.md`); owner go-ahead needed to build.
-   **P0 is done** (per-source delivery key + event dispatch, 2026-10-02);
-   next the spikes (S1 needs a throwaway GitHub repo and an org-token
-   check), then P1.
-   Replicas remain shipped (ADR 0018); left over there: re-run the Traefik
-   spike harness on the real Linux box when it's up, and horizontal
-   autoscaling (improvements.md, Medium-term).
+3. **Prebuilt deploys** — P0 + P1 built 2026-10-02 (ADR 0019, backend
+   only). Next **P2** (UI: mode select, token + Test connection with the
+   private-repo scope warning, generated workflow file, Deploy latest
+   successful run) so the owner can switch the failing `testing` app over,
+   then P3 (memory preflight). Owner actions pending: BeyondCredit org
+   token policy, the billing glance after 2026-10-03, delete the spike
+   repo. Replicas remain shipped (ADR 0018); left over: re-run the Traefik
+   spike harness on the real Linux box, horizontal autoscaling.
 4. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if

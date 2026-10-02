@@ -11,7 +11,7 @@ deploys or read secrets.**
 | Host ports | ufw allows 22/80/443 only; **only Traefik publishes publicly-reachable ports** — app/db containers live on the internal bridge. Apps additionally publish their port to **127.0.0.1 loopback only** (for `/preview/<slug>`); loopback bindings are unreachable from the internet |
 | Dashboard | argon2id password (PHC-encoded), httpOnly SameSite session cookie, per-session CSRF token on every POST, constant-time comparisons |
 | Webhooks | HMAC-SHA256 (`X-Hub-Signature-256`) / `X-GitLab-Token`, raw-body read once, 1 MiB cap, delivery-ID dedup (24 h), branch filter; handlers never execute repo code |
-| Secrets | XChaCha20-Poly1305 at rest (deploy keys, webhook secrets, env values, DB passwords); key file 0600; DB creds never displayed |
+| Secrets | XChaCha20-Poly1305 at rest (deploy keys, webhook secrets, GitHub API tokens for prebuilt deploys, env values, DB passwords); key file 0600; DB creds never displayed |
 | Deploy keys | ed25519, per-repo, read-only intent (add as read-only deploy key in the forge), 0600 temp file per clone, removed after |
 | User code | runs only inside containers; builds run in BuildKit containers; no `--privileged`; no host mounts |
 | Docker socket | held by the deploymate host process (docker group) and Traefik (read-only); **not** mounted into app containers. Hardening idea: `tecnativa/docker-socket-proxy` in front of Traefik (improvements) |
@@ -20,6 +20,15 @@ deploys or read secrets.**
 
 ## Residual risks (accepted, documented)
 
+- **GitHub API token (prebuilt deploys)**: a fine-grained token with
+  *Actions: read* can list runs/artifacts and download artifacts — it cannot
+  read code or start workflows (verified). Its **repository scope is the
+  owner's choice**: an *All repositories* token reads the build artifacts of
+  every private repo it can see, and a leak of the database **and** key
+  file together would expose them. Create it with *Only select
+  repositories*. The artifact download's signed storage URL is never logged
+  and never receives the token. Webhook gates refuse pull-request and fork
+  runs, so attacker-built artifacts cannot reach the deploy path.
 - **Docker socket = root-equivalent**: the platform process can do
   anything on the host. Accepted for a personal server; the blast radius
   is "someone who already owns your deploymate login owns the box" —

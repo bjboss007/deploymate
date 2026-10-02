@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strings"
 )
 
@@ -32,10 +33,29 @@ type App struct {
 	CreatedAt           string
 	Replicas            int    // desired slot count, 1..MaxReplicas (docs/specs/app-replicas.md)
 	HealthPath          string // per-slot probe + Traefik healthcheck path; default "/"
+	// Prebuilt deploys (docs/specs/prebuilt-deploys.md). DeployMode is
+	// DeployModeBuild (default) or DeployModeArtifact; the other two say
+	// which GitHub workflow's runs deploy this app and which uploaded
+	// artifact holds its JAR.
+	DeployMode   string
+	WorkflowPath string
+	ArtifactName string
 }
 
+// Deploy modes (apps.deploy_mode).
+const (
+	DeployModeBuild    = "build"    // clone + build on this server (the original behavior)
+	DeployModeArtifact = "artifact" // deploy a JAR built by GitHub Actions
+)
+
+// Defaults for the prebuilt-deploy settings (migration 0017's column defaults).
+const (
+	DefaultWorkflowPath = ".github/workflows/deploymate.yml"
+	DefaultArtifactName = "deploymate-app"
+)
+
 // appColumns is the column list every app SELECT reads, in scan order.
-const appColumns = `id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path`
+const appColumns = `id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name`
 
 // ErrSlugTaken is returned when a slug is already in use.
 var ErrSlugTaken = errors.New("store: slug already exists")
@@ -51,16 +71,25 @@ func (s *Store) CreateApp(a App) (App, error) {
 	if a.HealthPath == "" {
 		a.HealthPath = DefaultHealthPath
 	}
+	if a.DeployMode == "" {
+		a.DeployMode = DeployModeBuild
+	}
+	if a.WorkflowPath == "" {
+		a.WorkflowPath = DefaultWorkflowPath
+	}
+	if a.ArtifactName == "" {
+		a.ArtifactName = DefaultArtifactName
+	}
 	// Empty strings violate the git_sources foreign key; NULL is correct.
 	var gitSourceID any
 	if a.GitSourceID != "" {
 		gitSourceID = a.GitSourceID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.ProjectID, a.Name, a.Slug, gitSourceID, a.BuildType, a.RootDirectory,
-		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.PreviewHostPort, a.Entrypoint, a.Command, a.CreatedAt, a.Replicas, a.HealthPath,
+		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.PreviewHostPort, a.Entrypoint, a.Command, a.CreatedAt, a.Replicas, a.HealthPath, a.DeployMode, a.WorkflowPath, a.ArtifactName,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return a, ErrSlugTaken
@@ -91,7 +120,7 @@ func (s *Store) GetAppBySlug(slug string) (App, error) {
 		 FROM apps WHERE slug = ?`,
 		slug,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -120,6 +149,24 @@ func (s *Store) UpdateAppDeployConfig(id, image string, port int, entrypoint, co
 // and Traefik routing).
 func (s *Store) UpdateAppPort(id string, port int) error {
 	_, err := s.db.Exec(`UPDATE apps SET port = ? WHERE id = ?`, port, id)
+	return err
+}
+
+// UpdateAppDeployMode sets how the app is deployed and, for prebuilt
+// (artifact) mode, which workflow and artifact feed it. Empty workflow/
+// artifact values fall back to the defaults.
+func (s *Store) UpdateAppDeployMode(id, mode, workflowPath, artifactName string) error {
+	if mode != DeployModeBuild && mode != DeployModeArtifact {
+		return fmt.Errorf("store: unknown deploy mode %q", mode)
+	}
+	if workflowPath == "" {
+		workflowPath = DefaultWorkflowPath
+	}
+	if artifactName == "" {
+		artifactName = DefaultArtifactName
+	}
+	_, err := s.db.Exec(`UPDATE apps SET deploy_mode = ?, workflow_path = ?, artifact_name = ? WHERE id = ?`,
+		mode, workflowPath, artifactName, id)
 	return err
 }
 
@@ -166,7 +213,7 @@ func (s *Store) GetAppByID(id string) (App, error) {
 		 FROM apps WHERE id = ?`,
 		id,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -219,7 +266,7 @@ func scanApps(rows *sql.Rows) ([]App, error) {
 		var a App
 		var gitSourceID sql.NullString
 		if err := rows.Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType,
-			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath); err != nil {
+			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName); err != nil {
 			return nil, err
 		}
 		a.GitSourceID = gitSourceID.String

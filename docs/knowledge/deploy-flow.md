@@ -64,6 +64,43 @@ quotes the builder's last error line — never a bare "exit status 1". The
 previous container is untouched — a failed build never takes a running
 app down.
 
+## Prebuilt (GitHub Actions) deploys
+
+ADR 0019, spec `docs/specs/prebuilt-deploys.md`. An app in
+`deploy_mode = 'artifact'` deploys a JAR that CI built instead of cloning
+and building on the server — the way a 2 GB box runs what it cannot build.
+
+1. GitHub Actions builds the JAR and uploads artifact `apps.artifact_name`
+   (default `deploymate-app`, `retention-days: 1`).
+2. GitHub sends `workflow_run` to the app's existing `/hooks/{id}`. After the
+   HMAC check and the per-source dedupe, `ciSkipReason` applies the gates:
+   completed + success; `path == apps.workflow_path`; the tracked branch;
+   event `push`/`workflow_dispatch` only (never `pull_request`); head repo =
+   this repo (not a fork); no live deployment for the run id and a run
+   number above everything deployed or in flight. Pass → a queued
+   `deploy` row with `trigger = ci`, `ci_run`, `ci_run_number`.
+   (Pushes are ignored for prebuilt apps; CI events are ignored for
+   build-mode apps.)
+3. The worker (`runArtifactDeploy`) lists the run's artifacts, picks the
+   named one (not expired, under the size cap), downloads it with the
+   source's fine-grained token (302 → blob URL fetched **without** the
+   token), verifies GitHub's sha256 digest, extracts the single `.jar`, and
+   builds a two-line wrapper — `FROM eclipse-temurin:{major}-jre` (major
+   from the app's `java:NN` runtime, default 21), non-root, `JAVA_OPTS`
+   default `-XX:MaxRAMPercentage=75`, `-Dserver.port=${PORT}` — with the
+   normal builder (~1.4 s).
+4. The wrapped image is recorded in `images` and goes through the normal
+   rolling, replica-aware swap (`runContainer` → `finish`), with `GIT_SHA`
+   from `head_sha`.
+5. **Rollback** reuses the kept local image: no GitHub call, works with
+   GitHub down and the token dead.
+
+Failures name the cause (token rejected/refused/repo-or-run not found;
+no artifact of that name; expired; integrity check; not a zip; no/several
+JARs; the wrapper build) and happen before the swap — the previous version
+keeps serving and the app is not marked failed. A failed run id is retryable
+with GitHub's **Re-run**.
+
 ## Replicas (1–5 per app)
 
 ADR 0018, spec `docs/specs/app-replicas.md`. `apps.replicas` is the

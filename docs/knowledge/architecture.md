@@ -35,7 +35,8 @@
 | Worker | `internal/jobs` | claims queued deployments; clone → build → swap → mark; rollbacks; image pruning |
 | Builder | `internal/builder` | Dockerfile detection + buildx invocation with line streaming |
 | Git | `internal/gitpkg` | deploy-key generation (ssh-keygen), clone/pin via git CLI |
-| Webhooks | `internal/webhooks` | HMAC verify, payload parse, delivery dedup |
+| Webhooks | `internal/webhooks` | HMAC verify, payload parse (push, workflow_run), per-source delivery dedup |
+| GitHub client | `internal/githubci` | prebuilt deploys: read repo, list a workflow's runs and a run's artifacts, download an artifact (302 followed without the token) |
 | Proxy | `internal/proxy` | Traefik label generation (pure, unit-tested) |
 | Services | `internal/services` | Postgres/MySQL/Redis templates: image, env, conn URL, readiness cmd |
 | Monitor | `internal/monitor` | stats sampler, uptime prober, retention pruner |

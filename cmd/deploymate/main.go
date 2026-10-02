@@ -124,6 +124,7 @@ func serve() error {
 
 	// The deployment worker: one in-process loop, builds serialized.
 	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)
+	worker.SetGitHubAPI(cfg.GitHubAPIURL)
 	go worker.Run(workerCtx)
 
 	// Metrics, health, uptime, restart, and disk sampling.

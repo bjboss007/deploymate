@@ -120,3 +120,28 @@ Two things make this scriptable where the UI can't be:
 Deliberately passes **no** `DEPLOYMATE_CLOUDFLARE_*` vars, so the throwaway
 never creates real DNS records. Uses the Dockerfile build engine (no
 Railpack/buildkit dependency) to stay portable and fast.
+
+## `make e2e-artifact` — prebuilt (GitHub Actions artifact) deploys
+
+`testdata/e2e_artifact.sh` drives the whole prebuilt pipeline on a throwaway
+server (:18102) against a **fake GitHub** (`testdata/fakegithub.py`, ports
+18103 API / 18104 storage; Python 3 stdlib only). The server reaches it
+through the **test-only** env var `DEPLOYMATE_GITHUB_API_URL` (default
+`https://api.github.com`; never set it on a real server). The fake mirrors
+the response shapes captured from real GitHub (spike S1): Bearer auth,
+artifact lists with a zip `digest`, a 302 to a separate storage host that
+**rejects any request carrying an Authorization header**, 401/404 bodies.
+
+- Fixture: `testdata/apps/hellojar/` — `Hello.java` + `build.sh` build a
+  1.6 KB `hello.jar` with a JDK in Docker (committed; rebuild only when
+  `Hello.java` changes). It answers "deploymate e2e prebuilt jar fixture".
+- Needs `eclipse-temurin:21-jre` (pulled once if absent), `python3`, Docker.
+- Seeding without the UI: `seed-git-source` reads `DEPLOYMATE_SEED_MODE=
+  artifact`, `DEPLOYMATE_SEED_API_TOKEN`, `_WORKFLOW`, `_ARTIFACT`.
+- **Gotcha:** a leftover fake/server on 18102–18104 makes a run fail for the
+  wrong reason (the stale fake answers with *its* token → 401). The script
+  now refuses to start when those ports are busy. (Don't use `kill %1` in a
+  non-interactive shell — it doesn't kill the job.)
+- Quick tunnel note (from the S1 spike): with `~/.cloudflared/config.yml`
+  present a `cloudflared tunnel --url` quick tunnel answers 404 unless given
+  an empty `--config`; new trycloudflare hostnames can take ~80 s to resolve.

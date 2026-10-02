@@ -58,6 +58,66 @@ func ParseGitHubPush(body []byte) (Push, error) {
 	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: p.Head.Message}, nil
 }
 
+// WorkflowRun is the data prebuilt deploys read from a GitHub `workflow_run`
+// event (field names verified against real deliveries, spike S1).
+type WorkflowRun struct {
+	Action      string // requested | in_progress | completed
+	RunID       int64
+	RunNumber   int
+	RunAttempt  int
+	Name        string
+	Path        string // e.g. .github/workflows/deploymate.yml
+	Event       string // what triggered the run: push, pull_request, …
+	Status      string
+	Conclusion  string // success | failure | cancelled | …
+	HeadBranch  string
+	HeadSHA     string
+	HeadMessage string
+	HeadRepo    string // workflow_run.head_repository.full_name (the code's repo)
+	Repo        string // repository.full_name (where the workflow lives)
+}
+
+// ParseGitHubWorkflowRun extracts a workflow_run payload.
+func ParseGitHubWorkflowRun(body []byte) (WorkflowRun, error) {
+	var p struct {
+		Action     string `json:"action"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
+		Run *struct {
+			ID         int64  `json:"id"`
+			Name       string `json:"name"`
+			Path       string `json:"path"`
+			Event      string `json:"event"`
+			Status     string `json:"status"`
+			Conclusion string `json:"conclusion"`
+			HeadBranch string `json:"head_branch"`
+			HeadSHA    string `json:"head_sha"`
+			RunNumber  int    `json:"run_number"`
+			RunAttempt int    `json:"run_attempt"`
+			HeadCommit struct {
+				Message string `json:"message"`
+			} `json:"head_commit"`
+			HeadRepository struct {
+				FullName string `json:"full_name"`
+			} `json:"head_repository"`
+		} `json:"workflow_run"`
+	}
+	if err := json.Unmarshal(body, &p); err != nil {
+		return WorkflowRun{}, err
+	}
+	if p.Run == nil || p.Run.ID == 0 {
+		return WorkflowRun{}, errors.New("webhooks: not a workflow_run payload")
+	}
+	r := p.Run
+	return WorkflowRun{
+		Action: p.Action, RunID: r.ID, RunNumber: r.RunNumber, RunAttempt: r.RunAttempt,
+		Name: r.Name, Path: r.Path, Event: r.Event, Status: r.Status, Conclusion: r.Conclusion,
+		HeadBranch: r.HeadBranch, HeadSHA: r.HeadSHA, HeadMessage: r.HeadCommit.Message,
+		HeadRepo: r.HeadRepository.FullName, Repo: p.Repository.FullName,
+	}, nil
+}
+
 // ParseGitLabPush extracts the push data from a GitLab push payload.
 func ParseGitLabPush(body []byte) (Push, error) {
 	var p struct {

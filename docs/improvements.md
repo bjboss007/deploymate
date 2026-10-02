@@ -383,49 +383,46 @@ change.
   with the monitor's auto-heal (a scaled-to-zero app must not be
   "healed" back up), and RAM headroom on small (4 GB) hosts.
 - [ ] **Off-box builds for small servers** (from the `testing` app OOM,
-  2026-09-30) — a JVM build (Gradle daemon 2 GiB heap + compilers +
-  BuildKit ≈ 2.5–3 GB peak) cannot run on a 2–4 GB server, while the
-  same app *runs* in ~0.3–0.6 GB. Split build from run. **Owner
-  constraints (2026-09-30): no builder machine, no container registry.**
-  **Proposed direction — prebuilt artifact deploys:** GitHub Actions builds
-  only the JAR (`upload-artifact`); GitHub's `workflow_run: completed`
-  event arrives on the app's EXISTING webhook; DeployMate downloads the
-  artifact via the GitHub API (per-source fine-grained token, Actions:
-  read, encrypted), wraps it into a local image (`eclipse-temurin:21-jre`
-  + COPY — seconds, ~100 MB RAM, no registry), and runs the usual
-  zero-downtime replica-aware rollout. Pull-based, so Cloudflare's 100 MB
-  request-body cap on the tunnel never applies. App gets a build mode
-  "Prebuilt artifact (GitHub Actions)" + a generated workflow file; Java
-  JARs first, templates for Node dist / Go binaries later. Spec pending
-  owner go-ahead — **now spec'd: `docs/specs/prebuilt-deploys.md`
-  (2026-10-02; not implemented)**: route A (artifact) first, route B
-  (registry) as a documented v2 sharing its trigger/mode/worker seam;
-  phased P0 (per-source delivery key + event dispatch) → P1 (spikes S1–S3,
-  migration 0017, worker) → P2 (UI, workflow generator, "Deploy latest
-  successful run") → P3 (memory preflight advisory). Corrects an earlier
-  claim here: ghcr.io storage/bandwidth is "currently free" per GitHub's
-  docs — the *shared quota* (Free 500 MB / Pro-Team 2 GB) applies to
-  **Actions artifacts**, and a private GHCR pull needs a **classic**
-  `read:packages` PAT (account-wide), whereas the artifact route needs only
-  a fine-grained single-repo `Actions: read` token. The registry and
-  remote-builder options below stay recorded but are parked under the
-  no-registry / no-builder constraints:
-  - **Registry credentials** — per-project token (GHCR/Docker Hub),
-    encrypted at rest, used by `PullImage` (today `PullOptions{}`: public
-    or already-local images only).
-  - **Image deploy hook** — signed `POST /hooks/image/{id}` with the new
-    tag, queuing the same zero-downtime, replica-aware manual deploy; lets
-    CI (GitHub Actions: build JAR → JRE image → push) drive deploys.
-  - **Remote builder** — point `BUILDKIT_HOST` (railpack) / a buildx
-    remote driver at a bigger machine's buildkitd over mTLS; the image
-    streams back into the server's `docker load`. No workflow change for
-    the user.
-  - **Per-app build env** — pass e.g. `GRADLE_OPTS`/`NODE_OPTIONS` into
-    builds (railpack `--env`/buildx `--build-arg`) to cap on-box build
-    memory.
-  - **Build memory preflight** — estimate free memory before a build
-    (host total − running containers) and fail/queue fast with advice
-    instead of letting the OOM killer decide.
+  2026-09-30; **spec `docs/specs/prebuilt-deploys.md`, ADR 0019**) — a JVM
+  build (Gradle daemon 2 GiB heap + compilers + BuildKit ≈ 2.5–3 GB peak)
+  cannot run on a 2–4 GB server while the app *runs* in ~0.3–0.6 GB. Owner
+  constraints: no builder machine, no registry. **Chosen route A: prebuilt
+  artifact deploys** — GitHub Actions builds the JAR, the `workflow_run`
+  event arrives on the existing webhook, the worker downloads the artifact
+  (fine-grained `Actions: read` token), wraps it in an `eclipse-temurin`
+  JRE image and runs the usual rolling swap.
+  - [x] **P0** (2026-10-02): per-source webhook delivery key + dispatch on
+    `X-GitHub-Event` (fixed the fan-out bug).
+  - [x] **P1** (2026-10-02): spikes S1 (real GitHub round trip + a real
+    fine-grained token) and S2 (wrapper cost), migration 0017, GitHub
+    client, six `workflow_run` gates, `runArtifactDeploy`, safe unzip,
+    wrapper template, failure messages, `make e2e-artifact`. Backend only:
+    an app is switched to prebuilt mode via `seed-git-source` env until P2.
+  - [ ] **P2 — UI + the owner-facing flow:** Git panel mode select; token
+    field (write-only) + **Test connection** (repo reachable, workflow
+    found, and the **scope warning**: count of *private* repos other than
+    this one — `githubci.OtherPrivateRepos` exists and is tested);
+    workflow path / artifact name; the **generated workflow file** with a
+    copy button (tracked branch, Java version, `retention-days: 1`, the
+    `cp … out/app.jar` step); "tick *Workflow runs* on the webhook"
+    instruction; **Deploy latest successful run**
+    (`githubci.ListSuccessfulRuns` exists and is tested) for missed
+    deliveries and the first deploy; README Features entry.
+  - [ ] **P3 — memory preflight advisory:** before an on-server JVM build,
+    compare the host's Docker memory budget to ~3 GB and write a note (build
+    log + app page) pointing at prebuilt mode. Advises, never blocks.
+  - [ ] **Owner follow-ups:** the `BeyondCredit` org token-policy check;
+    glance at Settings → Billing → Actions storage after 2026-10-03 11:32
+    UTC (S3, expect ≈0); delete `bjboss007/dm-artifact-spike` (my token can
+    archive but not delete); switch the failing `testing` app to prebuilt
+    mode once P2 ships.
+  - [ ] **Later:** reconcile polling for missed deliveries; Node (`dist/`)
+    and Go (static binary) wrapper templates on the same pipeline; the
+    registry route (v2, same trigger/mode seam); base-image digest pinning;
+    re-run spike S2 on the real 4 GB Ubuntu box.
+  - Still parked under the no-registry / no-builder constraints: registry
+    credentials + image deploy hook, remote builder (`BUILDKIT_HOST`),
+    per-app build env (`GRADLE_OPTS`/`NODE_OPTIONS`).
 - [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
   (BuildKit registry cache) so rebuilds across deploys are faster than
   cold.

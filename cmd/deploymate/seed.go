@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"os"
 
 	"github.com/habibmuhammad/deploymate/internal/config"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
@@ -23,6 +24,14 @@ import (
 // webhook. Usage:
 //
 //	deploymate seed-git-source <app-slug> <repo-url> [branch] [provider]
+//
+// Prebuilt (GitHub Actions artifact) deploys are seeded through the
+// environment, so the argument list above stays stable:
+//
+//	DEPLOYMATE_SEED_MODE=artifact        switch the app to prebuilt mode
+//	DEPLOYMATE_SEED_API_TOKEN=<token>    store the (encrypted) GitHub token
+//	DEPLOYMATE_SEED_WORKFLOW=<path>      workflow file (default: the app's)
+//	DEPLOYMATE_SEED_ARTIFACT=<name>      artifact name (default: the app's)
 func seedGitSource() error {
 	args := flag.Args()[1:] // drop the subcommand itself
 	if len(args) < 2 {
@@ -72,6 +81,12 @@ func seedGitSource() error {
 		return err
 	}
 
+	var tokenEnc string
+	if tok := os.Getenv("DEPLOYMATE_SEED_API_TOKEN"); tok != "" {
+		if tokenEnc, err = crypto.Encrypt(encKey, tok); err != nil {
+			return err
+		}
+	}
 	gs, err := st.CreateGitSource(store.GitSource{
 		Provider:         provider,
 		RepoURL:          repoURL,
@@ -79,12 +94,26 @@ func seedGitSource() error {
 		PrivateKeyEnc:    privEnc,
 		WebhookSecretEnc: secretEnc,
 		DefaultBranch:    branch,
+		APITokenEnc:      tokenEnc,
 	})
 	if err != nil {
 		return err
 	}
 	if err := st.UpdateAppGitSource(app.ID, gs.ID); err != nil {
 		return err
+	}
+	if mode := os.Getenv("DEPLOYMATE_SEED_MODE"); mode != "" {
+		workflow := os.Getenv("DEPLOYMATE_SEED_WORKFLOW")
+		if workflow == "" {
+			workflow = app.WorkflowPath
+		}
+		artifact := os.Getenv("DEPLOYMATE_SEED_ARTIFACT")
+		if artifact == "" {
+			artifact = app.ArtifactName
+		}
+		if err := st.UpdateAppDeployMode(app.ID, mode, workflow, artifact); err != nil {
+			return err
+		}
 	}
 
 	// Machine-readable output for the e2e script (key=value lines).

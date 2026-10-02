@@ -48,6 +48,13 @@ type Worker struct {
 	buildEnv     func(app store.App) []string // injected by the server (services + env vars)
 	alerts       *alerts.Dispatcher
 
+	// githubAPI overrides the GitHub REST base URL for prebuilt deploys
+	// (tests); "" = https://api.github.com.
+	githubAPI string
+	// buildFn builds a Docker context into an image; nil = builder.Build.
+	// A seam so artifact-deploy tests do not need a Docker daemon.
+	buildFn func(ctx context.Context, contextDir, rootDir, imageTag string, log func(string)) error
+
 	// Test seams (mirroring the monitor's probeURLFn): zero values pick the
 	// swap defaults (30 attempts × 2s) and manualPullTimeout.
 	pullTimeout   time.Duration
@@ -61,6 +68,10 @@ type Worker struct {
 func NewWorker(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events *sse.Broker, encKey [32]byte, dataDir, network, leMode, railpackPath string, buildEnv func(store.App) []string, a *alerts.Dispatcher) *Worker {
 	return &Worker{store: st, rt: rt, prov: prov, events: events, encKey: encKey, dataDir: dataDir, network: network, leMode: leMode, railpackPath: railpackPath, buildEnv: buildEnv, alerts: a, pullTimeout: manualPullTimeout}
 }
+
+// SetGitHubAPI points prebuilt deploys at a different GitHub API base URL
+// (the e2e's fake GitHub). Empty keeps the default, https://api.github.com.
+func (w *Worker) SetGitHubAPI(base string) { w.githubAPI = base }
 
 // Run polls the queue until ctx is cancelled.
 func (w *Worker) Run(ctx context.Context) {
@@ -121,7 +132,11 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 	case "manual":
 		err = w.runManualDeploy(ctx, app, d)
 	default:
-		err = w.runGitDeploy(ctx, app, d)
+		if app.DeployMode == store.DeployModeArtifact {
+			err = w.runArtifactDeploy(ctx, app, d)
+		} else {
+			err = w.runGitDeploy(ctx, app, d)
+		}
 	}
 	if err != nil {
 		w.fail(d, err)

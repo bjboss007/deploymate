@@ -90,6 +90,18 @@ repo owner; `gh auth switch` does not switch SSH keys. Use the HTTPS
 remote with gh's credential helper (`git remote set-url origin
 https://github.com/<owner>/<repo>.git`).
 
+**A prebuilt (GitHub Actions) app doesn't deploy** → the webhook reply names
+the gate that refused it: `ignored: workflow run is not completed` (only the
+`completed` delivery matters), `did not succeed`, `a different workflow`
+(the run's workflow file must equal the app's workflow path),
+`not the deploy branch`, `only push and manual runs deploy` (pull-request
+runs never deploy), `the run is from a fork`, `this run was already handled`,
+`a newer run is already deployed`, `run belongs to a different repository`.
+Pushes answer `ignored: this app deploys from CI runs, not pushes`. If it
+queued but failed, the deployment's error says why (token rejected/refused,
+no artifact of that name, expired, integrity check, not exactly one `.jar`,
+…). A failed run is retried with GitHub's **Re-run**.
+
 **Webhook deploys don't happen** → check in order: HMAC signature
 (401 = wrong secret), event type (only `push` deploys; `ping` replies
 "pong", anything else "ignored: not a push event"), `X-GitHub-Delivery`

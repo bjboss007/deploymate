@@ -41,3 +41,50 @@ func TestDeliveryCacheExpires(t *testing.T) {
 		t.Error("entries older than 24h must be forgotten")
 	}
 }
+
+// realWorkflowRun is the shape captured from a real GitHub delivery
+// (spike S1, 2026-10-02), trimmed to the fields that matter.
+const realWorkflowRun = `{
+ "action": "completed",
+ "workflow_run": {
+  "id": 37001586057, "name": "DeployMate build", "path": ".github/workflows/deploymate.yml",
+  "event": "push", "status": "completed", "conclusion": "success",
+  "head_branch": "main", "head_sha": "a2b23cc23e0bcc9ece1fcdfceca4ef55f59423cd",
+  "run_number": 1, "run_attempt": 1, "display_title": "spike: workflow + hello source",
+  "head_commit": {"message": "spike: workflow + hello source"},
+  "head_repository": {"full_name": "bjboss007/dm-artifact-spike", "fork": false},
+  "pull_requests": []
+ },
+ "repository": {"full_name": "bjboss007/dm-artifact-spike"},
+ "sender": {"login": "bjboss007"}
+}`
+
+func TestParseGitHubWorkflowRun(t *testing.T) {
+	got, err := ParseGitHubWorkflowRun([]byte(realWorkflowRun))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := WorkflowRun{
+		Action: "completed", RunID: 37001586057, RunNumber: 1, RunAttempt: 1,
+		Name: "DeployMate build", Path: ".github/workflows/deploymate.yml", Event: "push",
+		Status: "completed", Conclusion: "success", HeadBranch: "main",
+		HeadSHA: "a2b23cc23e0bcc9ece1fcdfceca4ef55f59423cd", HeadMessage: "spike: workflow + hello source",
+		HeadRepo: "bjboss007/dm-artifact-spike", Repo: "bjboss007/dm-artifact-spike",
+	}
+	if got != want {
+		t.Errorf("got  %+v\nwant %+v", got, want)
+	}
+}
+
+func TestParseGitHubWorkflowRunRejectsOtherPayloads(t *testing.T) {
+	for name, body := range map[string]string{
+		"push payload": `{"ref":"refs/heads/main","after":"abc"}`,
+		"no run id":    `{"action":"completed","workflow_run":{"name":"x"}}`,
+		"not json":     `nope`,
+		"empty":        ``,
+	} {
+		if _, err := ParseGitHubWorkflowRun([]byte(body)); err == nil {
+			t.Errorf("%s: want an error", name)
+		}
+	}
+}

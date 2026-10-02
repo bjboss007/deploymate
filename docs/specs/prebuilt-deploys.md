@@ -1,8 +1,12 @@
 # Prebuilt deploys (CI builds, DeployMate runs) — specification
 
-**Status:** design (Oct 2026). **P0 shipped 2026-10-02** (per-source
-delivery key + `X-GitHub-Event` dispatch); everything else **not
-implemented**. Owner constraints:
+**Status:** **P0 and P1 implemented 2026-10-02** (ADR 0019): per-source
+delivery key + event dispatch, migration 0017, the GitHub client, the six
+`workflow_run` gates, `runArtifactDeploy`, and `make e2e-artifact`. **P2**
+(UI: mode, token + Test connection, workflow generator, "Deploy latest
+successful run") and **P3** (memory preflight) are not built; until P2 an
+app is switched to prebuilt mode only through the `seed-git-source` test
+hook (`DEPLOYMATE_SEED_MODE` / `_API_TOKEN`). Owner constraints:
 no builder machine, no container registry. Trigger facts and GitHub limits
 below were checked against GitHub's docs on 2026-10-02 (see "Verified
 facts"); three items are marked **spike** and must be proven on real GitHub
@@ -172,9 +176,14 @@ Add the two-apps-one-repo assertion to `make e2e-git`.
 - **Scope warning (from spike S1-B):** DeployMate cannot enforce "one
   repo", so Test connection also asks `GET /user/repos?per_page=100&
   affiliation=owner,organization_member` and, when the token can see
-  **repositories other than this one**, shows an amber warning: "this token
-  can also read Actions artifacts of N other repositories — create one
-  limited to *Only select repositories → {repo}*". It **warns, never
+  **private repositories other than this one**, shows an amber warning:
+  "this token can also read Actions artifacts of N other private
+  repositories — create one limited to *Only select repositories →
+  {repo}*". **Only private repos count**: a fine-grained token can always
+  read public repos (verified — a correctly narrowed token still listed 91
+  public repos and returned 404 for the private ones), so counting them
+  would warn every user. (`githubci.Client.OtherPrivateRepos` implements
+  this and is tested; the UI that shows it is P2.) It **warns, never
   blocks** (some owners legitimately share one token across a
   monorepo-adjacent set). The field help text and the docs say how to
   create the token (Only select repositories, Actions: read, short expiry).
@@ -421,8 +430,12 @@ Real-GitHub behavior is covered by spike S1, not the e2e.
    else ignored — `workflow_run` is acknowledged and ignored until P1 adds
    its path) + the e2e assertion (verified failing on the old code). It
    shipped alone and fixed the live fan-out bug.
-2. **P1** — spikes S1–S3 → migration 0017, GitHub client, `runArtifactDeploy`,
-   template, gates, failure messages, `make e2e-artifact`.
+2. **P1 — DONE 2026-10-02** — spikes S1/S2 (S3 partial), migration 0017,
+   GitHub client (`internal/githubci`), the six gates (`handlers_ci.go`),
+   `runArtifactDeploy` (`internal/jobs/artifact.go`), safe unzip + wrapper
+   template (`internal/builder/artifact.go`), failure messages,
+   `make e2e-artifact` (fake GitHub: `testdata/fakegithub.py`, fixture
+   `testdata/apps/hellojar/`).
 3. **P2** — UI (mode, token + Test connection, workflow generator, Deploy
    latest successful run).
 4. **P3** — memory preflight advisory.
@@ -474,3 +487,34 @@ build-once/promote-by-digest across environments or multi-server pulls.
 - The registry route (above), remote builders, build caches, `GRADLE_OPTS`
   / `NODE_OPTIONS` build env (separate backlog items).
 - Reconcile polling, token-expiry warnings, base-image digest pinning.
+
+## As built — P1 deviations from the design above
+
+- **Idempotency ignores failed deployments.** The design said "skip if a
+  `ci` deployment with the same `ci_run` exists"; but GitHub's *Re-run*
+  keeps the run id, so counting a failed deployment would make a failed
+  deploy unretryable. `HasCIRun` and `LatestCIRunNumber` both count only
+  queued/building/running deployments. (Found while writing the gate
+  tests; unit- and e2e-covered.)
+- **Extra gate:** `repository.full_name` in the payload must equal the
+  source's own repo (when its URL parses as owner/name).
+- **Response bodies are fixed strings** (`ignored: a different workflow`,
+  `ignored: the run is from a fork`, …), never payload text.
+- **Seeding:** until P2, `seed-git-source` takes `DEPLOYMATE_SEED_MODE`,
+  `_API_TOKEN`, `_WORKFLOW`, `_ARTIFACT` from the environment (the CLI
+  argument list is unchanged).
+- **Wrapper:** `ENTRYPOINT … -Dserver.port=${PORT:-8080}` (the platform
+  always injects `PORT`; the default only matters if run by hand);
+  `JavaMajor` maps `java:21.0.2` → `21`, anything non-Java → the default
+  21, and only 1–2 digit majors ever reach the `FROM` line.
+- **Worker seams:** `Worker.SetGitHubAPI` (the fake GitHub) and
+  `Worker.buildFn` (no Docker daemon in unit tests).
+- **Webhook response when a source has only prebuilt apps and a push
+  arrives:** `ignored: this app deploys from CI runs, not pushes`.
+- **Verified end to end** (`make e2e-artifact`): gates; v1 → run → serving
+  non-root with the `JAVA_OPTS` default; nothing cloned and the working
+  directory cleaned; the token never reaching the storage host; replay and
+  stale-run refusal; v2; seven failure causes with v2 serving throughout;
+  retry of a failed run id; **rollback with GitHub unreachable**; a
+  build-mode app untouched by CI events; no secret in the server log or any
+  build log.

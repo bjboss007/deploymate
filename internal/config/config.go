@@ -42,6 +42,10 @@ type Config struct {
 	// CloudflareTunnelID is the named tunnel every preview CNAME targets
 	// ({tunnelID}.cfargotunnel.com).
 	CloudflareTunnelID string
+	// GitHubAPIURL overrides the GitHub REST API base URL used by prebuilt
+	// (artifact) deploys. TEST ONLY — the e2e points it at a fake GitHub;
+	// empty means https://api.github.com.
+	GitHubAPIURL string
 	// BackupDestinations are the named off-box storage targets for database
 	// backups, keyed by destination id. Each is registered from its own env
 	// block, DEPLOYMATE_BACKUP_DEST_<ID>_*; a service's backup config picks
@@ -76,6 +80,7 @@ func Load() (*Config, error) {
 		CloudflareAPIToken: os.Getenv("DEPLOYMATE_CLOUDFLARE_API_TOKEN"),
 		CloudflareZoneID:   os.Getenv("DEPLOYMATE_CLOUDFLARE_ZONE_ID"),
 		CloudflareTunnelID: os.Getenv("DEPLOYMATE_CLOUDFLARE_TUNNEL_ID"),
+		GitHubAPIURL:       os.Getenv("DEPLOYMATE_GITHUB_API_URL"),
 	}
 	cfg.KeyPath = filepath.Join(cfg.DataDir, "keys", "root.key")
 

@@ -2,7 +2,7 @@ GO      ?= go
 BIN     := bin/deploymate
 TEMPL   := $(shell go env GOPATH)/bin/templ
 
-.PHONY: build gen dev test vet e2e e2e-backup e2e-replicas clean
+.PHONY: build gen dev test vet e2e e2e-backup e2e-replicas e2e-artifact clean
 
 build: gen
 	$(GO) build -o $(BIN) ./cmd/deploymate
@@ -62,6 +62,13 @@ e2e-backup:
 # merged logs, zero-failure rolling deploy — on a throwaway server (:18096).
 e2e-replicas:
 	./testdata/e2e_replicas.sh
+
+# Prebuilt deploys (docs/specs/prebuilt-deploys.md): signed workflow_run
+# webhooks through every gate, artifact download from a fake GitHub (302 to a
+# storage host that rejects tokens), wrap + run, 7 failure causes, retry,
+# rollback with GitHub down — on a throwaway server (:18102).
+e2e-artifact:
+	./testdata/e2e_artifact.sh
 
 clean:
 	rm -rf bin data

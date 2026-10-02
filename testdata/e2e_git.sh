@@ -148,7 +148,9 @@ out="$(hook "$SOURCE_ID" "$SECRET" push "e2e-$STAMP" "$BODY")"
 [ "$out" = "duplicate delivery ignored 200" ] || fail "retry on the same source must be deduped, got: $out"
 out="$(hook "$SOURCE_ID" "$SECRET" ping "e2e-ping-$STAMP" '{"zen":"e2e"}')"
 [ "$out" = "pong 200" ] || fail "ping must answer pong, got: $out"
-out="$(hook "$SOURCE_ID" "$SECRET" workflow_run "e2e-wf-$STAMP" '{"action":"completed"}')"
+# (workflow_run is a real code path now — prebuilt deploys — so use an event
+# type that stays ignored.)
+out="$(hook "$SOURCE_ID" "$SECRET" issues "e2e-wf-$STAMP" '{"action":"opened"}')"
 [ "$out" = "ignored: not a push event 200" ] || fail "non-push events must be ignored, got: $out"
 log "PASS: retry deduped, ping pongs, non-push events ignored"
 
