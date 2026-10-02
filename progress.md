@@ -7,6 +7,35 @@
 
 ## Where we stopped
 
+**2026-10-02 (spike S1 part A, S3 partial)** — **Real-GitHub round trip
+done against a throwaway private repo** `bjboss007/dm-artifact-spike`
+(generated-workflow shape, `javac`-built 1.6 KB JAR, `retention-days: 1`),
+a scratch DeployMate (random password, no real data) behind a temporary
+`cloudflared --config <empty> --url` quick tunnel (note: with
+`~/.cloudflared/config.yml` present a quick tunnel 404s unless given an
+empty `--config`; new trycloudflare hostnames took ~80 s to resolve).
+**Results (all in the spec's Spikes section):** the **P0 handler works
+against real GitHub** (ping → `pong`; all three `workflow_run` deliveries
+→ `ignored: not a push event`; real HMAC verified); every payload field
+the gates need is present (`path`, `event`, `conclusion`, `head_branch`,
+`head_sha`, `run_number`, `run_attempt`, `head_repository.full_name/fork`,
+`head_commit.message`); the artifact list carries a populated `digest`
+(`sha256:<hex>` **of the zip**, verified equal to the downloaded file's
+sha256); download = 302 to an Azure blob host, following it **without**
+`Authorization` works; zip held exactly `app.jar`; `expires_at` = +1 day;
+401 for missing/bad token, 404 for unknown ids, 5000 req/h. Pitfall: jq
+rounds GitHub's 19-digit delivery ids — read them with Python. **Cleanup
+done:** quick tunnel + scratch server stopped, webhook deleted, secret files
+removed. **Left in place on purpose:** the repo (needed for the token test;
+my token can archive but NOT delete repos — owner deletes it afterwards).
+**Still needs the owner:** (1) a **fine-grained token, only that repo,
+Actions: read** (browser-only; save it to a file, never paste in chat) to
+prove least privilege and see whether it returns the
+`github-authentication-token-expiration` header; (2) the **BeyondCredit**
+org token-policy check; (3) glance at Settings → Billing after the artifact
+expires (S3). **Not blocked:** P1 can start against the now-verified API
+shapes.
+
 **2026-10-02 (spike S2 + live restart)** — **Live server restarted on
 the P0 webhook-fix build** (pid 72999; snapshot
 `data/backups/pre-p0-20261002122337.db`; no migration; all apps healthy,

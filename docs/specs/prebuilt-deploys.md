@@ -287,14 +287,45 @@ reads.
 
 ## Spikes (before feature code)
 
-- **S1 — real GitHub round trip.** A throwaway private repo with the
-  generated workflow: confirm the `workflow_run` delivery reaches an
-  existing DeployMate webhook and its exact payload fields (incl.
-  `head_repository`, `run_number`, `run_attempt`); that a fine-grained token
-  with only *Actions: read* lists and downloads the artifact; that the
-  redirect works with Go's client; whether `digest` is populated. **Then
-  repeat under the `BeyondCredit` org** — org policy may require approval or
-  SSO authorization for fine-grained tokens (owner action).
+- **S1 — real GitHub round trip.** **Part A done 2026-10-02** on a
+  throwaway private repo (`bjboss007/dm-artifact-spike`: the generated
+  workflow shape, a `javac`-built 1.6 KB JAR, `retention-days: 1`), with a
+  scratch DeployMate behind a temporary Cloudflare quick tunnel so GitHub's
+  deliveries hit the real P0 handler. Confirmed against real GitHub:
+  - **Delivery + P0:** `ping` → `pong`; a run produces three `workflow_run`
+    deliveries (`requested`, `in_progress`, `completed`, distinct GUIDs), all
+    answered `200 "ignored: not a push event"` by the P0 handler. Real HMAC
+    verification works; headers are `X-GitHub-Event: workflow_run`.
+  - **Payload fields (all present, as designed):** `action`;
+    `workflow_run.{id, name, path, event, status, conclusion, head_branch,
+    head_sha, run_number, run_attempt, workflow_id, display_title,
+    pull_requests (empty for push), head_commit.message,
+    head_repository.{full_name, fork}}`; `repository.full_name`. For a push
+    run: `event == "push"`, `path == ".github/workflows/deploymate.yml"`,
+    `head_repository.full_name == repository.full_name`, `fork == false`.
+    (`run_attempt` exists: gate 6's idempotency can key on id + attempt.)
+  - **Artifacts API:** `GET …/runs/{id}/artifacts` returns `id, name,
+    size_in_bytes, expired, created_at, expires_at, archive_download_url,
+    workflow_run{id, head_branch, head_sha}` and **`digest`
+    (`"sha256:<hex>"`, populated)** — it is the digest of the **zip
+    archive** and matched `shasum -a 256` of the downloaded file exactly.
+  - **Download:** `GET …/artifacts/{id}/zip` → **302** to
+    `productionresultssa7.blob.core.windows.net` (Azure blob; the host may
+    change — follow whatever Location says); following it **without** an
+    `Authorization` header → 200 + the zip. The zip held exactly `app.jar`.
+  - **Retention:** `expires_at` = `created_at` + 1 day for
+    `retention-days: 1`.
+  - **Failure shapes:** no token → **401** "Requires authentication"; bad
+    token → **401** "Bad credentials"; unknown artifact/run → **404** "Not
+    Found"; rate limit **5000/hour** per token.
+  **Still open (part B, owner action):** (1) the least-privilege proof — a
+  **fine-grained token, one repo, only *Actions: read*** listing and
+  downloading the artifact (GitHub has no API to create PATs, so the owner
+  creates it in the browser); and whether fine-grained responses carry the
+  `github-authentication-token-expiration` header (an OAuth token's do
+  not) — that decides the "token expires soon" warning; (2) **repeat under
+  the `BeyondCredit` org** — org policy may require approval/SSO for
+  fine-grained tokens.
 - **S2 — wrapper cost on the target box.** ~~Run on the dev Mac~~
   **measured 2026-10-02 (Docker Desktop, arm64, 3.8 GiB VM)** — re-run on
   the real 4 GB Ubuntu box when it is up (numbers below are dominated by
@@ -317,9 +348,15 @@ reads.
     first deploy per host, so the limit is irrelevant at this volume.
   Caveat: the fixture is a hello-world, not a Spring Boot app — real JVM
   runtime memory (~300–600 MB) is the app's, not the wrapper's.
-- **S3 — retention accounting.** Confirm `retention-days: 1` keeps an
-  80 MB-JAR-per-push workflow comfortably under the Free/Pro shared quota
-  and how fast storage is reclaimed (the docs fetched don't say).
+- **S3 — retention accounting.** **Partly done:** `expires_at` honors
+  `retention-days: 1` (above). *Not observable from here:* how fast expired
+  artifacts stop counting toward the shared Actions/Packages quota, and
+  current usage — the billing endpoints return 404 without the `user`
+  scope. Owner check: Settings → Billing → Actions storage on
+  `bjboss007` a day after the spike run (artifact expires 2026-10-03
+  11:32 UTC) should show ≈0. Nothing in the design waits on this: a 1-day
+  retention bounds usage by (pushes/day × JAR size) and route B remains the
+  escape hatch.
 
 ## Verification
 
