@@ -207,3 +207,35 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+
+// --- environment variable rows ------------------------------------------
+// "+ Add variable" appends a row (key_N / value_N / secret_N with the next
+// index) to the form; Save posts every row at once. The first row can't be
+// removed away entirely: removing the last row just clears it.
+(() => {
+  const form = document.querySelector("[data-env-rows]");
+  if (!form) return;
+  const list = form.querySelector("[data-env-rows-list]");
+  let next = list.children.length;
+  const addRow = () => {
+    const i = next++;
+    const row = document.createElement("div");
+    row.className = "env-row";
+    row.innerHTML =
+      '<input type="text" name="key_' + i + '" placeholder="KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits, underscores \u2014 starting with a letter" autocomplete="off" spellcheck="false"/>' +
+      '<input type="text" name="value_' + i + '" placeholder="value" autocomplete="off" spellcheck="false"/>' +
+      '<label class="checkbox"><input type="checkbox" name="secret_' + i + '"/> secret</label>' +
+      '<button class="btn btn-ghost btn-sm" type="button" data-env-remove aria-label="Remove row">\u00d7</button>';
+    list.appendChild(row);
+    row.querySelector("input").focus();
+  };
+  form.addEventListener("click", (e) => {
+    if (e.target.closest("[data-env-add]")) { addRow(); return; }
+    const rm = e.target.closest("[data-env-remove]");
+    if (!rm) return;
+    const row = rm.closest(".env-row");
+    if (list.children.length > 1) row.remove();
+    else row.querySelectorAll("input[type=text]").forEach((i) => { i.value = ""; });
+  });
+})();

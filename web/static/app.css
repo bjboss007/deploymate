@@ -510,3 +510,16 @@ select { cursor: pointer; }
    reads as inert — the htmx .btn:disabled spinner rule does not apply. */
 .bk-form input:disabled, .bk-form select:disabled { opacity: 0.55; cursor: not-allowed; }
 .bk-form .btn:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* ---- bulk env vars --------------------------------------------------- */
+.env-bulk { margin-top: 14px; }
+.env-bulk summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 10px; }
+.env-bulk textarea { width: 100%; min-height: 150px; resize: vertical; background: #0a0c10; color: #d7dcea; border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; box-sizing: border-box; }
+.env-bulk-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 10px; }
+.env-rows { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.env-row { display: flex; align-items: center; gap: 10px; }
+.env-row input[type="text"] { flex: 1; min-width: 0; }
+.env-row input[name^="key_"] { flex: 0 0 34%; font-family: var(--font-mono); }
+.env-row input[name^="value_"] { font-family: var(--font-mono); }
+.env-rows-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 12px; }
+@media (max-width: 640px) { .env-row { flex-wrap: wrap; } .env-row input[name^="key_"] { flex: 1 1 100%; } }

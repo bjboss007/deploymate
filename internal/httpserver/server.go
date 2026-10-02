@@ -132,6 +132,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/health-path", am.CheckCSRF(s.handleAppHealthPath))
 		r.Post("/apps/{slug}/delete", am.CheckCSRF(s.handleAppDelete))
 		r.Post("/apps/{slug}/env", am.CheckCSRF(s.handleEnvVarCreate))
+		r.Post("/apps/{slug}/env/bulk", am.CheckCSRF(s.handleEnvVarBulk))
 		r.Post("/apps/{slug}/env/{id}/delete", am.CheckCSRF(s.handleEnvVarDelete))
 		r.Post("/apps/{slug}/git", am.CheckCSRF(s.handleGitConnect))
 		r.Post("/apps/{slug}/git/deploy", am.CheckCSRF(s.handleGitDeploy))

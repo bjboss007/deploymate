@@ -7,6 +7,21 @@
 
 ## Where we stopped
 
+**2026-10-02 (env vars: add several at once + ERP diagnosis)** — ERP's
+second deploy built fine on the server (Gradle 5 min) but the app exited at
+startup (Flyway: DB unreachable) because no `DB_URL`/`DB_USER`/… were set
+(DeployMate injects only `DATABASE_URL`/`REDIS_URL`); the deploy page showed
+only "readiness probe EOF". Owner asked for multi-add: the Environment
+variables panel now has **+ Add variable** (appends key/value/secret rows) and
+one **Save** that stores every row at once (`POST /apps/{slug}/env/bulk`,
+`handleEnvVarBulk`, `env_bulk.go`, `app.js`), plus an "or paste a .env file"
+box. All-or-nothing validation with row/line numbers; existing keys updated;
+sensitive-looking names always masked; events log names only. Tests:
+`env_bulk_test.go`; clicked through in the browser pane. The old single-add
+route `/env` is kept. **Not yet on the live server.** Still open from the ERP
+run: show the container's last log lines + OOM/exit state on a failed
+readiness probe (improvements.md), and "service env as components".
+
 **2026-10-02 (ERP would not start — service slug collision across projects)**
 — The owner recreated the failed app as `erp` (Acme Starter, build mode, repo
 `bjboss007/tradestack-dm-test`). Its deploy failed: `manifest: service did not

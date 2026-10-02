@@ -445,13 +445,28 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					</tbody>
 				</table>
 			}
-			<form method="post" action={ "/apps/" + app.Slug + "/env" } class="env-form">
+			<form method="post" action={ "/apps/" + app.Slug + "/env/bulk" } class="env-rows-form" data-env-rows>
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<input type="text" name="key" placeholder="KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits, underscores — starting with a letter" required/>
-				<input type="text" name="value" placeholder="value" required/>
-				<label class="checkbox"><input type="checkbox" name="is_secret"/> secret</label>
-				<button class="btn btn-primary" type="submit">Add variable</button>
+				<div class="env-rows" data-env-rows-list>
+					<div class="env-row">
+						<input type="text" name="key_0" placeholder="KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits, underscores — starting with a letter" autocomplete="off" spellcheck="false"/>
+						<input type="text" name="value_0" placeholder="value" autocomplete="off" spellcheck="false"/>
+						<label class="checkbox"><input type="checkbox" name="secret_0"/> secret</label>
+						<button class="btn btn-ghost btn-sm" type="button" data-env-remove aria-label="Remove row">×</button>
+					</div>
+				</div>
+				<div class="env-rows-actions">
+					<button class="btn btn-ghost" type="button" data-env-add>+ Add variable</button>
+					<button class="btn btn-primary" type="submit">Save</button>
+				</div>
+				<details class="env-bulk">
+					<summary>or paste a .env file</summary>
+					<textarea name="bulk" rows="7" spellcheck="false" autocomplete="off" placeholder={ "DB_URL=jdbc:postgresql://host:5432/app\nDB_USER=dm\nDB_PASSWORD=...\n# comments and blank lines are fine" }></textarea>
+					<label class="checkbox"><input type="checkbox" name="is_secret"/> mark all pasted values as secret</label>
+					<p class="muted panel-hint">One <span class="mono">KEY=VALUE</span> per line; <span class="mono">export</span> prefixes and surrounding quotes are stripped. Saved together with any rows above.</p>
+				</details>
 			</form>
+			<p class="muted panel-hint">Add as many rows as you need, then <strong>Save</strong> stores them all at once (an existing name is updated). If any row is invalid, nothing is saved. Names containing PASSWORD, SECRET, TOKEN or KEY are always stored masked.</p>
 			<p class="muted panel-hint">Values are encrypted at rest and apply on the next deploy. They can reference injected connection strings — e.g. set <span class="mono">DATABASE_URL</span> to <span class="mono">{ "${MYSQL_URL}" }</span> to alias a MySQL service (also { "${REDIS_URL}" }, { "${DATABASE_URL}" }).</p>
 		</div>
 

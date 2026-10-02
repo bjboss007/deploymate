@@ -61,7 +61,10 @@ One Go binary, one server, Docker as the compute substrate.
   any S3-compatible bucket (Cloudflare R2) with keep-newest-N retention,
   "Back up now", and typed-confirm restore from the service page
 - **Environment variables** — per-app, encrypted at rest, secrets masked in
-  the UI; values can reference injected URLs (`DATABASE_URL=${MYSQL_URL}`)
+  the UI; values can reference injected URLs (`DATABASE_URL=${MYSQL_URL}`).
+  Add several at once: **+ Add variable** appends rows, one **Save** stores
+  them all (or paste a `.env` file); all-or-nothing, and names like
+  `*_PASSWORD`/`*_SECRET`/`*_TOKEN` are masked automatically
 - **Automatic resource limits** — CPU/memory limits are derived from each
   app's own usage (P90 over 24h, doubled for headroom), and an app that
   sustains 80% of its limit is resized and redeployed automatically
