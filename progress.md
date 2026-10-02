@@ -7,6 +7,19 @@
 
 ## Where we stopped
 
+**2026-10-02 (UI bug: Start on a failed app nested the whole page)** —
+Owner screenshot: clicking **Start** on a failed app whose container is gone
+rendered the full page (layout and all) inside the header buttons. Cause: the
+header Start/Stop/Restart buttons are HTMX calls (`hx-target=#head-actions`);
+their error paths answered with a plain 303 to `/apps/{slug}?flash=…`, HTMX
+followed it and swapped the whole page into the fragment. Fix:
+`redirectOrHX` (handlers_apps.go) answers HTMX requests with `204` +
+`HX-Redirect` (a real navigation) and plain forms with the 303 as before;
+applied to the stop/start/restart error paths. Regression test
+`TestHeaderActionsNeverSwapAFullPage` (red on the old code, green now). Rule:
+**any handler an `hx-post` form targets must not `http.Redirect`** — use
+`redirectOrHX`. **Live server not restarted for this yet.**
+
 **2026-10-02 (P2 built — prebuilt-deploys UI)** — The Git panel (GitHub
 sources only) now has: a **Deploy mode** select (Build on this server |
 Prebuilt), write-only **token** field (blank keeps, "Remove saved token"

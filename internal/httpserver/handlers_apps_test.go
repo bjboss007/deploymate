@@ -566,3 +566,42 @@ func TestHealApp(t *testing.T) {
 		}
 	})
 }
+
+// goneRuntime reports every container as missing, like an app whose
+// container was removed out from under it.
+type goneRuntime struct{ fakeRuntime }
+
+func (g *goneRuntime) Start(context.Context, string) error { return runtime.ErrContainerNotFound }
+
+// TestHeaderActionsNeverSwapAFullPage: Start/Restart are HTMX calls that swap
+// only #head-actions. When they fail (container gone) the answer must be an
+// HX-Redirect — a plain 303 is followed by HTMX and the whole page, layout
+// included, gets pasted into the buttons area (the nested-page glitch).
+func TestHeaderActionsNeverSwapAFullPage(t *testing.T) {
+	st, app := replicaTestEnv(t, store.App{Name: "Api", Slug: "api", Status: "failed", Port: 8080})
+	_ = app
+	s := &Server{store: st, rt: &goneRuntime{}}
+	for _, action := range []string{"start", "restart"} {
+		for _, hx := range []bool{true, false} {
+			req := httptest.NewRequest(http.MethodPost, "/apps/api/"+action, strings.NewReader("csrf_token=csrf"))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+			if hx {
+				req.Header.Set("HX-Request", "true")
+			}
+			rec := httptest.NewRecorder()
+			s.Handler().ServeHTTP(rec, req)
+			if hx {
+				loc := rec.Header().Get("HX-Redirect")
+				if rec.Code != http.StatusNoContent || !strings.HasPrefix(loc, "/apps/api?flash=") {
+					t.Errorf("%s via HTMX: status %d, HX-Redirect %q — want 204 + HX-Redirect to the app page", action, rec.Code, loc)
+				}
+				if rec.Header().Get("Location") != "" {
+					t.Errorf("%s via HTMX sent a Location header (HTMX would follow it and swap the full page)", action)
+				}
+			} else if rec.Code != http.StatusSeeOther || !strings.HasPrefix(rec.Header().Get("Location"), "/apps/api?flash=") {
+				t.Errorf("%s as a plain form: status %d, Location %q", action, rec.Code, rec.Header().Get("Location"))
+			}
+		}
+	}
+}

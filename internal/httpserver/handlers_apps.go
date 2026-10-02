@@ -500,7 +500,7 @@ func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.stopApp(r.Context(), app, 10); err != nil {
 		slog.Error("apps: stop", "err", err)
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Stop failed: "+err.Error()), http.StatusSeeOther)
+		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Stop failed: "+err.Error()))
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "stopped")
@@ -523,11 +523,11 @@ func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.startApp(r.Context(), app); err != nil {
 		if errors.Is(err, runtime.ErrContainerNotFound) {
-			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."), http.StatusSeeOther)
+			redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."))
 			return
 		}
 		slog.Error("apps: start", "err", err)
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Start failed: "+err.Error()), http.StatusSeeOther)
+		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Start failed: "+err.Error()))
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "running")
@@ -555,11 +555,11 @@ func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
 	_ = s.stopApp(ctx, app, 10)
 	if err := s.startApp(ctx, app); err != nil {
 		if errors.Is(err, runtime.ErrContainerNotFound) {
-			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."), http.StatusSeeOther)
+			redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."))
 			return
 		}
 		slog.Error("apps: restart", "err", err)
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Restart failed: "+err.Error()), http.StatusSeeOther)
+		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Restart failed: "+err.Error()))
 		return
 	}
 	_ = s.store.UpdateAppStatus(app.ID, "running")
@@ -944,6 +944,20 @@ func (s *Server) appFromRequest(w http.ResponseWriter, r *http.Request) (store.A
 }
 
 func flashURL(msg string) string { return url.QueryEscape(msg) }
+
+// redirectOrHX sends the browser to a full page. The header action buttons
+// (start/stop/restart) are HTMX calls that swap only #head-actions; a plain
+// 303 would make HTMX follow it and paste the WHOLE page — layout and all —
+// into that fragment (the nested-page glitch). HX-Redirect makes HTMX do a
+// real navigation instead.
+func redirectOrHX(w http.ResponseWriter, r *http.Request, to string) {
+	if r.Header.Get("HX-Request") == "true" {
+		w.Header().Set("HX-Redirect", to)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	http.Redirect(w, r, to, http.StatusSeeOther)
+}
 
 // effectivePort is the platform port convention: apps read $PORT at
 // runtime, and when none is set the default is 8080 (Spring Boot/Heroku
