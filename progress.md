@@ -7,6 +7,27 @@
 
 ## Where we stopped
 
+**2026-10-02 (P2 built — prebuilt-deploys UI)** — The Git panel (GitHub
+sources only) now has: a **Deploy mode** select (Build on this server |
+Prebuilt), write-only **token** field (blank keeps, "Remove saved token"
+clears; never rendered/echoed), workflow path + artifact name, **Test
+connection** (repo + workflow check, scope warning counting OTHER private
+repos), the **generated workflow** (Gradle + Maven, copy buttons;
+`githubci.Workflow`), a webhook "tick Workflow runs" note, and **Deploy
+latest successful run** — which applies the *same* `ciSkipReason` gates as a
+webhook (fork/old/duplicate runs refused) and also backs the review page's
+deploy button for prebuilt apps. Code: `internal/httpserver/handlers_prebuilt.go`
+(+test), `internal/githubci/workflow.go` (+test), `web/templates/apps.templ`,
+CSS. `make e2e-artifact` now drives the whole UI flow against the fake
+GitHub (fake gained the workflow-runs and `/user/repos` endpoints); all unit
+tests + vet green; layout checked in the browser pane. Docs: spec "As built —
+P2", ADR 0019 status, deploy-flow, security, README Features, improvements
+(P2 checked). **Live server NOT restarted** (still the P0 build; restarting
+applies migration 17 — snapshot first). **Next:** P3 memory preflight; the
+"keep evidence when the readiness probe fails" item; owner follow-ups
+(BeyondCredit token, S3 billing glance, delete spike repo, switch the
+`testing` app to prebuilt once the live server runs this build).
+
 **2026-10-02 (real-project deploy test PASSED)** — The real Spring app
 (`bjboss007/tradestack-dm-test`, private copy of trade-stack-backend, CI-built
 102 MB JAR) deployed end-to-end through prebuilt mode on a scratch server

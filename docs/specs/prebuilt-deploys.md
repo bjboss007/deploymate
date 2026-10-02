@@ -2,11 +2,12 @@
 
 **Status:** **P0 and P1 implemented 2026-10-02** (ADR 0019): per-source
 delivery key + event dispatch, migration 0017, the GitHub client, the six
-`workflow_run` gates, `runArtifactDeploy`, and `make e2e-artifact`. **P2**
-(UI: mode, token + Test connection, workflow generator, "Deploy latest
-successful run") and **P3** (memory preflight) are not built; until P2 an
-app is switched to prebuilt mode only through the `seed-git-source` test
-hook (`DEPLOYMATE_SEED_MODE` / `_API_TOKEN`). Owner constraints:
+`workflow_run` gates, `runArtifactDeploy`, and `make e2e-artifact`. **P2 implemented
+2026-10-02** (UI: mode select, write-only token, Test connection with the
+private-repo scope warning, generated workflow, "Deploy latest successful
+run"); **P3** (memory preflight) is not built. The real project passed an
+end-to-end test the same day (see progress.md). The `seed-git-source` hook
+(`DEPLOYMATE_SEED_MODE` / `_API_TOKEN`) remains for tests. Owner constraints:
 no builder machine, no container registry. Trigger facts and GitHub limits
 below were checked against GitHub's docs on 2026-10-02 (see "Verified
 facts"); three items are marked **spike** and must be proven on real GitHub
@@ -518,3 +519,45 @@ build-once/promote-by-digest across environments or multi-server pulls.
   retry of a failed run id; **rollback with GitHub unreachable**; a
   build-mode app untouched by CI events; no secret in the server log or any
   build log.
+
+## As built — P2 (UI)
+
+- **Where:** the app page's Git panel, for GitHub sources only
+  (`GitInfo.GitHub`); GitLab/Gitea apps never see it and
+  `POST …/deploy-mode` refuses them. Build mode is the default and its
+  panel is unchanged ("Review & deploy…").
+- **Routes** (all CSRF-protected): `POST /apps/{slug}/deploy-mode`,
+  `POST /apps/{slug}/git/test`, `POST /apps/{slug}/git/deploy-latest`
+  (`internal/httpserver/handlers_prebuilt.go`).
+- **Save rules:** prebuilt requires a stored token; workflow path must match
+  `.github/workflows/<name>.yml|yaml`; artifact name `[A-Za-z0-9._-]{1,100}`;
+  a token is trimmed, ≤255 chars, no whitespace. The token field is
+  `type=password`, never pre-filled; a blank field **keeps** the stored token
+  and "Remove saved token" clears it. The token is stored encrypted and is
+  never rendered, logged or echoed in a flash message (tested, and checked by
+  `make e2e-artifact`).
+- **Test connection** (saved token + saved workflow): repo reachable →
+  workflow runs readable (a 404 here means "workflow file not in the repo
+  yet") → counts **other private repos** the token can read and warns when
+  any (`⚠ … recreate it with Only select repositories`). GitHub failures map
+  to fixed sentences (401 wrong/expired, 403 needs *Actions: read-only* or org
+  approval, 404 not found or not granted); GitHub's own message is not echoed.
+- **Deploy latest successful run** lists the newest 10 successful runs of the
+  workflow on the tracked branch and takes the first that passes **the same
+  `ciSkipReason` gates as a webhook** (fork, event, already-handled,
+  older-than-deployed all refused), queueing a `deploy` with
+  `trigger = dashboard` and the run's id/number/commit. A repeat press
+  reports "already handled" instead of deploying an older run. This is also the
+  first-deploy path and the answer to a missed webhook.
+- **Review page:** `POST /git/deploy` on a prebuilt app delegates to the same
+  action; the page's button reads "Deploy latest successful run".
+- **Generated workflow** (`githubci.Workflow`): Gradle and Maven variants,
+  branch/Java major/artifact name filled in (branch is always emitted as a
+  quoted YAML string), `workflow_dispatch` included so "Run workflow" works,
+  `retention-days: 1`, the single-`out/app.jar` step. Gradle multi-module
+  projects must edit the task (e.g. `:app:bootJar`) — noted on the page.
+- **Verified:** unit tests (`handlers_prebuilt_test.go`, `workflow_test.go`),
+  and `make e2e-artifact` now also drives the whole UI flow against the fake
+  GitHub (refuse without token → save → token encrypted/never rendered → Test
+  connection with the scope warning → Deploy latest skips a fork's run and
+  deploys → repeat is a no-op); layout checked in the browser pane.

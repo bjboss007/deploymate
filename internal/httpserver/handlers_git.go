@@ -100,6 +100,12 @@ func (s *Server) handleGitDeploy(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Connect a repo first."), http.StatusSeeOther)
 		return
 	}
+	// A prebuilt app has nothing to clone: the review page's deploy button
+	// deploys the latest successful CI run instead.
+	if app.DeployMode == store.DeployModeArtifact {
+		s.handleDeployLatest(w, r)
+		return
+	}
 	d, err := s.store.CreateDeployment(store.Deployment{
 		AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "dashboard",
 		CommitSHA: r.FormValue("sha"),
@@ -177,6 +183,7 @@ func (s *Server) handleDeployPreview(w http.ResponseWriter, r *http.Request) {
 		CommitURL:    gitpkg.CommitURL(gs.RepoURL, rg.Head),
 		FirstDeploy:  deployedSHA == "",
 		NothingToDo:  deployedSHA != "" && deployedSHA == rg.Head,
+		Prebuilt:     app.DeployMode == store.DeployModeArtifact,
 	}))
 }
 

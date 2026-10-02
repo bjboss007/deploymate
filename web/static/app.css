@@ -286,7 +286,14 @@ select { cursor: pointer; }
 .git-form input[type="text"] { min-width: 300px; }
 .git-form .branch-input { min-width: 0; width: 110px; }
 .git-connect .key-cell { word-break: break-all; }
-.git-deploy { margin-top: 14px; }
+.git-deploy { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+.git-deploy .inline-form { margin-bottom: 0; }
+.prebuilt { margin-top: 22px; padding-top: 4px; border-top: 1px solid var(--border); }
+.prebuilt .panel-title { margin-top: 18px; }
+.prebuilt input[type="password"] { min-width: 260px; }
+.prebuilt details { margin-top: 10px; }
+.prebuilt summary { cursor: pointer; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
+.prebuilt pre { background: #0a0c10; border: 1px solid var(--border); border-radius: 8px; padding: 14px; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; color: #b8c0d0; overflow-x: auto; margin-bottom: 8px; }
 .deploy-link { color: var(--text); }
 .deploy-link:hover { color: var(--accent); }
 

@@ -14,6 +14,15 @@ type GitInfo struct {
 	PublicKey     string
 	WebhookPath   string
 	WebhookSecret string
+
+	// Prebuilt (GitHub Actions artifact) deploys — shown for GitHub sources.
+	GitHub        bool
+	DeployMode    string // store.DeployModeBuild | DeployModeArtifact
+	WorkflowPath  string
+	ArtifactName  string
+	HasToken      bool   // an API token is stored (never the token itself)
+	WorkflowGradle string // generated workflow files, ready to copy
+	WorkflowMaven  string
 }
 
 // ReplicaView is one replica slot as the app page shows it.
@@ -342,10 +351,71 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 						</tbody>
 					</table>
 					<div class="git-deploy">
-						<a class="btn btn-primary" href={ "/apps/" + app.Slug + "/deploy-preview" }>Review &amp; deploy…</a>
+						if git.GitHub && git.DeployMode == "artifact" {
+							<form method="post" action={ "/apps/" + app.Slug + "/git/deploy-latest" } class="inline-form">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
+							</form>
+							<form method="post" action={ "/apps/" + app.Slug + "/git/test" } class="inline-form">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<button class="btn btn-ghost" type="submit">Test connection</button>
+							</form>
+						} else {
+							<a class="btn btn-primary" href={ "/apps/" + app.Slug + "/deploy-preview" }>Review &amp; deploy…</a>
+						}
 					</div>
 				</div>
-				<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
+				if git.GitHub && git.DeployMode == "artifact" {
+					<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes — tick <strong>Workflow runs</strong> in the repo's webhook settings (the push event can stay on; it is ignored for prebuilt apps).</p>
+				} else {
+					<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
+				}
+				if git.GitHub {
+					<div class="prebuilt">
+						<div class="panel-title">Deploy mode</div>
+						<form method="post" action={ "/apps/" + app.Slug + "/deploy-mode" } class="git-form">
+							<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+							<label>Mode
+								<select name="mode">
+									<option value="build" selected?={ git.DeployMode != "artifact" }>Build on this server</option>
+									<option value="artifact" selected?={ git.DeployMode == "artifact" }>Prebuilt (GitHub Actions)</option>
+								</select>
+							</label>
+							<label>Workflow file
+								<input type="text" name="workflow_path" value={ git.WorkflowPath }/>
+							</label>
+							<label>Artifact name
+								<input class="branch-input" type="text" name="artifact_name" value={ git.ArtifactName }/>
+							</label>
+							<label>GitHub token (write-only)
+								if git.HasToken {
+									<input type="password" name="api_token" autocomplete="off" placeholder="saved — leave blank to keep"/>
+								} else {
+									<input type="password" name="api_token" autocomplete="off" placeholder="github_pat_…"/>
+								}
+							</label>
+							if git.HasToken {
+								<label><span><input type="checkbox" name="clear_token"/> Remove saved token</span></label>
+							}
+							<button class="btn btn-primary" type="submit">Save</button>
+						</form>
+						<p class="muted panel-hint">Prebuilt mode keeps big builds off this server: your repo's GitHub Actions workflow builds the JAR, and DeployMate downloads and runs it. Use a <strong>fine-grained</strong> token limited to <strong>only this repository</strong> with <strong>Actions: read-only</strong> (for an organization's repo, set the organization as resource owner; an owner may need to approve it). The token is stored encrypted and never shown again. Build mode (default) is unchanged.</p>
+						if git.DeployMode == "artifact" {
+							<div class="panel-title">Workflow file</div>
+							<p class="muted panel-hint">Commit this as <span class="mono">{ git.WorkflowPath }</span> in the repo (Gradle shown; for a multi-module build use your app module's task, e.g. <span class="mono">:app:bootJar</span>). It uploads exactly one JAR as a one-day artifact.</p>
+							<details open>
+								<summary>Gradle</summary>
+								<pre id="wf-gradle">{ git.WorkflowGradle }</pre>
+								<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="wf-gradle">Copy</button>
+							</details>
+							<details>
+								<summary>Maven</summary>
+								<pre id="wf-maven">{ git.WorkflowMaven }</pre>
+								<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="wf-maven">Copy</button>
+							</details>
+						}
+					</div>
+				}
 			}
 		</div>
 

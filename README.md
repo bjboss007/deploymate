@@ -30,6 +30,14 @@ One Go binary, one server, Docker as the compute substrate.
   select a **runtime** — Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno,
   Elixir, .NET, static sites — built with Railpack, no Dockerfile needed,
   optionally version-pinned
+- **Prebuilt deploys (GitHub Actions)** — for JVM apps too big to build on a
+  small server: a workflow in your repo builds the JAR, DeployMate downloads
+  that one artifact (fine-grained, read-only token, one repo) and runs it in a
+  non-root `eclipse-temurin` wrapper with the same zero-downtime swap and
+  rollback. Switch per app from the Git panel (the default stays "build on
+  this server"): a Test connection check (with a warning if the token is
+  wider than one repo), a ready-to-copy workflow file, and a **Deploy latest
+  successful run** button for the first deploy or a missed webhook.
 - **Infra manifest** — a `deploymate.yml` in the repo declares the backing
   services (`services: [postgres, redis]`); every deploy reconciles the
   project's services with it — reuse a running one, start a stopped one, or

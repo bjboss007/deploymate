@@ -28,7 +28,10 @@ deploys or read secrets.**
   file together would expose them. Create it with *Only select
   repositories*. The artifact download's signed storage URL is never logged
   and never receives the token. Webhook gates refuse pull-request and fork
-  runs, so attacker-built artifacts cannot reach the deploy path.
+  runs, so attacker-built artifacts cannot reach the deploy path — and the
+  dashboard's "Deploy latest successful run" goes through the same gates.
+  The UI token field is write-only (never rendered or echoed), and Test
+  connection warns when the token can read other private repos.
 - **Docker socket = root-equivalent**: the platform process can do
   anything on the host. Accepted for a personal server; the blast radius
   is "someone who already owns your deploymate login owns the box" —

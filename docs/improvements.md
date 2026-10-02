@@ -398,7 +398,7 @@ change.
     client, six `workflow_run` gates, `runArtifactDeploy`, safe unzip,
     wrapper template, failure messages, `make e2e-artifact`. Backend only:
     an app is switched to prebuilt mode via `seed-git-source` env until P2.
-  - [ ] **P2 — UI + the owner-facing flow:** Git panel mode select; token
+  - [x] **P2 — UI + the owner-facing flow (done 2026-10-02):** Git panel mode select; token
     field (write-only) + **Test connection** (repo reachable, workflow
     found, and the **scope warning**: count of *private* repos other than
     this one — `githubci.OtherPrivateRepos` exists and is tested);
@@ -407,7 +407,10 @@ change.
     `cp … out/app.jar` step); "tick *Workflow runs* on the webhook"
     instruction; **Deploy latest successful run**
     (`githubci.ListSuccessfulRuns` exists and is tested) for missed
-    deliveries and the first deploy; README Features entry.
+    deliveries and the first deploy; README Features entry. Built as
+    specced (docs/specs/prebuilt-deploys.md "As built — P2"); e2e drives
+    the UI flow. Not included: a per-run picker (the button takes the newest
+    eligible run), and the Prebuilt/Build choice at app-creation time.
   - [ ] **P3 — memory preflight advisory:** before an on-server JVM build,
     compare the host's Docker memory budget to ~3 GB and write a note (build
     log + app page) pointing at prebuilt mode. Advises, never blocks.

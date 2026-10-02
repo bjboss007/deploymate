@@ -21,7 +21,9 @@ import (
 
 	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/githubci"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
@@ -356,6 +358,14 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 					PublicKey:     pubKey,
 					WebhookPath:   "/hooks/" + gs.ID,
 					WebhookSecret: secret,
+				}
+				if gs.Provider == "github" {
+					wf := githubci.WorkflowOpts{Branch: gs.DefaultBranch, JavaMajor: builder.JavaMajor(app.Runtime), ArtifactName: app.ArtifactName}
+					git.GitHub, git.DeployMode, git.HasToken = true, app.DeployMode, gs.APITokenEnc != ""
+					git.WorkflowPath, git.ArtifactName = app.WorkflowPath, app.ArtifactName
+					git.WorkflowGradle = githubci.Workflow(wf)
+					wf.Tool = githubci.ToolMaven
+					git.WorkflowMaven = githubci.Workflow(wf)
 				}
 			}
 		}

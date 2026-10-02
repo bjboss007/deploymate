@@ -80,7 +80,13 @@ and building on the server — the way a 2 GB box runs what it cannot build.
    number above everything deployed or in flight. Pass → a queued
    `deploy` row with `trigger = ci`, `ci_run`, `ci_run_number`.
    (Pushes are ignored for prebuilt apps; CI events are ignored for
-   build-mode apps.)
+   build-mode apps.) The **dashboard** can queue the same thing: the Git
+   panel's "Deploy latest successful run" (`handleDeployLatest`) lists the
+   workflow's newest successful runs and applies the *same* `ciSkipReason`
+   gates, queuing `trigger = dashboard` — the first-deploy path and the
+   missed-webhook path. Mode, token (write-only), workflow/artifact names,
+   Test connection and the generated workflow file live in the same panel
+   (`handlers_prebuilt.go`).
 3. The worker (`runArtifactDeploy`) lists the run's artifacts, picks the
    named one (not expired, under the size cap), downloads it with the
    source's fine-grained token (302 → blob URL fetched **without** the

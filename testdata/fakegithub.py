@@ -14,6 +14,7 @@ Runs by id:
   1003  artifact expired      1008  the "artifact" is not a zip
   1004  artifact name differs 1099  (unknown -> 404)
   1005  digest mismatch
+GET /user/repos (two other private repos) and the workflow's run list (1500 is a fork's) back the UI flow.
 GET /__stats reports how the fake was used (API calls, blob auth seen).
 """
 import hashlib
@@ -94,6 +95,19 @@ class API(Quiet):
             return self.send_json(401, {"message": "Bad credentials"})
         if path == "/repos/" + REPO:
             return self.send_json(200, {"full_name": REPO, "private": True})
+        if path == "/user/repos":  # a token that can see two OTHER private repos (scope warning)
+            return self.send_json(200, [{"full_name": REPO, "private": True},
+                                        {"full_name": "other/one", "private": True},
+                                        {"full_name": "other/two", "private": True},
+                                        {"full_name": "other/pub", "private": False}])
+        if path == "/repos/" + REPO + "/actions/workflows/deploymate.yml/runs":  # "Deploy latest successful run"
+            def run(i, n, event="push", head=REPO):
+                return {"id": i, "run_number": n, "run_attempt": 1, "event": event, "conclusion": "success",
+                        "head_branch": "main", "head_sha": "0123456789abcdef0123456789abcdef01234567",
+                        "path": ".github/workflows/deploymate.yml", "head_commit": {"message": "e2e ui deploy"},
+                        "head_repository": {"full_name": head}}
+            # newest first: a fork's run (must be skipped), then the repo's own v2 and v1
+            return self.send_json(200, {"total_count": 3, "workflow_runs": [run(1500, 3, head="mallory/web"), run(1002, 2), run(1001, 1)]})
         m = re.fullmatch(r"/repos/" + re.escape(REPO) + r"/actions/runs/(\d+)/artifacts", path)
         if m:
             arts = RUNS.get(int(m.group(1)))

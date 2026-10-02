@@ -49,13 +49,13 @@ cleanup() {
   set +e
   [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null && wait "$SRV_PID" 2>/dev/null
   [ -n "$GH_PID" ] && kill "$GH_PID" 2>/dev/null
-  for c in $(docker ps -aq --filter "name=^dm-$SLUG" --filter "name=^dm-$SLUG2" 2>/dev/null); do
+  for c in $(docker ps -aq --filter "name=^dm-$SLUG" --filter "name=^dm-$SLUG2" --filter "name=^dm-${SLUG3:-none}" 2>/dev/null); do
     docker rm -f "$c" >/dev/null 2>&1
   done
   for c in $(docker ps -aq --filter "name=^dm-e2eart" 2>/dev/null); do
-    case "$(docker inspect -f '{{.Name}}' "$c" 2>/dev/null)" in /dm-$SLUG*|/dm-$SLUG2*) docker rm -f "$c" >/dev/null 2>&1 ;; esac
+    case "$(docker inspect -f '{{.Name}}' "$c" 2>/dev/null)" in /dm-$SLUG*|/dm-$SLUG2*|/dm-${SLUG3:-none}*) docker rm -f "$c" >/dev/null 2>&1 ;; esac
   done
-  imgs="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^deploymate/apps/($SLUG|$SLUG2):" 2>/dev/null)"
+  imgs="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^deploymate/apps/($SLUG|$SLUG2|${SLUG3:-none}):" 2>/dev/null)"
   [ -n "$imgs" ] && docker rmi -f $imgs >/dev/null 2>&1
   rm -rf "$DATA_DIR" "$JAR"
 }
@@ -208,6 +208,45 @@ expect "retry of failed run" "queued 200" "$(hook "$SRC" "$SECRET" workflow_run 
 log "PASS: a failed run id is retryable"
 grep -q "SECRETSIGNATURE\|$TOKEN" "$DATA_DIR/server.log" && fail "a secret leaked into the server log"
 [ "$(db "SELECT COUNT(*) FROM build_logs WHERE line LIKE '%SECRETSIGNATURE%' OR line LIKE '%$TOKEN%'")" = "0" ] || fail "a secret leaked into a build log"
+
+# 5b. The UI flow (P2): an app on a build-mode source is switched to prebuilt
+# through the dashboard forms, tested, and deployed with "Deploy latest
+# successful run" — no hand-signed webhook, no seeding of mode or token.
+log "UI flow"
+SLUG3="e2eartc$STAMP"
+CSRF="$(csrf "$BASE/projects")"
+curl -sf -b "$JAR" -o /dev/null -d "name=$SLUG3&csrf_token=$CSRF" "$BASE/projects/$PROJ/apps" || fail "create app $SLUG3"
+env DEPLOYMATE_DATA_DIR="$DATA_DIR" "$BIN" seed-git-source "$SLUG3" "https://github.com/$REPO.git" main github >/dev/null 2>&1 || fail "seed $SLUG3"
+flash() { python3 -c 'import sys,urllib.parse as u; print(u.parse_qs(u.urlparse(sys.argv[1]).query).get("flash",[""])[0])' "$1"; }
+CSRF="$(csrf "$BASE/apps/$SLUG3")"
+page="$(curl -s -b "$JAR" "$BASE/apps/$SLUG3")"
+echo "$page" | grep -q 'Build on this server' || fail "mode select missing on a GitHub-source app"
+echo "$page" | grep -q 'Deploy latest successful run' && fail "prebuilt buttons shown in build mode"
+loc="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "mode=artifact&csrf_token=$CSRF" "$BASE/apps/$SLUG3/deploy-mode")"
+flash "$loc" | grep -q "needs a GitHub token" || fail "prebuilt without a token must be refused ($(flash "$loc"))"
+curl -s -b "$JAR" -o /dev/null --data-urlencode "mode=artifact" --data-urlencode "api_token=$TOKEN" -d "csrf_token=$CSRF" "$BASE/apps/$SLUG3/deploy-mode"
+[ "$(db "SELECT deploy_mode FROM apps WHERE slug='$SLUG3'")" = "artifact" ] || fail "UI did not switch the app to prebuilt"
+[ -n "$(db "SELECT api_token_enc FROM git_sources s JOIN apps a ON a.git_source_id=s.id WHERE a.slug='$SLUG3'")" ] || fail "token not stored"
+db "SELECT api_token_enc FROM git_sources" | grep -qF "$TOKEN" && fail "token stored in plaintext"
+page="$(curl -s -b "$JAR" "$BASE/apps/$SLUG3")"
+echo "$page" | grep -qF "$TOKEN" && fail "the token is rendered on the page"
+for want in 'Deploy latest successful run' 'Test connection' 'retention-days: 1' 'saved — leave blank to keep'; do
+  echo "$page" | grep -qF "$want" || fail "prebuilt panel lacks '$want'"
+done
+loc="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "csrf_token=$CSRF" "$BASE/apps/$SLUG3/git/test")"
+f="$(flash "$loc")"
+echo "$f" | grep -q "Connected to $REPO" && echo "$f" | grep -q "2 other private repositories" || fail "Test connection: '$f'"
+loc="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "csrf_token=$CSRF" "$BASE/apps/$SLUG3/git/deploy-latest")"
+D3="${loc##*/deployments/}"; [ -n "$D3" ] && [ "$D3" != "$loc" ] || fail "deploy-latest did not queue ($(flash "$loc"))"
+[ "$(db "SELECT ci_run FROM deployments WHERE id='$D3'")" = "1002" ] || fail "deploy-latest must skip the fork's run and take 1002"
+for i in $(seq 1 120); do
+  st="$(db "SELECT status FROM deployments WHERE id='$D3'")"; [ "$st" = running ] && break
+  [ "$st" = failed ] && fail "UI deploy failed: $(db "SELECT error FROM deployments WHERE id='$D3'")"
+  sleep 1; [ "$i" = 120 ] && fail "UI deploy never reached running"
+done
+loc="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "csrf_token=$CSRF" "$BASE/apps/$SLUG3/git/deploy-latest")"
+flash "$loc" | grep -q "already handled" || fail "second press must say already handled ($(flash "$loc"))"
+log "PASS: UI — switch to prebuilt, token encrypted and never rendered, Test connection (+scope warning), Deploy latest skips the fork run, repeat is a no-op"
 
 # 6. Rollback with GitHub DOWN: the kept local image is all it needs.
 kill "$GH_PID" 2>/dev/null; wait "$GH_PID" 2>/dev/null || true; GH_PID=""

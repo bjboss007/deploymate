@@ -12,6 +12,7 @@ type DeployPreview struct {
 	CommitURL   string // web URL of the head commit, "" when unguessable
 	FirstDeploy bool
 	NothingToDo bool
+	Prebuilt    bool // artifact-mode app: the button deploys the latest successful CI run
 }
 
 templ DeployPreviewPage(vc ViewCtx, project store.Project, app store.App, p DeployPreview) {
@@ -99,7 +100,11 @@ templ DeployPreviewPage(vc ViewCtx, project store.Project, app store.App, p Depl
 					<p class="muted panel-hint">
 						Deploying pins commit <span class="mono">{ shortSHA8(p.Range.Head) }</span> — exactly what you reviewed here.
 					</p>
-					<button class="btn btn-primary" type="submit">Deploy { shortSHA8(p.Range.Head) }</button>
+					if p.Prebuilt {
+						<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
+					} else {
+						<button class="btn btn-primary" type="submit">Deploy { shortSHA8(p.Range.Head) }</button>
+					}
 					<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Cancel</a>
 				</form>
 			</div>

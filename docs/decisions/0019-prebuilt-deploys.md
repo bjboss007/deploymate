@@ -1,8 +1,9 @@
 # 0019 — Prebuilt deploys: CI builds the JAR, DeployMate wraps and runs it
 
 - **Date:** 2026-10-02
-- **Status:** accepted (P1 implemented: data model, webhook gates, GitHub
-  client, worker, e2e; UI is P2 — see docs/specs/prebuilt-deploys.md)
+- **Status:** accepted (P1 + P2 implemented: data model, webhook gates, GitHub
+  client, worker, e2e, and the dashboard UI — see docs/specs/prebuilt-deploys.md;
+  P3 memory preflight is open)
 
 ## Context
 

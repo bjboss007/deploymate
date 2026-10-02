@@ -121,6 +121,7 @@ func serve() error {
 		go sched.Run(workerCtx)
 	}
 	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsManager, backupMgr)
+	server.SetGitHubAPI(cfg.GitHubAPIURL)
 
 	// The deployment worker: one in-process loop, builds serialized.
 	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)

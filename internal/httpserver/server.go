@@ -38,6 +38,7 @@ type Server struct {
 	dataDir     string       // repo mirrors for the deploy-review page
 	dns         dns.Manager  // nil disables auto-DNS
 	backups     *backup.Manager // nil disables the backups UI/actions
+	githubAPI   string          // GitHub REST base URL for prebuilt-deploy actions; "" = the real API
 	previewRR   sync.Map        // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
@@ -134,6 +135,9 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/env/{id}/delete", am.CheckCSRF(s.handleEnvVarDelete))
 		r.Post("/apps/{slug}/git", am.CheckCSRF(s.handleGitConnect))
 		r.Post("/apps/{slug}/git/deploy", am.CheckCSRF(s.handleGitDeploy))
+		r.Post("/apps/{slug}/git/deploy-latest", am.CheckCSRF(s.handleDeployLatest))
+		r.Post("/apps/{slug}/git/test", am.CheckCSRF(s.handleGitTest))
+		r.Post("/apps/{slug}/deploy-mode", am.CheckCSRF(s.handleDeployMode))
 		r.Post("/apps/{slug}/domains", am.CheckCSRF(s.handleDomainCreate))
 		r.Post("/apps/{slug}/domains/{id}/delete", am.CheckCSRF(s.handleDomainDelete))
 		r.Post("/apps/{slug}/port", am.CheckCSRF(s.handleAppPort))
