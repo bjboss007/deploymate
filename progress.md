@@ -24,11 +24,14 @@ generated credentials not matching the volume's. **Code fix (committed, tests
 green):** `CreateService` now enforces global slug uniqueness; manifest
 provisioning falls back to `{project-slug}-{env}-{type}` when the env-prefixed
 slug is taken (`TestEnsureDoesNotTakeAnotherProjectsService`,
-`TestCreateServiceSlugUniqueAcrossProjects`). **Live repair NOT done** (an
-action to modify shared containers was refused; owner to decide): shortener's
+`TestCreateServiceSlugUniqueAcrossProjects`). **Live repair DONE after the owner's OK** (snapshot
+`data/backups/pre-svcslug-*.db`; `dm-svc-dev-redis` recreated from `redis:latest`
+on its volume — PONG, empty dataset; the two acme-starter rows + their
+credentials deleted, 0 duplicate slugs left; live server restarted on the fix,
+pid 13906, apps healthy). The state BEFORE the repair was: shortener's
 `dm-svc-dev-redis` is crash-looping on `redis:7-alpine`; two duplicate rows
 (acme-starter `dev-postgres` id 742719b8…, `dev-redis` id 6bf89616…) still sit in
-`services`. Planned repair: snapshot the DB; recreate `dm-svc-dev-redis` from
+`services`. The repair that was run: snapshot the DB; recreate `dm-svc-dev-redis` from
 `redis:latest` on `dm-svc-dev-redis-data` (labels as in the service row);
 delete the two acme-starter rows (+ their `service_credentials`); restart the
 live server on the new build; redeploy ERP so it provisions its own services.
