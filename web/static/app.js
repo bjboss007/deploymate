@@ -111,12 +111,26 @@ function attachLogStream(panel) {
 }
 
 // --- metrics charts -----------------------------------------------------
-const CHART_COLORS = { cpu: "#ffb224", mem: "#3ecf8e" };
+// Chart colours come from the theme tokens (so light and dark both work) and
+// are re-applied when the theme is toggled.
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const CHART_COLORS = { cpu: "--accent", mem: "--green" };
+const liveCharts = [];
+
+function themeChart(chart, colorVar) {
+  const color = cssVar(colorVar);
+  const ds = chart.data.datasets[0];
+  ds.borderColor = color;
+  ds.backgroundColor = color + "22";
+  chart.options.scales.y.ticks.color = cssVar("--faint");
+  chart.options.scales.y.grid.color = cssVar("--border");
+  chart.update("none");
+}
 
 function lineChart(id, label, color) {
   const ctx = document.getElementById(id);
   if (!ctx) return null;
-  return new Chart(ctx, {
+  const chart = new Chart(ctx, {
     type: "line",
     data: { labels: [], datasets: [{ label, data: [], borderColor: color, backgroundColor: color + "22", fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5 }] },
     options: {
@@ -124,10 +138,13 @@ function lineChart(id, label, color) {
       plugins: { legend: { display: false } },
       scales: {
         x: { ticks: { display: false }, grid: { display: false } },
-        y: { beginAtZero: true, ticks: { color: "#565e70", font: { family: "IBM Plex Mono", size: 10 } }, grid: { color: "#1f2430" } },
+        y: { beginAtZero: true, ticks: { color: "#66738a", font: { family: "IBM Plex Mono", size: 10 } }, grid: { color: "#243040" } },
       },
     },
   });
+  liveCharts.push({ chart, colorVar: color });
+  themeChart(chart, color);
+  return chart;
 }
 
 function fmtTime(ts) {
@@ -238,4 +255,83 @@ document.addEventListener("DOMContentLoaded", () => {
     if (list.children.length > 1) row.remove();
     else row.querySelectorAll("input[type=text]").forEach((i) => { i.value = ""; });
   });
+})();
+
+
+// --- theme toggle --------------------------------------------------------
+// Dark is the default; "light" is remembered in localStorage and applied by
+// an inline script in <head> before first paint.
+document.addEventListener("click", (e) => {
+  if (!e.target.closest("[data-theme-toggle]")) return;
+  const root = document.documentElement;
+  const light = root.getAttribute("data-theme") !== "light";
+  if (light) root.setAttribute("data-theme", "light"); else root.removeAttribute("data-theme");
+  try { localStorage.setItem("dm-theme", light ? "light" : "dark"); } catch (_) {}
+  liveCharts.forEach((c) => themeChart(c.chart, c.colorVar));
+});
+
+
+// --- app page tabs -------------------------------------------------------
+// Overview / Deployments / Logs / Variables / Settings. Server-rendered as
+// stacked sections (works without JS); here they become tabs. The active tab
+// follows the URL hash. Forms redirect back to the bare page with a flash, so
+// the last-open tab is remembered per app and restored when a flash is
+// showing — saving a variable lands you back on Variables, not Overview.
+(() => {
+  const nav = document.querySelector("[data-tabs]");
+  if (!nav) return;
+  const root = document.documentElement;
+  const slug = document.body.dataset.appSlug || "";
+  const key = "dm-tab:" + slug;
+  const names = [...nav.querySelectorAll("[data-tab-btn]")].map((b) => b.dataset.tabBtn);
+  const panels = Object.fromEntries(names.map((n) => [n, document.getElementById("tab-" + n)]));
+  if (names.some((n) => !panels[n])) return; // markup mismatch: leave the stacked layout alone
+
+  const settingsAnchors = [...document.querySelectorAll(".settings-group")].map((g) => g.id);
+  const store = {
+    get: () => { try { return sessionStorage.getItem(key); } catch (_) { return null; } },
+    set: (v) => { try { sessionStorage.setItem(key, v); } catch (_) {} },
+  };
+  const show = (name, { scroll = false, anchor = "" } = {}) => {
+    if (!panels[name]) name = "overview";
+    root.classList.add("tabs-on");
+    names.forEach((n) => {
+      const on = n === name;
+      panels[n].classList.toggle("is-active", on);
+      const btn = nav.querySelector('[data-tab-btn="' + n + '"]');
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-current", on ? "page" : "false");
+    });
+    store.set(name);
+    // Charts sized while hidden need a nudge; the log stream follows the tail.
+    window.dispatchEvent(new Event("resize"));
+    if (name === "logs") { const l = document.querySelector("[data-log-src]"); if (l) l.scrollTop = l.scrollHeight; }
+    if (anchor) document.getElementById(anchor)?.scrollIntoView({ block: "start" });
+    else if (scroll) window.scrollTo({ top: 0 });
+  };
+  const fromHash = () => {
+    const h = decodeURIComponent(location.hash.replace(/^#/, ""));
+    if (names.includes(h)) return { name: h };
+    if (settingsAnchors.includes(h)) return { name: "settings", anchor: h };
+    return null;
+  };
+
+  const hasFlash = !!document.querySelector(".flash");
+  const initial = fromHash() || (hasFlash && store.get() ? { name: store.get() } : { name: "overview" });
+  show(initial.name, { anchor: initial.anchor });
+
+  // Tab buttons and in-page links ([data-tab-link]) switch without a jump.
+  document.addEventListener("click", (e) => {
+    const link = e.target.closest("[data-tab-btn], [data-tab-link], .settings-nav a");
+    if (!link) return;
+    const href = link.getAttribute("href") || "";
+    if (!href.startsWith("#")) return;
+    const target = decodeURIComponent(href.slice(1));
+    const dest = names.includes(target) ? { name: target } : settingsAnchors.includes(target) ? { name: "settings", anchor: target } : null;
+    if (!dest) return;
+    e.preventDefault();
+    history.replaceState(null, "", href);
+    show(dest.name, { scroll: !dest.anchor, anchor: dest.anchor });
+  });
+  window.addEventListener("hashchange", () => { const d = fromHash(); if (d) show(d.name, { anchor: d.anchor }); });
 })();

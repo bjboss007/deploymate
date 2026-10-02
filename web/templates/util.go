@@ -113,3 +113,68 @@ func runtimeVersion(spec string) string {
 	}
 	return ""
 }
+
+// ago renders an RFC3339Nano timestamp relative to now ("just now", "5 min
+// ago", "3 h ago", "2 d ago"); older than 30 days falls back to the date.
+func ago(ts string) string { return agoAt(ts, time.Now()) }
+
+func agoAt(ts string, now time.Time) string {
+	t, err := time.Parse(time.RFC3339Nano, ts)
+	if err != nil {
+		return "—"
+	}
+	d := now.Sub(t)
+	switch {
+	case d < 45*time.Second:
+		return "just now"
+	case d < 90*time.Minute && d >= time.Minute:
+		return fmt.Sprintf("%d min ago", int(d.Minutes()))
+	case d < time.Minute:
+		return "1 min ago"
+	case d < 36*time.Hour:
+		return fmt.Sprintf("%d h ago", int(d.Hours()))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%d d ago", int(d.Hours()/24))
+	}
+	return t.Local().Format("2006-01-02")
+}
+
+// clip shortens s to at most n runes, adding an ellipsis.
+func clip(s string, n int) string {
+	r := []rune(strings.TrimSpace(s))
+	if len(r) <= n {
+		return string(r)
+	}
+	return string(r[:n]) + "…"
+}
+
+// currentDeployment finds the deployment the app is serving among the recent
+// ones; ok is false when it is not in the list (e.g. never deployed).
+func currentDeployment(app store.App, ds []store.Deployment) (store.Deployment, bool) {
+	for _, d := range ds {
+		if d.ID == app.CurrentDeploymentID && d.ID != "" {
+			return d, true
+		}
+	}
+	return store.Deployment{}, false
+}
+
+// recent returns at most n deployments (the list is newest first).
+func recent(ds []store.Deployment, n int) []store.Deployment {
+	if len(ds) > n {
+		return ds[:n]
+	}
+	return ds
+}
+
+// versionLabel is what a deployment shipped, in a few characters: the image
+// tag, else the short commit, else its kind.
+func versionLabel(d store.Deployment) string {
+	switch {
+	case d.ImageTag != "":
+		return clip(d.ImageTag, 40)
+	case d.CommitSHA != "":
+		return shortDeployID(d.CommitSHA)
+	}
+	return d.Kind
+}

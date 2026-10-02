@@ -29,7 +29,7 @@ func LoginPage(err ...string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Sign in · DeployMate</title><link rel=\"stylesheet\" href=\"/static/app.css\"></head><body class=\"login-body\"><div class=\"login-card\"><div class=\"login-brand\"><span class=\"led\"></span> <span>deploymate</span></div><p class=\"login-sub\">Sign in to your server.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Sign in · DeployMate</title><script>\n\t\t\t\ttry { var t = localStorage.getItem(\"dm-theme\"); if (t === \"light\") document.documentElement.setAttribute(\"data-theme\", \"light\"); } catch (e) {}\n\t\t\t</script><link rel=\"stylesheet\" href=\"/static/app.css\"></head><body class=\"login-body\"><div class=\"login-card\"><div class=\"login-brand\"><span class=\"led\"></span> <span>deploymate</span></div><p class=\"login-sub\">Sign in to your server.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -41,7 +41,7 @@ func LoginPage(err ...string) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(err[0])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/login.templ`, Line: 20, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/login.templ`, Line: 23, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {

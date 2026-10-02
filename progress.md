@@ -7,6 +7,42 @@
 
 ## Where we stopped
 
+**2026-10-02 (UI redesign, step 1+2: foundation + app page)** — Owner asked
+for a UI/UX redesign (designer skill; dark default + light option; start with
+the app page). **Audit:** projects page = names only; app page = one 3,000 px
+column of ten equal panels (image-deploy form first, logs last, history on
+another page, failures show only "readiness probe EOF"). **Direction:**
+"control room" — ink panels, ONE cobalt action colour, status as lamps
+(green/amber/red), Schibsted Grotesk (people) + IBM Plex Mono (machine text
+only), signature = a per-app heartbeat strip of uptime + deploy notches (not
+built yet; the existing uptime dots are restyled). **Built:** (1) *Foundation*
+— tokens in `app.css` (`:root` dark, `[data-theme="light"]`), all hard-coded
+colours moved to variables (`color-mix`), new vendored font (`web/static/fonts/`,
+OFL, README there; Plex Sans removed), theme toggle in the topbar
+(`localStorage dm-theme`, applied before paint by an inline `<head>` script;
+dark is the default; the login page honours it), charts re-theme on toggle.
+(2) *App page* (`web/templates/apps.templ`): header (name, env, URL, one
+primary **Deploy**, Restart/Stop/Start + status lamp), sticky tabs
+**Overview · Deployments · Logs · Variables · Settings** (+ Activity →
+history page), server-rendered as stacked sections so it works without JS;
+`app.js` turns them into tabs driven by the URL hash and remembers the last
+tab per app so a form redirect with a flash returns to the same tab. Overview:
+*diagnosis banner* (last deploy's real error + "Read the build log", or the
+health-check reason), facts (health / running version / resources), uptime,
+resource charts, recent deployments (rows show commit message or failure
+reason). Deployments tab: image-deploy form or source row + deploy action,
+full history with Roll back. Settings: Source & build, Domains & access,
+Scaling, Environment, Danger zone (Delete moved here from the header, with
+an explanation), each with a heading and a jump chip. Helpers `ago`, `clip`,
+`currentDeployment`, `recent`, `versionLabel` (+tests). Checked in the browser
+pane at desktop and 375 px, dark and light; no duplicate ids. **Next steps
+(not started):** fleet board for the projects/project pages (status, last
+deploy, uptime strip per app), deployment + log pages (failure causes in plain
+words), services pages, login/empty/error states, and restyle the remaining
+mono-heavy pages to the new type system. Known nit: the header button says
+"Deploy latest run" while the Git panel says "Deploy latest successful run"
+(e2e greps the latter). **Not on the live server yet.**
+
 **2026-10-02 (env vars: add several at once + ERP diagnosis)** — ERP's
 second deploy built fine on the server (Gradle 5 min) but the app exited at
 startup (Flyway: DB unreachable) because no `DB_URL`/`DB_USER`/… were set

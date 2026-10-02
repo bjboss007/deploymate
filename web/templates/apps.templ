@@ -127,7 +127,6 @@ templ appCard(app store.App) {
 templ AppHeadActions(vc ViewCtx, app store.App) {
 	<div class="head-actions" id="head-actions">
 		@statusBadge(app.Status)
-		<a class="btn btn-ghost" href={ "/apps/" + app.Slug + "/history" }>History</a>
 		if app.Status == "running" {
 			<form method="post" action={ "/apps/" + app.Slug + "/restart" }
 				hx-post={ "/apps/" + app.Slug + "/restart" }
@@ -154,443 +153,645 @@ templ AppHeadActions(vc ViewCtx, app store.App) {
 				<button class="btn btn-ghost" type="submit">Start</button>
 			</form>
 		}
-		<form method="post" action={ "/apps/" + app.Slug + "/delete" } onsubmit="return confirm('Delete this app and its container?')">
-			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-			<button class="btn btn-danger" type="submit">Delete</button>
-		</form>
 	</div>
+}
+
+// appVersion is the "what is running" fact: the current deployment's
+// version, when it shipped, and (for commits) its message.
+templ appVersion(app store.App, deployments []store.Deployment) {
+	if cur, ok := currentDeployment(app, deployments); ok {
+		<div class="fact-main mono">{ versionLabel(cur) }</div>
+		<div class="fact-sub">
+			{ ago(cur.CreatedAt) }
+			if cur.CommitMessage != "" {
+				· { clip(cur.CommitMessage, 60) }
+			}
+		</div>
+	} else if app.Image != "" {
+		<div class="fact-main mono">{ clip(app.Image, 40) }</div>
+		<div class="fact-sub">nothing deployed from this app yet</div>
+	} else {
+		<div class="fact-main muted-text">Not deployed</div>
+		<div class="fact-sub">Deploy to get a running version.</div>
+	}
+}
+
+// appDiagnosis answers "why isn't it working?" at the top of Overview: the
+// last deployment's real error, or the health check's reason, with the way to
+// read the full log. It renders nothing when everything is fine.
+templ appDiagnosis(app store.App, deployments []store.Deployment, healthReason string) {
+	if len(deployments) > 0 && deployments[0].Status == "failed" {
+		<div class="diagnosis diagnosis-bad" role="alert">
+			<div class="diagnosis-title">The last deploy failed</div>
+			if deployments[0].Error != "" {
+				<p class="diagnosis-body">{ clip(deployments[0].Error, 400) }</p>
+			}
+			<div class="diagnosis-actions">
+				<a class="btn btn-ghost btn-sm" href={ templ.SafeURL("/deployments/" + deployments[0].ID) }>Read the build log</a>
+				if app.Status == "running" {
+					<span class="muted-text">The previous version is still serving.</span>
+				}
+			</div>
+		</div>
+	} else if healthReason != "" {
+		<div class="diagnosis diagnosis-bad" role="alert">
+			<div class="diagnosis-title">The app is up but failing its health check</div>
+			<p class="diagnosis-body">{ healthReason }</p>
+			<div class="diagnosis-actions">
+				<a class="btn btn-ghost btn-sm" href="#logs" data-tab-link="logs">Open the logs</a>
+			</div>
+		</div>
+	} else if app.Status == "failed" {
+		<div class="diagnosis diagnosis-warn" role="status">
+			<div class="diagnosis-title">The app is not running</div>
+			<p class="diagnosis-body">Its container is gone or stopped. Start it, or deploy again.</p>
+		</div>
+	}
+}
+
+// deploymentsTable lists deployments with what each shipped, how it was
+// triggered, and — for failures — the reason, so the history explains itself.
+templ deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitURLs map[string]string) {
+	<div class="table-wrap">
+		<table class="deploy-table">
+			<thead>
+				<tr>
+					<th>Status</th>
+					<th>Version</th>
+					<th>Trigger</th>
+					<th>When</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, d := range ds {
+					<tr>
+						<td>
+							<a class="deploy-link" href={ templ.SafeURL("/deployments/" + d.ID) }>@statusBadge(d.Status)</a>
+						</td>
+						<td>
+							<div class="mono">
+								if d.ImageTag != "" {
+									{ d.ImageTag }
+								} else if d.CommitSHA != "" {
+									if commitURL := commitURLs[d.ID]; commitURL != "" {
+										<a class="deploy-link" href={ commitURL } target="_blank" rel="noopener" title={ commitURL }>{ shortDeployID(d.CommitSHA) } ↗</a>
+									} else {
+										{ shortDeployID(d.CommitSHA) }
+									}
+								} else {
+									<span class="muted-text">—</span>
+								}
+							</div>
+							if d.Status == "failed" && d.Error != "" {
+								<div class="row-note row-note-bad">{ clip(d.Error, 140) }</div>
+							} else if d.CommitMessage != "" {
+								<div class="row-note">{ clip(d.CommitMessage, 90) }</div>
+							}
+						</td>
+						<td>
+							if d.Trigger != "" {
+								{ d.Trigger }
+							} else {
+								{ d.Kind }
+							}
+						</td>
+						<td class="muted-text" title={ shortTime(d.CreatedAt) }>{ ago(d.CreatedAt) }</td>
+						<td class="env-actions">
+							if d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" && d.Kind != "scale" {
+								<form method="post" action={ "/deployments/" + d.ID + "/rollback" }>
+									<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+									<button class="btn btn-ghost btn-sm" type="submit">Roll back</button>
+								</form>
+							}
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}
+
+// appDeployAction is the one primary "deploy" control, in the header and at
+// the top of the Deployments tab: an image app jumps to the image form, a
+// prebuilt app deploys the latest successful CI run, a build-from-source app
+// opens the review page.
+templ appDeployAction(vc ViewCtx, app store.App, git *GitInfo) {
+	if git == nil {
+		<a class="btn btn-primary" href="#deployments" data-tab-link="deployments">Deploy</a>
+	} else if git.GitHub && git.DeployMode == "artifact" {
+		<form method="post" action={ "/apps/" + app.Slug + "/git/deploy-latest" }>
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<button class="btn btn-primary" type="submit">Deploy latest run</button>
+		</form>
+	} else {
+		<a class="btn btn-primary" href={ templ.SafeURL("/apps/" + app.Slug + "/deploy-preview") }>Deploy</a>
+	}
 }
 
 templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
-		<div class="page-head">
-			<div>
-				<h1>{ app.Name }</h1>
-				@healthBadge(app.Health)
-				if replicas.Degraded() {
-					<span class="badge badge-accent">{ fmt.Sprintf("%d/%d replicas up", replicas.Healthy, len(replicas.Slots)) }</span>
-				}
-				@envBadge(app.Environment)
-				if healthReason != "" {
-					<p class="muted health-reason">{ healthReason }</p>
-				}
+		<header class="app-head">
+			<div class="app-id">
+				<div class="app-title">
+					<h1>{ app.Name }</h1>
+					@envBadge(app.Environment)
+				</div>
+				<div class="app-meta">
+					<a class="app-url mono" href={ templ.SafeURL(previewURL) } target="_blank" rel="noopener">{ previewURL } ↗</a>
+				</div>
 			</div>
-			@AppHeadActions(vc, app)
-		</div>
-
-		if git == nil {
-			<div class="panel">
-				<div class="panel-title">Deploy</div>
-				<form method="post" action={ "/apps/" + app.Slug + "/deploy" } class="deploy-form">
-					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-					<label>Image
-						<input type="text" name="image" placeholder="nginx:alpine" value={ app.Image } required/>
-					</label>
-					<label>Port
-						<input class="port-input" type="text" name="port" placeholder="80" value={ fmtPort(app.Port) }/>
-					</label>
-					<label>Entrypoint
-						<input type="text" name="entrypoint" placeholder="optional — image default" value={ app.Entrypoint }/>
-					</label>
-					<label>Command
-						<input type="text" name="command" placeholder="optional — image default" value={ app.Command }/>
-					</label>
-					<button class="btn btn-primary" type="submit">Deploy</button>
-				</form>
-				<p class="muted panel-hint">Runs any container image on the private deploymate network. Entrypoint/Command are whitespace-separated with no quoting — leave empty for the image's defaults. Connect a git repo below to build from source instead.</p>
+			<div class="app-actions">
+				@appDeployAction(vc, app, git)
+				@AppHeadActions(vc, app)
 			</div>
-		}
+		</header>
 
-		<div class="panel">
-			<div class="panel-title">Access</div>
-			<table class="deploy-table">
-				<tbody>
-					<tr>
-						<td>Preview URL</td>
-						<td>
-							<a class="mono deploy-link" href={ previewURL } target="_blank" rel="noopener">{ previewURL }</a>
-						</td>
-					</tr>
-				</tbody>
-			</table>
-			<p class="muted panel-hint">Works the moment the app is running — add a domain below for a real URL with TLS.</p>
-		</div>
+		<nav class="tabs" aria-label="App sections" data-tabs>
+			<a class="tab" href="#overview" data-tab-btn="overview">Overview</a>
+			<a class="tab" href="#deployments" data-tab-btn="deployments">Deployments</a>
+			<a class="tab" href="#logs" data-tab-btn="logs">Logs</a>
+			<a class="tab" href="#variables" data-tab-btn="variables">Variables
+				if len(envVars) > 0 {
+					<span class="tab-count">{ fmt.Sprint(len(envVars)) }</span>
+				}
+			</a>
+			<a class="tab" href="#settings" data-tab-btn="settings">Settings</a>
+			<a class="tab tab-end" href={ templ.SafeURL("/apps/" + app.Slug + "/history") }>Activity ↗</a>
+		</nav>
 
-		@replicasPanel(vc, app, replicas)
-
-		<div class="panel">
-			<div class="panel-title">Domains</div>
-			if len(domains) == 0 {
-				<p class="muted">No domains yet. Point an A record at your server first, then add it here.</p>
-			} else {
-				<table class="deploy-table">
-					<tbody>
-						for _, dm := range domains {
-							<tr>
-								<td class="mono">https://{ dm.Hostname }</td>
-								<td>{ dm.TLSStatus }</td>
-								<td class="env-actions">
-									<form method="post" action={ "/apps/" + app.Slug + "/domains/" + dm.ID + "/delete" }>
-										<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-										<button class="btn btn-ghost btn-sm" type="submit">Remove</button>
-									</form>
-								</td>
-							</tr>
+		<section class="tab-panel" id="tab-overview" data-tab="overview" aria-label="Overview">
+			@appDiagnosis(app, deployments, healthReason)
+			<div class="facts">
+				<div class="fact">
+					<div class="fact-label">Health</div>
+					<div class="fact-main fact-badges">
+						if app.Health != "" {
+							@healthBadge(app.Health)
+						} else if app.Status == "running" {
+							<span class="muted-text">Not probed yet</span>
+						} else {
+							<span class="muted-text">Not running</span>
 						}
-					</tbody>
-				</table>
-			}
-			<form method="post" action={ "/apps/" + app.Slug + "/domains" } class="env-form">
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<input type="text" name="hostname" placeholder="app.example.com" required/>
-				<button class="btn btn-primary" type="submit">Add domain</button>
-				<span class="muted">routing port</span>
-				<input class="port-input" type="text" name="port" formaction={ "/apps/" + app.Slug + "/port" } value={ fmtPort(app.Port) } placeholder="80"/>
-				<button class="btn btn-ghost" type="submit" formaction={ "/apps/" + app.Slug + "/port" }>Save port</button>
-			</form>
-			<p class="muted panel-hint">
-				if leMode == "production" {
-					Certificates come from Let's Encrypt production on the next deploy.
+					</div>
+					if replicas.Degraded() {
+						<div class="fact-sub">{ fmt.Sprintf("%d of %d replicas answering", replicas.Healthy, len(replicas.Slots)) }</div>
+					} else if len(replicas.Slots) > 1 {
+						<div class="fact-sub">{ fmt.Sprintf("%d replicas", len(replicas.Slots)) }</div>
+					} else {
+						<div class="fact-sub">Checked every 30 s.</div>
+					}
+				</div>
+				<div class="fact fact-wide">
+					<div class="fact-label">Running version</div>
+					@appVersion(app, deployments)
+				</div>
+				<div class="fact">
+					<div class="fact-label">Resources</div>
+					if app.MemLimitMB > 0 {
+						<div class="fact-main mono">{ fmt.Sprintf("%d MB", app.MemLimitMB) }</div>
+						<div class="fact-sub">{ fmtCPU(app.CPULimit) } CPU per container</div>
+					} else {
+						<div class="fact-main muted-text">Learning…</div>
+						<div class="fact-sub">Limits are sized from 24 h of use.</div>
+					}
+				</div>
+			</div>
+
+			<div class="panel">
+				<div class="panel-title">Uptime <span class="panel-note">last 15 minutes, probed every 30 s</span></div>
+				if len(domains) > 0 {
+					<div class="uptime-strip">
+						for _, dm := range domains {
+							<div class="uptime-row">
+								<span class="mono uptime-host">{ dm.Hostname }</span>
+								<span class="uptime-dots">
+									for _, ok := range uptime[dm.ID] {
+										if ok {
+											<span class="udot udot-ok" aria-hidden="true"></span>
+										} else {
+											<span class="udot udot-bad" aria-hidden="true"></span>
+										}
+									}
+								</span>
+							</div>
+						}
+					</div>
 				} else {
-					Certificates come from the Let's Encrypt staging resolver (safe for testing). Set DEPLOYMATE_LE_MODE=production for real certs.
+					<p class="muted-text">Uptime is probed on custom domains. <a class="text-link" href="#settings" data-tab-link="settings">Add a domain</a> to start tracking it.</p>
 				}
-			</p>
-		</div>
+			</div>
 
-		<div class="panel">
-			<div class="panel-title">Build</div>
-			<form method="post" action={ "/apps/" + app.Slug + "/runtime" } class="git-form">
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<label>Build method
-					<select name="runtime">
-						<option value="dockerfile" selected?={ app.Runtime == "" }>Dockerfile</option>
-						<option value="node" selected?={ runtimeKey(app.Runtime) == "node" }>Node.js</option>
-						<option value="python" selected?={ runtimeKey(app.Runtime) == "python" }>Python</option>
-						<option value="golang" selected?={ runtimeKey(app.Runtime) == "golang" }>Go</option>
-						<option value="ruby" selected?={ runtimeKey(app.Runtime) == "ruby" }>Ruby</option>
-						<option value="php" selected?={ runtimeKey(app.Runtime) == "php" }>PHP</option>
-						<option value="java" selected?={ runtimeKey(app.Runtime) == "java" }>Java</option>
-						<option value="rust" selected?={ runtimeKey(app.Runtime) == "rust" }>Rust</option>
-						<option value="deno" selected?={ runtimeKey(app.Runtime) == "deno" }>Deno</option>
-						<option value="elixir" selected?={ runtimeKey(app.Runtime) == "elixir" }>Elixir</option>
-						<option value="dotnet" selected?={ runtimeKey(app.Runtime) == "dotnet" }>.NET</option>
-						<option value="staticfile" selected?={ runtimeKey(app.Runtime) == "staticfile" }>Static site</option>
-					</select>
-				</label>
-				<label>Version <span class="muted">(optional)</span>
-					<input class="branch-input" type="text" name="version" placeholder="22 / 3.13 / 1.24" value={ runtimeVersion(app.Runtime) }/>
-				</label>
-				<button class="btn btn-primary" type="submit">Save build method</button>
-			</form>
-			<p class="muted panel-hint">
-				if app.Runtime == "" {
-					Builds run the repo's Dockerfile.
-				} else {
-					Builds use Railpack — the runtime is installed automatically and your repo's version files (.node-version, .python-version, mise config) win unless you pin a version here.
-				}
-			</p>
-		</div>
-
-		<div class="panel">
-			<div class="panel-title">Environment</div>
-			<form method="post" action={ "/apps/" + app.Slug + "/environment" } class="git-form">
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<label>Environment
-					<select name="environment">
-						<option value="dev" selected?={ app.Environment == "dev" }>dev</option>
-						<option value="staging" selected?={ app.Environment == "staging" }>staging</option>
-						<option value="production" selected?={ app.Environment == "production" }>production</option>
-					</select>
-				</label>
-				<button class="btn btn-primary" type="submit">Save environment</button>
-			</form>
-			<p class="muted panel-hint">Which environment this app runs in (new apps start in dev). Each environment resolves its own services (dev apps get dev-postgres, staging apps get staging-postgres, production apps get postgres) and can use a { "deploymate.{env}.yml" } overlay in the repo. One container per app — switching is instant, the next deploy applies it.</p>
-		</div>
-
-		<div class="panel">
-			<div class="panel-title">Git</div>
-			if git == nil {
-				<form method="post" action={ "/apps/" + app.Slug + "/git" } class="git-form">
-					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-					<label>Repository
-						<input type="text" name="repo_url" placeholder="git@github.com:you/repo.git" required/>
-					</label>
-					<label>Provider
-						<select name="provider">
-							<option value="github">GitHub</option>
-							<option value="gitlab">GitLab</option>
-							<option value="gitea">Gitea</option>
+			<div class="panel">
+				<div class="panel-title">Resource use
+					if len(replicas.Slots) > 1 {
+						<select class="log-filter" data-metrics-filter aria-label="Replica metrics">
+							<option value="">all replicas (total)</option>
+							for _, sl := range replicas.Slots {
+								<option value={ fmt.Sprintf("r%d", sl.Slot) }>{ fmt.Sprintf("r%d only", sl.Slot) }</option>
+							}
 						</select>
-					</label>
-					<label>Branch
-						<input class="branch-input" type="text" name="branch" value="main"/>
-					</label>
-					<button class="btn btn-primary" type="submit">Connect repo</button>
-				</form>
-				<p class="muted panel-hint">Connecting generates a deploy key and webhook secret. Builds run on every push to the branch.</p>
-			} else {
-				<div class="git-connect">
-					<table class="deploy-table">
-						<tbody>
-							<tr>
-								<td>Repository</td>
-								<td class="mono">{ git.RepoURL } <span class="muted">({ git.Provider }, { git.DefaultBranch })</span></td>
-							</tr>
-							<tr>
-								<td>Deploy key</td>
-								<td class="mono key-cell">{ git.PublicKey }</td>
-							</tr>
-							<tr>
-								<td>Webhook URL</td>
-								<td class="mono">https://your-host{ git.WebhookPath }</td>
-							</tr>
-							<tr>
-								<td>Webhook secret</td>
-								<td class="mono">{ git.WebhookSecret }</td>
-							</tr>
-						</tbody>
-					</table>
-					<div class="git-deploy">
+					}
+				</div>
+				<div class="chart-grid">
+					<div>
+						<div class="chart-label">CPU %</div>
+						<canvas id="cpu-chart" height="90"></canvas>
+					</div>
+					<div>
+						<div class="chart-label">Memory (MB)</div>
+						<canvas id="mem-chart" height="90"></canvas>
+					</div>
+				</div>
+				<p class="muted panel-hint">Sampled every 5 seconds from the running container.
+					if app.MemLimitMB > 0 {
+						Limits are auto-detected from usage and apply on the next deploy.
+					}
+				</p>
+			</div>
+
+			if len(deployments) > 0 {
+				<div class="panel">
+					<div class="panel-title">Recent deployments
+						<a class="panel-link" href="#deployments" data-tab-link="deployments">See all →</a>
+					</div>
+					@deploymentsTable(vc, app, recent(deployments, 5), commitURLs)
+				</div>
+			}
+		</section>
+
+		<section class="tab-panel" id="tab-deployments" data-tab="deployments" aria-label="Deployments">
+			if git == nil {
+				<div class="panel">
+					<div class="panel-title">Deploy</div>
+					<form method="post" action={ "/apps/" + app.Slug + "/deploy" } class="deploy-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<label>Image
+							<input type="text" name="image" placeholder="nginx:alpine" value={ app.Image } required/>
+						</label>
+						<label>Port
+							<input class="port-input" type="text" name="port" placeholder="80" value={ fmtPort(app.Port) }/>
+						</label>
+						<label>Entrypoint
+							<input type="text" name="entrypoint" placeholder="optional — image default" value={ app.Entrypoint }/>
+						</label>
+						<label>Command
+							<input type="text" name="command" placeholder="optional — image default" value={ app.Command }/>
+						</label>
+						<button class="btn btn-primary" type="submit">Deploy</button>
+					</form>
+					<p class="muted panel-hint">Runs any container image on the private deploymate network. Entrypoint/Command are whitespace-separated with no quoting — leave empty for the image's defaults. Connect a git repo in Settings to build from source instead.</p>
+				</div>
+			}
+			if git != nil {
+				<div class="panel">
+					<div class="panel-title">Source</div>
+					<div class="source-row">
+						<span class="mono">{ git.RepoURL }</span>
+						<span class="badge">{ git.DefaultBranch }</span>
 						if git.GitHub && git.DeployMode == "artifact" {
-							<form method="post" action={ "/apps/" + app.Slug + "/git/deploy-latest" } class="inline-form">
-								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-								<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
-							</form>
+							<span class="badge badge-accent">prebuilt</span>
+						}
+					</div>
+					<div class="git-deploy">
+						@appDeployAction(vc, app, git)
+						if git.GitHub && git.DeployMode == "artifact" {
 							<form method="post" action={ "/apps/" + app.Slug + "/git/test" } class="inline-form">
 								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 								<button class="btn btn-ghost" type="submit">Test connection</button>
 							</form>
-						} else {
-							<a class="btn btn-primary" href={ "/apps/" + app.Slug + "/deploy-preview" }>Review &amp; deploy…</a>
 						}
 					</div>
+					<p class="muted panel-hint">Source, build and deploy-mode settings are under <a class="text-link" href="#settings" data-tab-link="settings">Settings</a>.</p>
 				</div>
-				if git.GitHub && git.DeployMode == "artifact" {
-					<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes — tick <strong>Workflow runs</strong> in the repo's webhook settings (the push event can stay on; it is ignored for prebuilt apps).</p>
+			}
+			<div class="panel">
+				<div class="panel-title">History
+					<a class="panel-link" href={ templ.SafeURL("/apps/" + app.Slug + "/releases") }>All releases →</a>
+				</div>
+				if len(deployments) == 0 {
+					<p class="muted-text">Nothing deployed yet. Your deployments will appear here with what shipped and why any failed.</p>
 				} else {
-					<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
-				}
-				if git.GitHub {
-					<div class="prebuilt">
-						<div class="panel-title">Deploy mode</div>
-						<form method="post" action={ "/apps/" + app.Slug + "/deploy-mode" } class="git-form">
-							<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-							<label>Mode
-								<select name="mode">
-									<option value="build" selected?={ git.DeployMode != "artifact" }>Build on this server</option>
-									<option value="artifact" selected?={ git.DeployMode == "artifact" }>Prebuilt (GitHub Actions)</option>
-								</select>
-							</label>
-							<label>Workflow file
-								<input type="text" name="workflow_path" value={ git.WorkflowPath }/>
-							</label>
-							<label>Artifact name
-								<input class="branch-input" type="text" name="artifact_name" value={ git.ArtifactName }/>
-							</label>
-							<label>GitHub token (write-only)
-								if git.HasToken {
-									<input type="password" name="api_token" autocomplete="off" placeholder="saved — leave blank to keep"/>
-								} else {
-									<input type="password" name="api_token" autocomplete="off" placeholder="github_pat_…"/>
-								}
-							</label>
-							if git.HasToken {
-								<label><span><input type="checkbox" name="clear_token"/> Remove saved token</span></label>
-							}
-							<button class="btn btn-primary" type="submit">Save</button>
-						</form>
-						<p class="muted panel-hint">Prebuilt mode keeps big builds off this server: your repo's GitHub Actions workflow builds the JAR, and DeployMate downloads and runs it. Use a <strong>fine-grained</strong> token limited to <strong>only this repository</strong> with <strong>Actions: read-only</strong> (for an organization's repo, set the organization as resource owner; an owner may need to approve it). The token is stored encrypted and never shown again. Build mode (default) is unchanged.</p>
-						if git.DeployMode == "artifact" {
-							<div class="panel-title">Workflow file</div>
-							<p class="muted panel-hint">Commit this as <span class="mono">{ git.WorkflowPath }</span> in the repo (Gradle shown; for a multi-module build use your app module's task, e.g. <span class="mono">:app:bootJar</span>). It uploads exactly one JAR as a one-day artifact.</p>
-							<details open>
-								<summary>Gradle</summary>
-								<pre id="wf-gradle">{ git.WorkflowGradle }</pre>
-								<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="wf-gradle">Copy</button>
-							</details>
-							<details>
-								<summary>Maven</summary>
-								<pre id="wf-maven">{ git.WorkflowMaven }</pre>
-								<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="wf-maven">Copy</button>
-							</details>
-						}
-					</div>
-				}
-			}
-		</div>
-
-		<div class="panel">
-			<div class="panel-title">Environment variables</div>
-			if len(envVars) == 0 {
-				<p class="muted">No variables yet. Databases and caches in this project inject their connection URLs automatically when running.</p>
-			} else {
-				<table class="deploy-table">
-					<tbody>
-						for _, v := range envVars {
-							<tr>
-								<td class="mono">{ v.Key }</td>
-								if v.IsSecret {
-									<td class="mono muted">••••••••••</td>
-								} else {
-									<td class="mono">{ v.Value }</td>
-								}
-								<td class="env-actions">
-									<form method="post" action={ "/apps/" + app.Slug + "/env/" + v.ID + "/delete" }>
-										<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-										<button class="btn btn-ghost btn-sm" type="submit">Remove</button>
-									</form>
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
-			<form method="post" action={ "/apps/" + app.Slug + "/env/bulk" } class="env-rows-form" data-env-rows>
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<div class="env-rows" data-env-rows-list>
-					<div class="env-row">
-						<input type="text" name="key_0" placeholder="KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits, underscores — starting with a letter" autocomplete="off" spellcheck="false"/>
-						<input type="text" name="value_0" placeholder="value" autocomplete="off" spellcheck="false"/>
-						<label class="checkbox"><input type="checkbox" name="secret_0"/> secret</label>
-						<button class="btn btn-ghost btn-sm" type="button" data-env-remove aria-label="Remove row">×</button>
-					</div>
-				</div>
-				<div class="env-rows-actions">
-					<button class="btn btn-ghost" type="button" data-env-add>+ Add variable</button>
-					<button class="btn btn-primary" type="submit">Save</button>
-				</div>
-				<details class="env-bulk">
-					<summary>or paste a .env file</summary>
-					<textarea name="bulk" rows="7" spellcheck="false" autocomplete="off" placeholder={ "DB_URL=jdbc:postgresql://host:5432/app\nDB_USER=dm\nDB_PASSWORD=...\n# comments and blank lines are fine" }></textarea>
-					<label class="checkbox"><input type="checkbox" name="is_secret"/> mark all pasted values as secret</label>
-					<p class="muted panel-hint">One <span class="mono">KEY=VALUE</span> per line; <span class="mono">export</span> prefixes and surrounding quotes are stripped. Saved together with any rows above.</p>
-				</details>
-			</form>
-			<p class="muted panel-hint">Add as many rows as you need, then <strong>Save</strong> stores them all at once (an existing name is updated). If any row is invalid, nothing is saved. Names containing PASSWORD, SECRET, TOKEN or KEY are always stored masked.</p>
-			<p class="muted panel-hint">Values are encrypted at rest and apply on the next deploy. They can reference injected connection strings — e.g. set <span class="mono">DATABASE_URL</span> to <span class="mono">{ "${MYSQL_URL}" }</span> to alias a MySQL service (also { "${REDIS_URL}" }, { "${DATABASE_URL}" }).</p>
-		</div>
-
-		<div class="panel">
-			<div class="panel-title">Monitoring
-				if len(replicas.Slots) > 1 {
-					<select class="log-filter" data-metrics-filter aria-label="Replica metrics">
-						<option value="">all replicas (total)</option>
-						for _, sl := range replicas.Slots {
-							<option value={ fmt.Sprintf("r%d", sl.Slot) }>{ fmt.Sprintf("r%d only", sl.Slot) }</option>
-						}
-					</select>
+					@deploymentsTable(vc, app, deployments, commitURLs)
 				}
 			</div>
-			if len(domains) > 0 {
-				<div class="uptime-strip">
-					for _, dm := range domains {
-						<div class="uptime-row">
-							<span class="mono uptime-host">{ dm.Hostname }</span>
-							<span class="uptime-dots">
-								for _, ok := range uptime[dm.ID] {
-									if ok {
-										<span class="udot udot-ok" aria-hidden="true"></span>
-									} else {
-										<span class="udot udot-bad" aria-hidden="true"></span>
-									}
-								}
-							</span>
-						</div>
+		</section>
+
+		<section class="tab-panel" id="tab-logs" data-tab="logs" aria-label="Logs">
+			<div class="panel">
+				<div class="panel-title">Live logs
+					if len(replicas.Slots) > 1 {
+						<select class="log-filter" data-log-filter="logs" aria-label="Replica">
+							<option value="">all replicas</option>
+							for _, sl := range replicas.Slots {
+								<option value={ fmt.Sprintf("r%d", sl.Slot) }>{ fmt.Sprintf("r%d only", sl.Slot) }</option>
+							}
+						</select>
 					}
 				</div>
-			} else {
-				<p class="muted">Add a domain to get uptime probes (every 30s).</p>
-			}
-			<div class="chart-grid">
-				<div>
-					<div class="chart-label">CPU %</div>
-					<canvas id="cpu-chart" height="90"></canvas>
-				</div>
-				<div>
-					<div class="chart-label">Memory (MB)</div>
-					<canvas id="mem-chart" height="90"></canvas>
+				<div id="logs" class="log-panel" data-log-src={ "/apps/" + app.Slug + "/logs" }>
+					<span class="log-wait">connecting…</span>
 				</div>
 			</div>
-			<p class="muted panel-hint">
-				if len(replicas.Slots) > 1 {
-					Sampled every 5 seconds from every replica — charts show the total across replicas, or one replica with the filter. Uptime dots show the last 30 probes (15 minutes).
-				} else {
-					Sampled every 5 seconds from the running container. Uptime dots show the last 30 probes (15 minutes).
-				}
-				if app.MemLimitMB > 0 {
-					<br/>Resource limits: <span class="mono">{ app.MemLimitMB } MB · { fmtCPU(app.CPULimit) } CPU</span> per container — auto-detected from usage (the busiest replica's), applied on the next deploy.
-				} else {
-					<br/>Resource limits: not yet detected — they are derived from 24h of usage and applied on the next deploy.
-				}
-			</p>
-		</div>
+		</section>
 
-		<div class="panel">
-			<div class="panel-title">Logs
-				if len(replicas.Slots) > 1 {
-					<select class="log-filter" data-log-filter="logs" aria-label="Replica">
-						<option value="">all replicas</option>
-						for _, sl := range replicas.Slots {
-							<option value={ fmt.Sprintf("r%d", sl.Slot) }>{ fmt.Sprintf("r%d only", sl.Slot) }</option>
-						}
-					</select>
-				}
-			</div>
-			<div id="logs" class="log-panel" data-log-src={ "/apps/" + app.Slug + "/logs" }>
-				<span class="log-wait">connecting…</span>
-			</div>
-		</div>
-
-		if len(deployments) > 0 {
+		<section class="tab-panel" id="tab-variables" data-tab="variables" aria-label="Variables">
 			<div class="panel">
-				<div class="panel-title">Deployments
-					<a class="panel-link" href={ "/apps/" + app.Slug + "/releases" }>All releases →</a>
-				</div>
-				<table class="deploy-table">
-					<thead>
-						<tr>
-							<th>Status</th>
-							<th>Image / commit</th>
-							<th>Kind</th>
-							<th>When</th>
-							<th></th>
-						</tr>
-					</thead>
-					<tbody>
-						for _, d := range deployments {
-							<tr>
-								<td>
-									<a class="mono deploy-link" href={ "/deployments/" + d.ID }>@statusBadge(d.Status)</a>
-								</td>
-								<td class="mono">
-									if d.ImageTag != "" {
-										{d.ImageTag}
-									} else if d.CommitSHA != "" {
-										if commitURL := commitURLs[d.ID]; commitURL != "" {
-											<a class="deploy-link" href={ commitURL } target="_blank" rel="noopener" title={ commitURL }>{ d.CommitSHA } ↗</a>
-										} else {
-											{d.CommitSHA}
-										}
+				<div class="panel-title">Environment variables</div>
+				if len(envVars) == 0 {
+					<p class="muted">No variables yet. Databases and caches in this project inject their connection URLs automatically when running.</p>
+				} else {
+					<table class="deploy-table">
+						<tbody>
+							for _, v := range envVars {
+								<tr>
+									<td class="mono">{ v.Key }</td>
+									if v.IsSecret {
+										<td class="mono muted">••••••••••</td>
 									} else {
-										<span class="muted">—</span>
+										<td class="mono">{ v.Value }</td>
 									}
-								</td>
-								<td>{ d.Kind }</td>
-								<td class="mono muted">{ shortTime(d.CreatedAt) }</td>
-								<td class="env-actions">
-									if d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" && d.Kind != "scale" {
-										<form method="post" action={ "/deployments/" + d.ID + "/rollback" }>
+									<td class="env-actions">
+										<form method="post" action={ "/apps/" + app.Slug + "/env/" + v.ID + "/delete" }>
 											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-											<button class="btn btn-ghost btn-sm" type="submit">Rollback</button>
+											<button class="btn btn-ghost btn-sm" type="submit">Remove</button>
 										</form>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+				<form method="post" action={ "/apps/" + app.Slug + "/env/bulk" } class="env-rows-form" data-env-rows>
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<div class="env-rows" data-env-rows-list>
+						<div class="env-row">
+							<input type="text" name="key_0" placeholder="KEY" pattern="[A-Za-z_][A-Za-z0-9_]*" title="Letters, digits, underscores — starting with a letter" autocomplete="off" spellcheck="false"/>
+							<input type="text" name="value_0" placeholder="value" autocomplete="off" spellcheck="false"/>
+							<label class="checkbox"><input type="checkbox" name="secret_0"/> secret</label>
+							<button class="btn btn-ghost btn-sm" type="button" data-env-remove aria-label="Remove row">×</button>
+						</div>
+					</div>
+					<div class="env-rows-actions">
+						<button class="btn btn-ghost" type="button" data-env-add>+ Add variable</button>
+						<button class="btn btn-primary" type="submit">Save</button>
+					</div>
+					<details class="env-bulk">
+						<summary>or paste a .env file</summary>
+						<textarea name="bulk" rows="7" spellcheck="false" autocomplete="off" placeholder={ "DB_URL=jdbc:postgresql://host:5432/app\nDB_USER=dm\nDB_PASSWORD=...\n# comments and blank lines are fine" }></textarea>
+						<label class="checkbox"><input type="checkbox" name="is_secret"/> mark all pasted values as secret</label>
+						<p class="muted panel-hint">One <span class="mono">KEY=VALUE</span> per line; <span class="mono">export</span> prefixes and surrounding quotes are stripped. Saved together with any rows above.</p>
+					</details>
+				</form>
+				<p class="muted panel-hint">Add as many rows as you need, then <strong>Save</strong> stores them all at once (an existing name is updated). If any row is invalid, nothing is saved. Names containing PASSWORD, SECRET, TOKEN or KEY are always stored masked.</p>
+				<p class="muted panel-hint">Values are encrypted at rest and apply on the next deploy. They can reference injected connection strings — e.g. set <span class="mono">DATABASE_URL</span> to <span class="mono">{ "${MYSQL_URL}" }</span> to alias a MySQL service (also { "${REDIS_URL}" }, { "${DATABASE_URL}" }).</p>
+			</div>
+		</section>
+
+		<section class="tab-panel" id="tab-settings" data-tab="settings" aria-label="Settings">
+			<nav class="settings-nav" aria-label="Settings sections">
+				<a href="#set-source">Source &amp; build</a>
+				<a href="#set-domains">Domains &amp; access</a>
+				<a href="#set-scaling">Scaling</a>
+				<a href="#set-environment">Environment</a>
+				<a href="#set-danger">Danger zone</a>
+			</nav>
+			<div class="settings-group" id="set-source">
+				<div class="group-head"><h2>Source &amp; build</h2><p>Where the code comes from and how it becomes a running container.</p></div>
+			<div class="panel">
+				<div class="panel-title">Git</div>
+				if git == nil {
+					<form method="post" action={ "/apps/" + app.Slug + "/git" } class="git-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<label>Repository
+							<input type="text" name="repo_url" placeholder="git@github.com:you/repo.git" required/>
+						</label>
+						<label>Provider
+							<select name="provider">
+								<option value="github">GitHub</option>
+								<option value="gitlab">GitLab</option>
+								<option value="gitea">Gitea</option>
+							</select>
+						</label>
+						<label>Branch
+							<input class="branch-input" type="text" name="branch" value="main"/>
+						</label>
+						<button class="btn btn-primary" type="submit">Connect repo</button>
+					</form>
+					<p class="muted panel-hint">Connecting generates a deploy key and webhook secret. Builds run on every push to the branch.</p>
+				} else {
+					<div class="git-connect">
+						<table class="deploy-table">
+							<tbody>
+								<tr>
+									<td>Repository</td>
+									<td class="mono">{ git.RepoURL } <span class="muted">({ git.Provider }, { git.DefaultBranch })</span></td>
+								</tr>
+								<tr>
+									<td>Deploy key</td>
+									<td class="mono key-cell">{ git.PublicKey }</td>
+								</tr>
+								<tr>
+									<td>Webhook URL</td>
+									<td class="mono">https://your-host{ git.WebhookPath }</td>
+								</tr>
+								<tr>
+									<td>Webhook secret</td>
+									<td class="mono">{ git.WebhookSecret }</td>
+								</tr>
+							</tbody>
+						</table>
+						<div class="git-deploy">
+							if git.GitHub && git.DeployMode == "artifact" {
+								<form method="post" action={ "/apps/" + app.Slug + "/git/deploy-latest" } class="inline-form">
+									<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+									<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
+								</form>
+								<form method="post" action={ "/apps/" + app.Slug + "/git/test" } class="inline-form">
+									<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+									<button class="btn btn-ghost" type="submit">Test connection</button>
+								</form>
+							} else {
+								<a class="btn btn-primary" href={ "/apps/" + app.Slug + "/deploy-preview" }>Review &amp; deploy…</a>
+							}
+						</div>
+					</div>
+					if git.GitHub && git.DeployMode == "artifact" {
+						<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes — tick <strong>Workflow runs</strong> in the repo's webhook settings (the push event can stay on; it is ignored for prebuilt apps).</p>
+					} else {
+						<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
+					}
+					if git.GitHub {
+						<div class="prebuilt">
+							<div class="panel-title">Deploy mode</div>
+							<form method="post" action={ "/apps/" + app.Slug + "/deploy-mode" } class="git-form">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<label>Mode
+									<select name="mode">
+										<option value="build" selected?={ git.DeployMode != "artifact" }>Build on this server</option>
+										<option value="artifact" selected?={ git.DeployMode == "artifact" }>Prebuilt (GitHub Actions)</option>
+									</select>
+								</label>
+								<label>Workflow file
+									<input type="text" name="workflow_path" value={ git.WorkflowPath }/>
+								</label>
+								<label>Artifact name
+									<input class="branch-input" type="text" name="artifact_name" value={ git.ArtifactName }/>
+								</label>
+								<label>GitHub token (write-only)
+									if git.HasToken {
+										<input type="password" name="api_token" autocomplete="off" placeholder="saved — leave blank to keep"/>
+									} else {
+										<input type="password" name="api_token" autocomplete="off" placeholder="github_pat_…"/>
 									}
-								</td>
-							</tr>
-						}
+								</label>
+								if git.HasToken {
+									<label><span><input type="checkbox" name="clear_token"/> Remove saved token</span></label>
+								}
+								<button class="btn btn-primary" type="submit">Save</button>
+							</form>
+							<p class="muted panel-hint">Prebuilt mode keeps big builds off this server: your repo's GitHub Actions workflow builds the JAR, and DeployMate downloads and runs it. Use a <strong>fine-grained</strong> token limited to <strong>only this repository</strong> with <strong>Actions: read-only</strong> (for an organization's repo, set the organization as resource owner; an owner may need to approve it). The token is stored encrypted and never shown again. Build mode (default) is unchanged.</p>
+							if git.DeployMode == "artifact" {
+								<div class="panel-title">Workflow file</div>
+								<p class="muted panel-hint">Commit this as <span class="mono">{ git.WorkflowPath }</span> in the repo (Gradle shown; for a multi-module build use your app module's task, e.g. <span class="mono">:app:bootJar</span>). It uploads exactly one JAR as a one-day artifact.</p>
+								<details open>
+									<summary>Gradle</summary>
+									<pre id="wf-gradle">{ git.WorkflowGradle }</pre>
+									<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="wf-gradle">Copy</button>
+								</details>
+								<details>
+									<summary>Maven</summary>
+									<pre id="wf-maven">{ git.WorkflowMaven }</pre>
+									<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="wf-maven">Copy</button>
+								</details>
+							}
+						</div>
+					}
+				}
+			</div>
+			<div class="panel">
+				<div class="panel-title">Build</div>
+				<form method="post" action={ "/apps/" + app.Slug + "/runtime" } class="git-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<label>Build method
+						<select name="runtime">
+							<option value="dockerfile" selected?={ app.Runtime == "" }>Dockerfile</option>
+							<option value="node" selected?={ runtimeKey(app.Runtime) == "node" }>Node.js</option>
+							<option value="python" selected?={ runtimeKey(app.Runtime) == "python" }>Python</option>
+							<option value="golang" selected?={ runtimeKey(app.Runtime) == "golang" }>Go</option>
+							<option value="ruby" selected?={ runtimeKey(app.Runtime) == "ruby" }>Ruby</option>
+							<option value="php" selected?={ runtimeKey(app.Runtime) == "php" }>PHP</option>
+							<option value="java" selected?={ runtimeKey(app.Runtime) == "java" }>Java</option>
+							<option value="rust" selected?={ runtimeKey(app.Runtime) == "rust" }>Rust</option>
+							<option value="deno" selected?={ runtimeKey(app.Runtime) == "deno" }>Deno</option>
+							<option value="elixir" selected?={ runtimeKey(app.Runtime) == "elixir" }>Elixir</option>
+							<option value="dotnet" selected?={ runtimeKey(app.Runtime) == "dotnet" }>.NET</option>
+							<option value="staticfile" selected?={ runtimeKey(app.Runtime) == "staticfile" }>Static site</option>
+						</select>
+					</label>
+					<label><span>Version <span class="muted">(optional)</span></span>
+						<input class="branch-input" type="text" name="version" placeholder="22 / 3.13 / 1.24" value={ runtimeVersion(app.Runtime) }/>
+					</label>
+					<button class="btn btn-primary" type="submit">Save build method</button>
+				</form>
+				<p class="muted panel-hint">
+					if app.Runtime == "" {
+						Builds run the repo's Dockerfile.
+					} else {
+						Builds use Railpack — the runtime is installed automatically and your repo's version files (.node-version, .python-version, mise config) win unless you pin a version here.
+					}
+				</p>
+			</div>
+			</div>
+			<div class="settings-group" id="set-domains">
+				<div class="group-head"><h2>Domains &amp; access</h2><p>How people reach this app.</p></div>
+			<div class="panel">
+				<div class="panel-title">Access</div>
+				<table class="deploy-table">
+					<tbody>
+						<tr>
+							<td>Preview URL</td>
+							<td>
+								<a class="mono deploy-link" href={ previewURL } target="_blank" rel="noopener">{ previewURL }</a>
+							</td>
+						</tr>
 					</tbody>
 				</table>
+				<p class="muted panel-hint">Works the moment the app is running — add a domain below for a real URL with TLS.</p>
 			</div>
-		}
+			<div class="panel">
+				<div class="panel-title">Domains</div>
+				if len(domains) == 0 {
+					<p class="muted">No domains yet. Point an A record at your server first, then add it here.</p>
+				} else {
+					<table class="deploy-table">
+						<tbody>
+							for _, dm := range domains {
+								<tr>
+									<td class="mono">https://{ dm.Hostname }</td>
+									<td>{ dm.TLSStatus }</td>
+									<td class="env-actions">
+										<form method="post" action={ "/apps/" + app.Slug + "/domains/" + dm.ID + "/delete" }>
+											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+											<button class="btn btn-ghost btn-sm" type="submit">Remove</button>
+										</form>
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+				<form method="post" action={ "/apps/" + app.Slug + "/domains" } class="env-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<input type="text" name="hostname" placeholder="app.example.com" required/>
+					<button class="btn btn-primary" type="submit">Add domain</button>
+					<span class="muted">routing port</span>
+					<input class="port-input" type="text" name="port" formaction={ "/apps/" + app.Slug + "/port" } value={ fmtPort(app.Port) } placeholder="80"/>
+					<button class="btn btn-ghost" type="submit" formaction={ "/apps/" + app.Slug + "/port" }>Save port</button>
+				</form>
+				<p class="muted panel-hint">
+					if leMode == "production" {
+						Certificates come from Let's Encrypt production on the next deploy.
+					} else {
+						Certificates come from the Let's Encrypt staging resolver (safe for testing). Set DEPLOYMATE_LE_MODE=production for real certs.
+					}
+				</p>
+			</div>
+			</div>
+			<div class="settings-group" id="set-scaling">
+				<div class="group-head"><h2>Scaling</h2><p>How many copies run, and what counts as healthy.</p></div>
+				@replicasPanel(vc, app, replicas)
+			</div>
+			<div class="settings-group" id="set-environment">
+				<div class="group-head"><h2>Environment</h2><p>Which environment this app belongs to.</p></div>
+			<div class="panel">
+				<div class="panel-title">Environment</div>
+				<form method="post" action={ "/apps/" + app.Slug + "/environment" } class="git-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<label>Environment
+						<select name="environment">
+							<option value="dev" selected?={ app.Environment == "dev" }>dev</option>
+							<option value="staging" selected?={ app.Environment == "staging" }>staging</option>
+							<option value="production" selected?={ app.Environment == "production" }>production</option>
+						</select>
+					</label>
+					<button class="btn btn-primary" type="submit">Save environment</button>
+				</form>
+				<p class="muted panel-hint">Which environment this app runs in (new apps start in dev). Each environment resolves its own services (dev apps get dev-postgres, staging apps get staging-postgres, production apps get postgres) and can use a { "deploymate.{env}.yml" } overlay in the repo. One container per app — switching is instant, the next deploy applies it.</p>
+			</div>
+			</div>
+			<div class="settings-group" id="set-danger">
+				<div class="group-head"><h2>Danger zone</h2><p>Actions that can’t be undone.</p></div>
+				<div class="panel panel-warn">
+					<div class="panel-title">Delete this app</div>
+					<p class="muted-text">Removes the app and every replica container. Environment variables and deployment history go with it. This can't be undone.</p>
+					<form method="post" action={ "/apps/" + app.Slug + "/delete" } onsubmit="return confirm('Delete this app and its container?')" class="danger-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-danger" type="submit">Delete app</button>
+					</form>
+				</div>
+			</div>
+		</section>
 	}
 }
 

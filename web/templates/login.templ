@@ -7,6 +7,9 @@ templ LoginPage(err ...string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>Sign in · DeployMate</title>
+			<script>
+				try { var t = localStorage.getItem("dm-theme"); if (t === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
+			</script>
 			<link rel="stylesheet" href="/static/app.css"/>
 		</head>
 		<body class="login-body">

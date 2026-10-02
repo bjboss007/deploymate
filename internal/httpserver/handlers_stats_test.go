@@ -63,7 +63,7 @@ func TestStatsPageRendersFleetData(t *testing.T) {
 			t.Fatalf("body missing %q", want)
 		}
 	}
-	if strings.Contains(body, "Storage") {
+	if strings.Contains(body, `panel-title">Storage`) { // (the theme script legitimately mentions localStorage)
 		t.Fatalf("body must not show the storage panel without a runtime")
 	}
 }
