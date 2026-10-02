@@ -423,6 +423,26 @@ change.
   - Still parked under the no-registry / no-builder constraints: registry
     credentials + image deploy hook, remote builder (`BUILDKIT_HOST`),
     per-app build env (`GRADLE_OPTS`/`NODE_OPTIONS`).
+- [ ] **Service env as components, not just URLs** — found 2026-10-02 trying
+  to run the real `trade-stack-backend` (Spring Boot): DeployMate injects only
+  `DATABASE_URL` (`postgres://user:pass@host:5432/db`), `MYSQL_URL`,
+  `REDIS_URL`. JVM apps want a JDBC URL + separate user/password
+  (`DB_URL`, `DB_USER`, `DB_PASSWORD`) and Redis as host + port; the env
+  alias feature (`${KEY}`, ADR 0016) substitutes whole values only, so it
+  cannot split a URL or add `jdbc:`. Today the operator copies the values
+  from the service page by hand. Inject components next to the URL
+  (`DATABASE_HOST/PORT/NAME/USER/PASSWORD`, a Heroku-style
+  `JDBC_DATABASE_URL`, `REDIS_HOST/PORT`, `MYSQL_*`) so
+  `DB_USER=${DATABASE_USER}` aliasing just works. Additive: existing apps
+  see new variables only.
+- [ ] **Prebuilt (artifact) mode ignores `deploymate.yml`** — the manifest
+  (services to provision, ADR 0017 overlays) is read from a git checkout,
+  and prebuilt deploys clone nothing (docs/specs/prebuilt-deploys.md). An
+  app that relies on a manifest silently gets no services. Options: have the
+  workflow upload the manifest(s) next to the JAR in the artifact (no extra
+  token permission), or fetch them via the contents API (needs *Contents:
+  read*, which we deliberately don't grant). The artifact route fits.
+  (`trade-stack-backend` has no manifest today, so it isn't blocked.)
 - [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
   (BuildKit registry cache) so rebuilds across deploys are faster than
   cold.
