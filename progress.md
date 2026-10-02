@@ -22,8 +22,10 @@ CSS. `make e2e-artifact` now drives the whole UI flow against the fake
 GitHub (fake gained the workflow-runs and `/user/repos` endpoints); all unit
 tests + vet green; layout checked in the browser pane. Docs: spec "As built —
 P2", ADR 0019 status, deploy-flow, security, README Features, improvements
-(P2 checked). **Live server NOT restarted** (still the P0 build; restarting
-applies migration 17 — snapshot first). **Next:** P3 memory preflight; the
+(P2 checked). **Live server restarted on this build later the same day**
+(pid 6772; snapshot `data/backups/pre-p2-20261002174802.db`; migration 17
+applied; all 10 running apps healthy, 6 sampled public `http://` URLs 200 —
+https on `*.dm.` has no edge cert by design; `testing` still failed). **Next:** switch `testing` to prebuilt in the UI; P3 memory preflight; the
 "keep evidence when the readiness probe fails" item; owner follow-ups
 (BeyondCredit token, S3 billing glance, delete spike repo, switch the
 `testing` app to prebuilt once the live server runs this build).
