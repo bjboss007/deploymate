@@ -169,6 +169,15 @@ Add the two-apps-one-repo assertion to `make e2e-git`.
   workflow's runs list and reports exactly what failed (404 on a private repo
   = no access to *that repo*; 401 = bad/expired token; 403 = missing
   permission or org SSO/approval pending).
+- **Scope warning (from spike S1-B):** DeployMate cannot enforce "one
+  repo", so Test connection also asks `GET /user/repos?per_page=100&
+  affiliation=owner,organization_member` and, when the token can see
+  **repositories other than this one**, shows an amber warning: "this token
+  can also read Actions artifacts of N other repositories — create one
+  limited to *Only select repositories → {repo}*". It **warns, never
+  blocks** (some owners legitimately share one token across a
+  monorepo-adjacent set). The field help text and the docs say how to
+  create the token (Only select repositories, Actions: read, short expiry).
 - Fine-grained PATs **expire** (and an org may force short lifetimes or
   approval). A deploy that gets 401/403 fails with "the GitHub token was
   rejected — replace it on the app page" and fires the existing
@@ -257,6 +266,12 @@ reads.
   API call is the second proof the run exists and succeeded.
 - Redirect URLs carry a signed token: never logged, `Authorization` never
   forwarded to the blob host.
+- **Blast radius of the stored token** = whatever repos it was created for
+  (read of Actions runs/artifacts only; it can neither read code nor start
+  workflows — verified). An all-repositories token exposes every repo's
+  build artifacts if DeployMate's database **and** key file leak together;
+  hence the Test-connection scope warning and the "Only select
+  repositories" guidance.
 - Artifacts are readable by anyone with repo read access: keep secrets out
   of the JAR (config comes from DeployMate env vars, 12-factor as already
   documented).
@@ -318,14 +333,32 @@ reads.
   - **Failure shapes:** no token → **401** "Requires authentication"; bad
     token → **401** "Bad credentials"; unknown artifact/run → **404** "Not
     Found"; rate limit **5000/hour** per token.
-  **Still open (part B, owner action):** (1) the least-privilege proof — a
-  **fine-grained token, one repo, only *Actions: read*** listing and
-  downloading the artifact (GitHub has no API to create PATs, so the owner
-  creates it in the browser); and whether fine-grained responses carry the
-  `github-authentication-token-expiration` header (an OAuth token's do
-  not) — that decides the "token expires soon" warning; (2) **repeat under
-  the `BeyondCredit` org** — org policy may require approval/SSO for
-  fine-grained tokens.
+  **Part B done 2026-10-02** with a real **fine-grained token (`github_pat_…`,
+  Actions: read)** the owner created:
+  - **Works:** `GET /repos/{r}` (what Test connection needs; response header
+    `x-accepted-github-permissions: metadata=read`),
+    `GET …/actions/workflows/{file}/runs?branch=&status=success&event=push`
+    (the "Deploy latest successful run" list: `workflow_runs[].{id,
+    run_number, event, conclusion, head_sha, run_attempt}` all present),
+    the run's artifacts, and the 302 download (follow without
+    `Authorization`; zip sha256 == `digest`). Every call DeployMate needs.
+  - **Permissions are least-privilege:** contents → **403**, dispatching the
+    workflow (Actions: write) → **403**, both "Resource not accessible by
+    personal access token".
+  - **Repository scope is NOT enforced by DeployMate and was too wide in
+    practice:** this token was created with *All repositories*, so it could
+    read Actions **runs and artifacts of every private repo the owner has**
+    (98 repos visible, 7 private; contents still 403). The spec's "one repo"
+    is a property of how the owner creates the token, not something we can
+    guarantee → see "Credential handling" (Test connection now warns).
+  - **Token-expiry header: not returned** (`github-authentication-token-
+    expiration` was absent for this token) — do **not** build an
+    "expires soon" warning on it; surface expiry only as the 401 failure
+    message. Also: the repo JSON's `permissions` object describes the
+    *owner's* rights, not the token's (it said admin) — never use it to
+    judge the token.
+  **Still open (owner action):** repeat under the **`BeyondCredit` org**
+  (org policy may require approval/SSO for fine-grained tokens).
 - **S2 — wrapper cost on the target box.** ~~Run on the dev Mac~~
   **measured 2026-10-02 (Docker Desktop, arm64, 3.8 GiB VM)** — re-run on
   the real 4 GB Ubuntu box when it is up (numbers below are dominated by

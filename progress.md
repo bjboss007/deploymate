@@ -7,6 +7,28 @@
 
 ## Where we stopped
 
+**2026-10-02 (spike S1 part B — fine-grained token)** — **Owner created
+a fine-grained token `DM_ARTIFACT_TOKEN`** (exported in `~/.zshrc`; read via
+`zsh -c 'source ~/.zshrc …'`, never printed/written). Results (spec
+Spikes section): it does **everything DeployMate needs** (repo metadata,
+workflow-runs list for "Deploy latest successful run", run artifacts,
+302 download, digest match) and its **permissions are least-privilege**
+(contents 403, workflow dispatch 403). **But its repository scope was
+"All repositories"** — it could read Actions runs/artifacts of every
+private repo of the owner (98 repos visible / 7 private), so the spec's
+"one repo" is only true if the owner scopes the token; **design change:
+Test connection now warns when the token can see other repos** (spec
+Credential handling + Security). Also learned: the
+`github-authentication-token-expiration` header was **not** returned
+(don't build an expiry warning on it), and the repo JSON `permissions`
+field is the owner's, not the token's. **Recommended owner action:** edit
+the token (GitHub → Settings → Developer settings → Fine-grained tokens →
+DM_ARTIFACT_TOKEN → Repository access → *Only select repositories* →
+`dm-artifact-spike`) — no need to regenerate. Still open: the
+`BeyondCredit` org token-policy check; the S3 billing glance after
+2026-10-03 11:32 UTC; deleting the spike repo when done (my token can
+archive, not delete).
+
 **2026-10-02 (spike S1 part A, S3 partial)** — **Real-GitHub round trip
 done against a throwaway private repo** `bjboss007/dm-artifact-spike`
 (generated-workflow shape, `javac`-built 1.6 KB JAR, `retention-days: 1`),
