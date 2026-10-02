@@ -260,7 +260,10 @@ change.
   backend on the deterministic preview port) and verified in a real
   headless Chrome: login → `/preview/react-spa/` renders the React app,
   body text + `api/ping` → pong (Aug 2026).
-- [ ] **Multi-webhook fan-out deduped to one app** — found live
+- [ ] **Multi-webhook fan-out deduped to one app** — **now a hard
+  prerequisite (P0) of docs/specs/prebuilt-deploys.md**: CI-driven deploys
+  send one `workflow_run` to every env's hook with the same delivery GUID.
+  Found live
   (2026-09-04) by the three-environment dogfood demo (one GitHub repo →
   one webhook per app, all on the same repo). GitHub sends every webhook
   on a repo the **same `X-GitHub-Delivery` GUID** for one push event
@@ -395,8 +398,19 @@ change.
   request-body cap on the tunnel never applies. App gets a build mode
   "Prebuilt artifact (GitHub Actions)" + a generated workflow file; Java
   JARs first, templates for Node dist / Go binaries later. Spec pending
-  owner go-ahead. The registry/remote-builder options below stay recorded
-  but are parked under those constraints:
+  owner go-ahead — **now spec'd: `docs/specs/prebuilt-deploys.md`
+  (2026-10-02; not implemented)**: route A (artifact) first, route B
+  (registry) as a documented v2 sharing its trigger/mode/worker seam;
+  phased P0 (per-source delivery key + event dispatch) → P1 (spikes S1–S3,
+  migration 0017, worker) → P2 (UI, workflow generator, "Deploy latest
+  successful run") → P3 (memory preflight advisory). Corrects an earlier
+  claim here: ghcr.io storage/bandwidth is "currently free" per GitHub's
+  docs — the *shared quota* (Free 500 MB / Pro-Team 2 GB) applies to
+  **Actions artifacts**, and a private GHCR pull needs a **classic**
+  `read:packages` PAT (account-wide), whereas the artifact route needs only
+  a fine-grained single-repo `Actions: read` token. The registry and
+  remote-builder options below stay recorded but are parked under the
+  no-registry / no-builder constraints:
   - **Registry credentials** — per-project token (GHCR/Docker Hub),
     encrypted at rest, used by `PullImage` (today `PullOptions{}`: public
     or already-local images only).

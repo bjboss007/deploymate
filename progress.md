@@ -7,6 +7,39 @@
 
 ## Where we stopped
 
+**2026-10-02 (prebuilt-deploys spec round)** — **Spec written:
+`docs/specs/prebuilt-deploys.md`** (design only, nothing built). Problem:
+JVM builds can't run on the small servers (the `testing` app OOM). Owner
+constraints: **no builder machine, no registry**. Chosen v1: **route A —
+CI uploads the JAR as a GitHub Actions artifact; GitHub's `workflow_run`
+event arrives on the app's EXISTING webhook; the worker downloads the
+artifact (fine-grained single-repo `Actions: read` token, new
+`git_sources.api_token_enc`), extracts exactly one JAR (never by entry
+name), wraps it with `FROM eclipse-temurin:{ver}-jre` + `COPY`, and runs
+the usual rolling replica-aware swap** (rollback/prune/stats unchanged).
+Route B (GHCR image) documented as v2 on the same seam. Facts were
+verified against GitHub's docs (artifact download = 302 to a 1-minute
+URL; `workflow_run` payload fields; shared Actions/Packages quota —
+**ghcr.io is "currently free" and I had told the owner otherwise, now
+corrected in the spec and backlog**; **private GHCR pulls need a classic
+`read:packages` PAT**, artifact downloads need only fine-grained
+`Actions: read`). Key design points: six `workflow_run` gates (success,
+workflow path, tracked branch, `push`/`workflow_dispatch` only, same-repo
+head — a fork PR must never deploy — and `run_number` ordering so an old
+re-run can't roll back), generated workflow with `retention-days: 1`,
+"Deploy latest successful run" button (missed webhooks / first deploy),
+memory-preflight advisory for on-box JVM builds. **Hard prerequisite
+(P0): the delivery de-dupe key must include the git source id** (the
+known fan-out bug) — all three env hooks get one GUID per `workflow_run`.
+Three spikes before code: S1 real GitHub round trip (+ BeyondCredit org
+token policy — **owner action**), S2 wrapper cost on the 4 GB box, S3
+artifact-retention quota accounting. **Same day: the live server was
+restarted on the build-diagnosis binary** (pid 62816; pre-restart
+snapshot `data/backups/pre-restart-20261002110108.db`, no migration);
+owner restarted the Cloudflare tunnel (it had died with its terminal tab;
+public URLs 530 until then). The `testing` app is still failed (needs
+more Docker memory / smaller Gradle heap, or the prebuilt route).
+
 **2026-09-30 (build-diagnosis round)** — **The owner's `testing` app
 failed to deploy: out of memory.** It builds
 `BeyondCredit/trade-stack-backend` (`development`, Java 21 via
@@ -759,10 +792,14 @@ real Let's Encrypt issuance.
    `DEPLOYMATE_CLOUDFLARE_ZONE_ID`, then flip `previewURL` to `https://`.
    Entries: `internal/dns`, `internal/httpserver/handlers_preview.go`,
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
-3. **Replicas** — shipped 2026-09-30 with all follow-ups (ADR 0018).
-   Remaining: re-run the Traefik spike harness on the real Linux box when
-   it's up; horizontal autoscaling is the next scaling step
-   (improvements.md, Medium-term).
+3. **Prebuilt deploys** — spec'd 2026-10-02
+   (`docs/specs/prebuilt-deploys.md`); owner go-ahead needed to build.
+   Start with **P0** (per-source webhook delivery key + dispatch on
+   `X-GitHub-Event` — fixes the live fan-out bug on its own), then the
+   spikes (S1 needs a throwaway GitHub repo and an org-token check).
+   Replicas remain shipped (ADR 0018); left over there: re-run the Traefik
+   spike harness on the real Linux box when it's up, and horizontal
+   autoscaling (improvements.md, Medium-term).
 4. **Recurring bindingless containers** — the auto-heal is reactive (on
    probe failure); the root cause (pre-fix binaries starting containers
    without bindings) is gone now that the fix binary is deployed, but if
