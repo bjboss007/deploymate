@@ -18,7 +18,8 @@ followed it and swapped the whole page into the fragment. Fix:
 applied to the stop/start/restart error paths. Regression test
 `TestHeaderActionsNeverSwapAFullPage` (red on the old code, green now). Rule:
 **any handler an `hx-post` form targets must not `http.Redirect`** — use
-`redirectOrHX`. **Live server not restarted for this yet.**
+`redirectOrHX`. **Live server restarted on this fix** (pid 9176; snapshot
+`data/backups/pre-hxfix-*.db`; no migration; apps healthy, public URLs 200).
 
 **2026-10-02 (P2 built — prebuilt-deploys UI)** — The Git panel (GitHub
 sources only) now has: a **Deploy mode** select (Build on this server |
