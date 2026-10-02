@@ -7,6 +7,30 @@
 
 ## Where we stopped
 
+**2026-10-02 (real-project deploy test PASSED)** — The real Spring app
+(`bjboss007/tradestack-dm-test`, private copy of trade-stack-backend, CI-built
+102 MB JAR) deployed end-to-end through prebuilt mode on a scratch server
+(:18110, real GitHub, signed local `workflow_run` webhooks — no tunnel; the
+real-delivery path was proven in S1) with Postgres + Redis services and
+`DB_URL`/`DB_USER`/`DB_PASSWORD`/`REDIS_*` set by hand: download (token now
+covers all repos) -> wrap -> run (non-root `app`, `JAVA_OPTS` set, app
+"Started in 7.5 s", ~670 MB RSS) -> v2 (run 2) rolling swap with both versions
+answering -> duplicate delivery ignored ("already handled") -> rollback to v1
+from the local image. **The first attempt failed** because the Docker Desktop
+VM (4 GB, 29 containers) had ~137 MB free: the JVM was OOM-killed (exit 137)
+and DeployMate only reported "readiness probe: EOF". After the owner raised the
+VM to 7 GB it passed. Actuator `/health` reads DOWN only because the app's mail
+health check can't reach SMTP (a config choice, not a deploy fault). **Gaps
+logged in improvements.md:** capture the container's last log lines + OOM/exit
+state when the readiness probe fails (the container is removed first today);
+probe window (~60 s) is tight on loaded hosts. The scratch server, services,
+volumes, image and secrets file are removed. **Side effect to flag:** I stopped
+`documents-axion-server-1` and `dm-svc-main-mysql` (owner-approved) to free
+memory; after the Docker VM restart they no longer existed when I went to start
+them again (cause unknown). The mysql data volume `dm-svc-main-mysql-data`
+(194 MB) is intact — Start it from the dashboard; axion was recreated from
+`~/Documents/docker-compose.yml`.
+
 **2026-10-02 (prebuilt deploys P1 built)** — **Prebuilt (GitHub Actions
 artifact) deploys are implemented, backend-only** (ADR 0019; spec
 `docs/specs/prebuilt-deploys.md` "As built"; improvements.md P0/P1 checked,

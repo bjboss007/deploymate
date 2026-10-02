@@ -435,6 +435,14 @@ change.
   `JDBC_DATABASE_URL`, `REDIS_HOST/PORT`, `MYSQL_*`) so
   `DB_USER=${DATABASE_USER}` aliasing just works. Additive: existing apps
   see new variables only.
+- [ ] **Keep evidence when the readiness probe fails** — found by the real-project
+  test (2026-10-02): a JVM OOM-killed during startup surfaced only as
+  `swap: staged container failed readiness probe: ... EOF`, because the staged
+  container is removed before anyone reads why it died. Before removing it,
+  capture its last ~50 log lines and `State.OOMKilled`/`ExitCode` into the
+  deployment error (reuse `internal/builder/diagnose.go` patterns: "killed by the
+  kernel — the host ran out of memory"). Also consider a longer or configurable
+  probe window (30 x 2 s today) for Spring-sized apps on loaded hosts.
 - [ ] **Prebuilt (artifact) mode ignores `deploymate.yml`** — the manifest
   (services to provision, ADR 0017 overlays) is read from a git checkout,
   and prebuilt deploys clone nothing (docs/specs/prebuilt-deploys.md). An
