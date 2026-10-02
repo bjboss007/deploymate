@@ -260,24 +260,23 @@ change.
   backend on the deterministic preview port) and verified in a real
   headless Chrome: login → `/preview/react-spa/` renders the React app,
   body text + `api/ping` → pong (Aug 2026).
-- [ ] **Multi-webhook fan-out deduped to one app** — **now a hard
-  prerequisite (P0) of docs/specs/prebuilt-deploys.md**: CI-driven deploys
-  send one `workflow_run` to every env's hook with the same delivery GUID.
-  Found live
-  (2026-09-04) by the three-environment dogfood demo (one GitHub repo →
-  one webhook per app, all on the same repo). GitHub sends every webhook
-  on a repo the **same `X-GitHub-Delivery` GUID** for one push event
-  (verified across three hook deliveries: identical `bb45e8b8-…`), so
-  `DeliveryCache.Seen(provider, deliveryID)`
-  (`internal/webhooks/webhooks.go`) — designed to dedupe retries on a
-  *single* source — eats the 2nd..Nth fan-out deliveries: only the first
-  hook to arrive queues a deployment, the rest get `200 "duplicate
-  delivery ignored"` (response `Content-Length: 26` in GitHub's
-  delivery records). Manual replays with a fresh GUID always queue, so
-  the handler is otherwise fine. Fix idea: include the git source id in
-  the dedupe key (`provider:sourceID:deliveryID`), or hash the payload
-  instead of the GUID. **No e2e caught it** — `e2e_git.sh` fires one
-  webhook; add a two-apps-one-repo assertion.
+- [x] **Multi-webhook fan-out deduped to one app** — done 2026-10-02 (P0
+  of docs/specs/prebuilt-deploys.md). Found live (2026-09-04) by the
+  three-environment dogfood demo (one GitHub repo → one webhook per app):
+  GitHub sends every webhook on a repo the **same `X-GitHub-Delivery`
+  GUID** for one push, so the global `DeliveryCache` key
+  `provider:deliveryID` let only the first hook queue a deployment (the
+  rest got `200 "duplicate delivery ignored"`). The key is now
+  `provider:sourceID:deliveryID`; retries on one source are still
+  deduped. Same change: `handleWebhook` dispatches on `X-GitHub-Event`
+  (`ping` → `pong`, `push`/missing header → deploy, everything else
+  acknowledged and ignored). Tests: `internal/webhooks` cache tests,
+  `handlers_webhook_test.go` (3-env fan-out with one GUID, retry dedupe,
+  event dispatch, authenticated ping — red on the old code, green now), and
+  `make e2e-git` extended (second app on the same repo, same GUID → both
+  deploy; retry deduped; ping/non-push) — verified to FAIL on the old code
+  at "second source … must queue". The manual replay-with-fresh-GUID
+  workaround is no longer needed.
 - [ ] **SSH deploy-key clones fail when `DEPLOYMATE_DATA_DIR` is
   relative or space-containing** — found live (2026-09-04, same demo).
   The worker's checkout + identity paths come from `cfg.DataDir`

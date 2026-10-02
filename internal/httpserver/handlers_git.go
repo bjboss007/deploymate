@@ -224,6 +224,21 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "bad signature", http.StatusUnauthorized)
 			return
 		}
+		// Dispatch on the event type (after authentication, so ping is not
+		// an unauthenticated oracle). A missing header is treated as a push:
+		// manual replays of a signed push (the multi-env workaround) never
+		// carried one.
+		switch event := r.Header.Get("X-GitHub-Event"); event {
+		case "ping":
+			_, _ = w.Write([]byte("pong"))
+			return
+		case "push", "":
+		default:
+			// Any other event (workflow_run, issues, …) is not a deploy.
+			slog.Debug("webhook: ignoring non-push event", "source", gs.ID, "event", event)
+			_, _ = w.Write([]byte("ignored: not a push event"))
+			return
+		}
 		push, err = webhooks.ParseGitHubPush(body)
 	case "gitlab":
 		if !webhooks.VerifyGitLab(secret, r.Header.Get("X-GitLab-Token")) {
@@ -244,7 +259,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte("ignored: not the deploy branch"))
 		return
 	}
-	if s.deliveries.Seen(gs.Provider, delivery) {
+	if s.deliveries.Seen(gs.Provider, gs.ID, delivery) {
 		_, _ = w.Write([]byte("duplicate delivery ignored"))
 		return
 	}

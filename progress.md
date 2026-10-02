@@ -7,6 +7,27 @@
 
 ## Where we stopped
 
+**2026-10-02 (P0 webhook fix)** — **The multi-webhook fan-out bug is
+fixed** (P0 of `docs/specs/prebuilt-deploys.md`; improvements.md item
+checked off; ADR 0009 + deploy-flow + troubleshooting updated).
+`DeliveryCache.Seen` now takes the **source id** — key
+`provider:sourceID:deliveryID` — so one push's shared GUID no longer lets
+the first of dev/stage/prod swallow the others; retries on one source are
+still deduped. `handleWebhook` also dispatches on `X-GitHub-Event` after
+the HMAC check: `ping` → `pong`, `push` **or a missing header** (old
+manual replays) → the deploy path, any other event → `200 "ignored: not
+a push event"` (this is where P1 will route `workflow_run`). Tests: new
+`internal/webhooks` cache tests and `handlers_webhook_test.go` (3-app
+fan-out with one GUID, same-source retry, dispatch, unauthenticated-ping
+rejected) — **red on the old code, green now**; `make e2e-git` extended
+(second app/source on the same repo, same GUID → both deploy and serve;
+retry deduped; ping/non-push) and **verified to fail on the old binary**
+at the second source; `make test` + `make vet` green, `-race` clean.
+gofmt note: handlers_git.go and webhooks.go carry pre-existing drift
+(untouched lines). **Live server NOT restarted** on this build yet (no
+migration; the owner's manual fresh-GUID replay workaround becomes
+unnecessary once it is). Next: spikes S1–S3, then P1.
+
 **2026-10-02 (prebuilt-deploys spec round)** — **Spec written:
 `docs/specs/prebuilt-deploys.md`** (design only, nothing built). Problem:
 JVM builds can't run on the small servers (the `testing` app OOM). Owner
@@ -794,9 +815,9 @@ real Let's Encrypt issuance.
    `docs/specs/cloudflare-tunnel.md`, backlog items (Near-term).
 3. **Prebuilt deploys** — spec'd 2026-10-02
    (`docs/specs/prebuilt-deploys.md`); owner go-ahead needed to build.
-   Start with **P0** (per-source webhook delivery key + dispatch on
-   `X-GitHub-Event` — fixes the live fan-out bug on its own), then the
-   spikes (S1 needs a throwaway GitHub repo and an org-token check).
+   **P0 is done** (per-source delivery key + event dispatch, 2026-10-02);
+   next the spikes (S1 needs a throwaway GitHub repo and an org-token
+   check), then P1.
    Replicas remain shipped (ADR 0018); left over there: re-run the Traefik
    spike harness on the real Linux box when it's up, and horizontal
    autoscaling (improvements.md, Medium-term).

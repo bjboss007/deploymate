@@ -1,6 +1,8 @@
 # Prebuilt deploys (CI builds, DeployMate runs) — specification
 
-**Status:** design (Oct 2026), **not implemented**. Owner constraints:
+**Status:** design (Oct 2026). **P0 shipped 2026-10-02** (per-source
+delivery key + `X-GitHub-Event` dispatch); everything else **not
+implemented**. Owner constraints:
 no builder machine, no container registry. Trigger facts and GitHub limits
 below were checked against GitHub's docs on 2026-10-02 (see "Verified
 facts"); three items are marked **spike** and must be proven on real GitHub
@@ -324,9 +326,11 @@ Real-GitHub behavior is covered by spike S1, not the e2e.
 
 ## Phasing
 
-1. **P0** — per-source delivery key + dispatch on `X-GitHub-Event` (`ping`,
-   `push`, `workflow_run`) + the e2e assertion. Ships alone; unblocks
-   everything and fixes a live bug.
+1. **P0 — DONE 2026-10-02** — per-source delivery key + dispatch on
+   `X-GitHub-Event` (`ping` → pong, `push`/missing → deploy, everything
+   else ignored — `workflow_run` is acknowledged and ignored until P1 adds
+   its path) + the e2e assertion (verified failing on the old code). It
+   shipped alone and fixed the live fan-out bug.
 2. **P1** — spikes S1–S3 → migration 0017, GitHub client, `runArtifactDeploy`,
    template, gates, failure messages, `make e2e-artifact`.
 3. **P2** — UI (mode, token + Test connection, workflow generator, Deploy

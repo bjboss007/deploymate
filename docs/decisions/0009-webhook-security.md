@@ -18,8 +18,17 @@ answer fast so providers don't resend.
 - Per-source webhook secret, generated at git-connect time and stored
   encrypted (0008).
 - **Delivery dedup:** in-memory cache keyed
-  `provider:delivery-id` (GitHub `X-GitHub-Delivery`, GitLab
-  `X-Gitlab-Event-UUID`), 24 h TTL — dedup survives server restarts
+  `provider:source-id:delivery-id` (GitHub `X-GitHub-Delivery`, GitLab
+  `X-Gitlab-Event-UUID`), 24 h TTL. **The source id is part of the key**
+  (fixed 2026-10-02): GitHub sends every webhook on a repo the same
+  delivery GUID for one event, and each env's app has its own source and
+  hook, so a key without it let the first hook to arrive swallow the
+  dev/stage/prod fan-out. A retry on the same source is still deduped.
+  **Event dispatch (GitHub):** after the HMAC check, `ping` answers
+  `pong`, `push` (or a missing event header — old manual replays) takes
+  the deploy path, and every other event type is acknowledged and ignored
+  (`workflow_run` gets its own path in docs/specs/prebuilt-deploys.md).
+  Dedup survives server restarts
   poorly (in-memory), which is acceptable because duplicate deliveries
   produce a queued deploy of the same SHA.
 - The handler only *queues* a deployment and returns `200` immediately

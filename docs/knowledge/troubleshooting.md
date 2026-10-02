@@ -91,7 +91,9 @@ remote with gh's credential helper (`git remote set-url origin
 https://github.com/<owner>/<repo>.git`).
 
 **Webhook deploys don't happen** → check in order: HMAC signature
-(401 = wrong secret), `X-GitHub-Delivery` seen before (dedup, 24 h),
+(401 = wrong secret), event type (only `push` deploys; `ping` replies
+"pong", anything else "ignored: not a push event"), `X-GitHub-Delivery`
+seen before **on this source** (dedup, 24 h),
 branch name mismatch (must equal `default_branch`, reply says
 "ignored"), no app linked to the source (worker log warns).
 

@@ -27,6 +27,11 @@ APP_NAME="e2eweb$STAMP"          # slug == name (lowercase, no spaces)
 SLUG="$APP_NAME"
 CONTAINER="dm-$SLUG"
 IMAGE_PREFIX="deploymate/apps/$SLUG"
+# Second app on the SAME repo/branch (the dev/stage/prod-on-one-repo shape):
+# its own git source + webhook, same push GUID from GitHub.
+SLUG2="${APP_NAME}b"
+CONTAINER2="dm-$SLUG2"
+IMAGE_PREFIX2="deploymate/apps/$SLUG2"
 
 DATA_DIR="$(mktemp -d)"
 BARE="$(mktemp -d)/e2e-web.git"
@@ -40,9 +45,9 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 cleanup() {
   set +e
   [ -n "$SRV_PID" ] && kill "$SRV_PID" 2>/dev/null && wait "$SRV_PID" 2>/dev/null
-  docker rm -f "$CONTAINER" >/dev/null 2>&1
-  # Remove only THIS run's built images (slug is timestamped).
-  imgs="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep "^$IMAGE_PREFIX:" 2>/dev/null)"
+  docker rm -f "$CONTAINER" "$CONTAINER2" >/dev/null 2>&1
+  # Remove only THIS run's built images (slugs are timestamped).
+  imgs="$(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^($IMAGE_PREFIX|$IMAGE_PREFIX2):" 2>/dev/null)"
   [ -n "$imgs" ] && docker rmi -f $imgs >/dev/null 2>&1
   rm -rf "$DATA_DIR" "$BARE" "$WORK" "$JAR" "$(dirname "$BARE")"
 }
@@ -118,6 +123,35 @@ code="$(echo "$resp" | tail -1)"
 echo "$resp" | grep -q queued || fail "webhook not queued: $resp"
 log "webhook accepted, deploy queued"
 
+# 5b. Fan-out + event dispatch (P0 of docs/specs/prebuilt-deploys.md).
+#     GitHub sends EVERY webhook on a repo the same X-GitHub-Delivery GUID for
+#     one event; each env's app has its own source and hook, so each must
+#     deploy. A retry on the SAME source must still be deduped, and a ping
+#     must answer pong.
+hook() { # hook <source> <secret> <event> <guid> <body> → "<code> <body>"
+  local sig
+  sig="sha256=$(printf '%s' "$5" | openssl dgst -sha256 -hmac "$2" | awk '{print $NF}')"
+  curl -s -w ' %{http_code}' -H "X-GitHub-Event: $3" -H "X-GitHub-Delivery: $4" \
+    -H "X-Hub-Signature-256: $sig" -H "Content-Type: application/json" \
+    -d "$5" "$BASE/hooks/$1"
+}
+curl -sf -b "$JAR" -o /dev/null -d "name=$SLUG2&csrf_token=$CSRF" "$BASE/projects/$PROJ_SLUG/apps" || fail "create second app"
+seed_out2="$(env DEPLOYMATE_DATA_DIR="$DATA_DIR" "$BIN" seed-git-source "$SLUG2" "$BARE" main github)" \
+  || fail "seed-git-source (second app)"
+SOURCE_ID2="$(echo "$seed_out2" | grep '^source_id=' | cut -d= -f2)"
+SECRET2="$(echo "$seed_out2" | grep '^webhook_secret=' | cut -d= -f2)"
+[ -n "$SOURCE_ID2" ] && [ "$SOURCE_ID2" != "$SOURCE_ID" ] || fail "second app must get its own git source"
+out="$(hook "$SOURCE_ID2" "$SECRET2" push "e2e-$STAMP" "$BODY")"
+[ "$out" = "queued 200" ] || fail "second source with the SAME delivery GUID must queue, got: $out"
+log "PASS: same X-GitHub-Delivery GUID deployed BOTH apps (per-source de-dupe)"
+out="$(hook "$SOURCE_ID" "$SECRET" push "e2e-$STAMP" "$BODY")"
+[ "$out" = "duplicate delivery ignored 200" ] || fail "retry on the same source must be deduped, got: $out"
+out="$(hook "$SOURCE_ID" "$SECRET" ping "e2e-ping-$STAMP" '{"zen":"e2e"}')"
+[ "$out" = "pong 200" ] || fail "ping must answer pong, got: $out"
+out="$(hook "$SOURCE_ID" "$SECRET" workflow_run "e2e-wf-$STAMP" '{"action":"completed"}')"
+[ "$out" = "ignored: not a push event 200" ] || fail "non-push events must be ignored, got: $out"
+log "PASS: retry deduped, ping pongs, non-push events ignored"
+
 # 6. Wait for the worker to build + start the container (Dockerfile build of
 #    nginx:alpine — base image is local, so this is fast)
 log "waiting for $CONTAINER to run"
@@ -131,6 +165,15 @@ for i in $(seq 1 90); do
   [ "$i" = 90 ] && { tail -40 "$DATA_DIR/server.log"; fail "container never started"; }
 done
 
+log "waiting for $CONTAINER2 (second app) to run"
+for i in $(seq 1 90); do
+  [ "$(docker inspect "$CONTAINER2" --format '{{.State.Running}}' 2>/dev/null)" = "true" ] && break
+  kill -0 "$SRV_PID" 2>/dev/null || { cat "$DATA_DIR/server.log"; fail "server died"; }
+  sleep 2
+  [ "$i" = 90 ] && { tail -40 "$DATA_DIR/server.log"; fail "second app's container never started"; }
+done
+log "$CONTAINER2 running"
+
 # 7. HTTP-probe the running app through the preview proxy (session-protected)
 log "probing $BASE/preview/$SLUG/"
 for i in $(seq 1 15); do
@@ -142,10 +185,20 @@ for i in $(seq 1 15); do
   sleep 1
   [ "$i" = 15 ] && fail "app did not serve expected content (last: $out)"
 done
+for i in $(seq 1 15); do
+  out="$(curl -s -b "$JAR" "$BASE/preview/$SLUG2/" || true)"
+  if echo "$out" | grep -q "deploymate e2e git fixture"; then
+    log "PASS: second app (same GUID, own source) also serves the fixture"
+    break
+  fi
+  sleep 1
+  [ "$i" = 15 ] && fail "second app did not serve expected content (last: $out)"
+done
 
 # 8. The built image's on-disk size must be recorded (best-effort inspect
 #    at build time) and surface on /stats as the tracked app-images total.
-SZ="$(sqlite3 "$DATA_DIR/data.db" "SELECT size_bytes FROM images LIMIT 1" 2>/dev/null || true)"
+#    (Two apps now → the tracked total is the SUM of both images.)
+SZ="$(sqlite3 "$DATA_DIR/data.db" "SELECT SUM(size_bytes) FROM images" 2>/dev/null || true)"
 [ -n "$SZ" ] && [ "$SZ" -gt 0 ] 2>/dev/null || fail "images.size_bytes not recorded (got '$SZ')"
 expected="$(awk -v n="$SZ" 'BEGIN{
   if (n < 1024) printf "%d B", n;

@@ -130,8 +130,12 @@ apps always have empty columns and are unaffected.
 
 ## Webhook → deploy (timing)
 
-1. Provider POSTs `/hooks/{id}`; handler verifies HMAC, dedupes the
-   delivery, filters branches, inserts `queued`, replies 200 in <50 ms.
+1. Provider POSTs `/hooks/{id}`; handler verifies HMAC, dispatches on
+   the event (`ping` → pong, non-push events ignored), dedupes the
+   delivery **per source**, filters branches, inserts `queued`, replies
+   200 in <50 ms. (One repo can feed several apps — dev/stage/prod — each
+   with its own source and hook; they share one delivery GUID, which is
+   why the dedupe key includes the source id.)
 2. Worker polls every 1 s → claims → builds (seconds to minutes).
 3. Dashboard: `/deployments/{id}` page live-updates via SSE
    (`/deployments/{id}/stream` replays stored lines, then streams

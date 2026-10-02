@@ -83,7 +83,11 @@ func BranchFromRef(ref string) string {
 }
 
 // DeliveryCache dedupes webhook deliveries for 24h so provider retries and
-// double sends never deploy twice.
+// double sends never deploy twice. Deliveries are keyed per git SOURCE:
+// GitHub sends every webhook configured on a repo the same
+// X-GitHub-Delivery GUID for one event, and each env's app (dev/stage/prod
+// of one repo) has its own source and hook — a key without the source id
+// would let the first hook to arrive swallow the rest.
 type DeliveryCache struct {
 	mu    sync.Mutex
 	items map[string]time.Time
@@ -94,8 +98,9 @@ func NewDeliveryCache() *DeliveryCache {
 	return &DeliveryCache{items: make(map[string]time.Time)}
 }
 
-// Seen records a delivery ID; true means it was already processed.
-func (c *DeliveryCache) Seen(provider, deliveryID string) bool {
+// Seen records a delivery for a source; true means that source already
+// processed this delivery ID.
+func (c *DeliveryCache) Seen(provider, sourceID, deliveryID string) bool {
 	if deliveryID == "" {
 		return false
 	}
@@ -107,7 +112,7 @@ func (c *DeliveryCache) Seen(provider, deliveryID string) bool {
 			delete(c.items, k)
 		}
 	}
-	key := provider + ":" + deliveryID
+	key := provider + ":" + sourceID + ":" + deliveryID
 	if _, ok := c.items[key]; ok {
 		return true
 	}
