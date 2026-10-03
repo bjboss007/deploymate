@@ -1,94 +1,359 @@
 package templates
 
-import "github.com/habibmuhammad/deploymate/internal/store"
+import (
+	"fmt"
 
-templ ProjectsPage(vc ViewCtx, projects []store.Project) {
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+// StripCell is one slice of an app's 24-hour heartbeat strip.
+type StripCell struct {
+	State   string // up | down | stopped | none
+	Deploys int
+	Title   string // "14:00 · up · 1 deploy"
+}
+
+// AppRow is everything the fleet board shows about one app.
+type AppRow struct {
+	App         store.App
+	Last        *store.Deployment // newest deployment, nil if never deployed
+	Strip       []StripCell
+	UptimePct   float64
+	UptimeKnown bool
+	// Attention is "" (fine), "bad" (needs you) or "warn" (worth a look);
+	// Reason says why in a sentence.
+	Attention string
+	Reason    string
+	// Project names the project on the cross-project "Needs attention" list.
+	Project string
+}
+
+// ProjectGroup is one project with its apps and services, for the fleet board.
+type ProjectGroup struct {
+	Project  store.Project
+	Rows     []AppRow
+	Services []store.Service
+}
+
+// FleetSummary is the one-line state of everything.
+type FleetSummary struct {
+	Apps, Healthy, Failing, Stopped, Projects int
+}
+
+// lampState maps an app to the colour of its lamp.
+func lampState(a store.App) string {
+	switch {
+	case a.Status == "failed" || (a.Status == "running" && a.Health == "unhealthy"):
+		return "down"
+	case a.Status == "running":
+		return "up"
+	}
+	return "stopped"
+}
+
+// statusText is the plain-words state next to the lamp.
+func statusText(a store.App) string {
+	switch {
+	case a.Status == "failed":
+		return "Failed"
+	case a.Status == "running" && a.Health == "unhealthy":
+		return "Running, failing its health check"
+	case a.Status == "running":
+		return "Running"
+	case a.Status == "" || a.Status == "stopped":
+		return "Stopped"
+	}
+	return a.Status
+}
+
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return fmt.Sprintf("%d %s", n, one)
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// stripLabel is the strip's accessible summary.
+func stripLabel(r AppRow) string {
+	deploys := 0
+	for _, c := range r.Strip {
+		deploys += c.Deploys
+	}
+	l := "Last 24 hours: "
+	if r.UptimeKnown {
+		l += fmtPct(r.UptimePct) + " up, "
+	} else {
+		l += "no availability data yet, "
+	}
+	return l + plural(deploys, "deploy", "deploys")
+}
+
+func svcLamp(status string) string {
+	switch status {
+	case "running":
+		return "up"
+	case "failed":
+		return "down"
+	}
+	return "stopped"
+}
+
+func withoutAttention(rows []AppRow) []AppRow {
+	out := make([]AppRow, 0, len(rows))
+	for _, r := range rows {
+		if r.Attention != "bad" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func attentionCount(groups []ProjectGroup) int {
+	n := 0
+	for _, g := range groups {
+		for _, r := range g.Rows {
+			if r.Attention == "bad" {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+// appRow is one app on the fleet board: lamp, name, what is running, and the
+// 24-hour heartbeat. The whole row is the link.
+templ appRow(r AppRow, showProject bool) {
+	<a class={ "app-row", templ.KV("app-row-attn", r.Attention != "") } href={ templ.SafeURL("/apps/" + r.App.Slug) }>
+		<span class={ "lamp", "lamp-" + lampState(r.App) } aria-hidden="true"></span>
+		<span class="row-main">
+			<span class="row-title">
+				<span class="row-name">{ r.App.Name }</span>
+				@envBadge(r.App.Environment)
+				if showProject && r.Project != "" {
+					<span class="row-project">in { r.Project }</span>
+				}
+			</span>
+			<span class="row-sub">
+				if r.Reason != "" {
+					<span class={ "row-reason", templ.KV("row-reason-warn", r.Attention == "warn") }>{ r.Reason }</span>
+				} else {
+					{ statusText(r.App) }
+				}
+			</span>
+		</span>
+		<span class="row-deploy">
+			if r.Last != nil {
+				<span class="mono">{ versionLabel(*r.Last) }</span>
+				<span class="muted-text">{ ago(r.Last.CreatedAt) }</span>
+			} else {
+				<span class="muted-text">Never deployed</span>
+			}
+		</span>
+		<span class="strip" role="img" aria-label={ stripLabel(r) }>
+			for _, c := range r.Strip {
+				<span class={ "hb", "hb-" + c.State, templ.KV("hb-deploy", c.Deploys > 0) } title={ c.Title }></span>
+			}
+		</span>
+		<span class="row-uptime">
+			if r.UptimeKnown {
+				{ fmtPct(r.UptimePct) }
+			} else {
+				<span class="muted-text">—</span>
+			}
+		</span>
+	</a>
+}
+
+// serviceRow is a database/cache on the project page.
+templ serviceRow(sv store.Service) {
+	<a class="app-row svc-row" href={ templ.SafeURL("/services/" + sv.Slug) }>
+		<span class={ "lamp", "lamp-" + svcLamp(sv.Status) } aria-hidden="true"></span>
+		<span class="row-main">
+			<span class="row-title">
+				<span class="row-name">{ sv.Name }</span>
+				@envBadge(sv.Environment)
+				if sv.Orphaned {
+					<span class="badge badge-failed">orphaned</span>
+				}
+			</span>
+			<span class="row-sub">
+				if sv.Status == "failed" {
+					Failed to start
+				} else if sv.Status == "running" {
+					Running
+				} else {
+					Stopped
+				}
+			</span>
+		</span>
+		<span class="row-deploy"><span class="mono">{ sv.Type }</span><span class="muted-text">{ sv.Image }</span></span>
+		<span class="row-uptime mono muted-text">:{ fmt.Sprint(sv.Port) }</span>
+	</a>
+}
+
+// summaryLine reads like a status report: what is fine, what is not.
+templ summaryLine(sm FleetSummary) {
+	<p class="fleet-summary">
+		if sm.Apps == 0 {
+			No apps yet.
+		} else {
+			<span class="sum-ok">{ plural(sm.Healthy, "app", "apps") } healthy</span>
+			if sm.Failing > 0 {
+				<span class="sum-sep">·</span>
+				<span class="sum-bad">{ fmt.Sprintf("%d need attention", sm.Failing) }</span>
+			}
+			if sm.Stopped > 0 {
+				<span class="sum-sep">·</span>
+				<span class="sum-quiet">{ fmt.Sprintf("%d stopped", sm.Stopped) }</span>
+			}
+		}
+	</p>
+}
+
+// attentionList puts what needs you first, whichever project it is in.
+templ attentionList(groups []ProjectGroup) {
+	if n := attentionCount(groups); n > 0 {
+		<section class="fleet-group attention">
+			<div class="group-bar">
+				<h2>Needs attention</h2>
+				<span class="muted-text">{ plural(n, "app", "apps") }</span>
+			</div>
+			<div class="rows">
+				for _, g := range groups {
+					for _, r := range g.Rows {
+						if r.Attention == "bad" {
+							@appRow(r, true)
+						}
+					}
+				}
+			</div>
+		</section>
+	}
+}
+
+templ ProjectsPage(vc ViewCtx, groups []ProjectGroup, sm FleetSummary) {
 	@Layout(vc, "Projects", "", nil) {
 		<div class="page-head">
 			<div>
-				<h1>Projects</h1>
-				<p class="muted">Everything you deploy lives in a project — apps, databases, and caches.</p>
+				<h1>Fleet</h1>
+				@summaryLine(sm)
 			</div>
+			<details class="disclose">
+				<summary class="btn btn-primary">New project</summary>
+				<form method="post" action="/projects" class="disclose-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<input type="text" name="name" placeholder="Project name" maxlength="64" required/>
+					<button class="btn btn-primary" type="submit">Create project</button>
+				</form>
+			</details>
 		</div>
-		<form method="post" action="/projects" class="inline-form">
-			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-			<input type="text" name="name" placeholder="project name" maxlength="64" required/>
-			<button class="btn btn-primary" type="submit">Create project</button>
-		</form>
-		if len(projects) == 0 {
+		if len(groups) == 0 {
 			<div class="empty">
 				<p>No projects yet.</p>
-				<p>Create one above — apps, databases, and caches live inside projects.</p>
+				<p>A project groups the apps, databases and caches that belong together. Create one to get started.</p>
 			</div>
 		} else {
-			<div class="card-grid">
-				for _, p := range projects {
-					<a class="project-card" href={ "/projects/" + p.Slug }>
-						<div class="card-title">{ p.Name }</div>
-						<div class="card-meta">/{ p.Slug }</div>
-					</a>
-				}
-			</div>
+			@attentionList(groups)
+			for _, g := range groups {
+				<section class="fleet-group">
+					<div class="group-bar">
+						<h2><a href={ templ.SafeURL("/projects/" + g.Project.Slug) }>{ g.Project.Name }</a></h2>
+						<span class="muted-text">
+							{ plural(len(g.Rows), "app", "apps") }
+							if len(g.Services) > 0 {
+								· { plural(len(g.Services), "database or cache", "databases and caches") }
+							}
+						</span>
+						<a class="text-link group-open" href={ templ.SafeURL("/projects/" + g.Project.Slug) }>Open project →</a>
+					</div>
+					if len(g.Rows) == 0 {
+						<p class="muted-text group-empty">No apps in this project yet.</p>
+					} else {
+						if rest := withoutAttention(g.Rows); len(rest) > 0 {
+							<div class="rows">
+								for _, r := range rest {
+									@appRow(r, false)
+								}
+							</div>
+						}
+						if n := len(g.Rows) - len(withoutAttention(g.Rows)); n > 0 {
+							<p class="muted-text group-empty">{ plural(n, "app is", "apps are") } listed under Needs attention.</p>
+						}
+					}
+				</section>
+			}
 		}
 	}
 }
 
-templ ProjectPage(vc ViewCtx, p store.Project, apps []store.App, svcs []store.Service) {
+templ ProjectPage(vc ViewCtx, p store.Project, rows []AppRow, svcs []store.Service) {
 	@Layout(vc, p.Name, "", []Crumb{{Label: p.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ p.Name }</h1>
-				<p class="muted">Apps, databases, and caches in this project.</p>
+				<p class="muted-text">{ plural(len(rows), "app", "apps") } · { plural(len(svcs), "database or cache", "databases and caches") }</p>
 			</div>
+		</div>
+		<section class="fleet-group">
+			<div class="group-bar">
+				<h2>Apps</h2>
+				<details class="disclose disclose-inline">
+					<summary class="btn btn-ghost btn-sm">New app</summary>
+					<form method="post" action={ "/projects/" + p.Slug + "/apps" } class="disclose-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<input type="text" name="name" placeholder="App name" maxlength="64" required/>
+						<button class="btn btn-primary" type="submit">Create app</button>
+					</form>
+				</details>
+			</div>
+			if len(rows) == 0 {
+				<div class="empty">
+					<p>No apps yet.</p>
+					<p>Create an app, then deploy a container image or connect a git repository.</p>
+				</div>
+			} else {
+				<div class="rows">
+					for _, r := range rows {
+						@appRow(r, false)
+					}
+				</div>
+			}
+		</section>
+		<section class="fleet-group">
+			<div class="group-bar">
+				<h2>Databases &amp; caches</h2>
+				<details class="disclose disclose-inline">
+					<summary class="btn btn-ghost btn-sm">New database or cache</summary>
+					<form method="post" action={ "/projects/" + p.Slug + "/services" } class="disclose-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<input type="text" name="name" placeholder="Service name" maxlength="64" required/>
+						<select name="type">
+							<option value="postgres">PostgreSQL</option>
+							<option value="mysql">MySQL</option>
+							<option value="redis">Redis</option>
+						</select>
+						<button class="btn btn-primary" type="submit">Create</button>
+					</form>
+				</details>
+			</div>
+			if len(svcs) == 0 {
+				<div class="empty">
+					<p>No databases or caches yet.</p>
+					<p>Create one and apps in this project get its connection URL automatically.</p>
+				</div>
+			} else {
+				<div class="rows">
+					for _, sv := range svcs {
+						@serviceRow(sv)
+					}
+				</div>
+			}
+		</section>
+		<section class="fleet-group danger-bar">
 			<form method="post" action={ "/projects/" + p.Slug + "/delete" } onsubmit="return confirm('Delete this project and everything in it?')">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<button class="btn btn-danger" type="submit">Delete project</button>
+				<button class="btn btn-danger btn-sm" type="submit">Delete project</button>
 			</form>
-		</div>
-
-		<div class="section-title">Apps</div>
-		<form method="post" action={ "/projects/" + p.Slug + "/apps" } class="inline-form">
-			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-			<input type="text" name="name" placeholder="app name" maxlength="64" required/>
-			<button class="btn btn-primary" type="submit">Create app</button>
-		</form>
-
-		if len(apps) == 0 {
-			<div class="empty">
-				<p>No apps yet.</p>
-				<p>Create an app above, then deploy a container image to it.</p>
-			</div>
-		} else {
-			<div class="card-grid">
-				for _, a := range apps {
-					@appCard(a)
-				}
-			</div>
-		}
-
-		<div class="section-title">Databases &amp; caches</div>
-		<form method="post" action={ "/projects/" + p.Slug + "/services" } class="inline-form">
-			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-			<input type="text" name="name" placeholder="service name" maxlength="64" required/>
-			<select name="type">
-				<option value="postgres">PostgreSQL</option>
-				<option value="mysql">MySQL</option>
-				<option value="redis">Redis</option>
-			</select>
-			<button class="btn btn-primary" type="submit">Create service</button>
-		</form>
-
-		if len(svcs) == 0 {
-			<div class="empty">
-				<p>No databases or caches yet.</p>
-				<p>Create one above — apps in this project get its connection URL automatically.</p>
-			</div>
-		} else {
-			<div class="card-grid">
-				for _, sv := range svcs {
-					@serviceCard(sv)
-				}
-			</div>
-		}
+		</section>
 	}
 }

@@ -204,21 +204,6 @@ select { cursor: pointer; }
 }
 .section-title:not(:first-child) { margin-top: 36px; }
 
-/* ---- cards ----------------------------------------------------------- */
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 14px;
-}
-.project-card {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px;
-  display: block;
-  transition: border-color 0.15s, transform 0.15s;
-}
-.project-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
-.card-title { font-weight: 500; font-size: 15px; }
-.card-meta { font-family: var(--font-mono); font-size: 13px; color: var(--muted); margin-top: 6px; }
 
 /* ---- empty states ---------------------------------------------------- */
 .empty {
@@ -245,18 +230,6 @@ select { cursor: pointer; }
 .badge-accent { color: var(--amber); border-color: color-mix(in srgb, var(--amber) 40%, transparent); }
 .badge-dev { color: var(--blue); border-color: color-mix(in srgb, var(--blue) 40%, transparent); }
 
-/* ---- app cards ------------------------------------------------------- */
-.app-card {
-  background: var(--panel); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 18px;
-  display: block;
-  transition: border-color 0.15s, transform 0.15s;
-}
-.app-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
-/* Wrap the badge row: status + health + env + image can be four pills, which
-   overflowed and clipped ("product:", spilled image) on a narrow card. */
-.app-card-foot { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-.app-image { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 
 /* ---- panels ---------------------------------------------------------- */
 .panel {
@@ -663,4 +636,90 @@ select { cursor: pointer; }
   .tab { padding: 10px 10px; font-size: 13.5px; }
   h1 { font-size: 23px; }
   .app-actions { width: 100%; }
+}
+
+/* ==========================================================================
+   Fleet board — projects and project pages
+   One row per app: lamp, name + plain-words state, what is running, and the
+   24-hour heartbeat (the page's signature). Whole row is the link.
+   ========================================================================== */
+.fleet-summary { margin-top: 6px; font-size: 15px; display: flex; gap: 8px; flex-wrap: wrap; color: var(--muted); }
+.sum-ok { color: var(--green); font-weight: 600; }
+.sum-bad { color: var(--red); font-weight: 600; }
+.sum-quiet { color: var(--muted); }
+.sum-sep { color: var(--faint); }
+
+.fleet-group { margin-bottom: 30px; }
+.group-bar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.group-bar h2 { font-size: 17px; font-weight: 650; letter-spacing: -0.01em; }
+.group-bar h2 a:hover { color: var(--accent); }
+.group-bar .group-open { margin-left: auto; font-size: 13.5px; }
+.group-empty { padding: 10px 2px; }
+.attention .group-bar h2 { color: var(--red); }
+.danger-bar { margin-top: 40px; padding-top: 18px; border-top: 1px solid var(--border); }
+
+.rows { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--panel); box-shadow: var(--shadow); }
+.app-row {
+  display: grid; grid-template-columns: 14px minmax(180px, 1.5fr) minmax(130px, 1fr) minmax(190px, 1.1fr) 56px;
+  align-items: center; gap: 16px; padding: 13px 16px;
+  border-bottom: 1px solid var(--border); transition: background 0.12s;
+}
+.app-row:last-child { border-bottom: none; }
+.app-row:hover { background: var(--panel-2); }
+.app-row-attn { background: color-mix(in srgb, var(--red) 5%, var(--panel)); }
+.app-row-attn:hover { background: color-mix(in srgb, var(--red) 9%, var(--panel-2)); }
+.row-main { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.row-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.row-name { font-weight: 600; font-size: 15px; }
+.row-title .badge { margin: 0; }
+.row-project { font-size: 12.5px; color: var(--muted); }
+.row-sub { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.row-reason { color: var(--red); }
+.row-reason-warn { color: var(--amber); }
+.row-deploy { display: flex; flex-direction: column; gap: 2px; font-size: 13px; min-width: 0; overflow-wrap: anywhere; }
+.row-uptime { font-size: 13px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* lamps */
+.lamp { width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); justify-self: center; }
+.lamp-up { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 20%, transparent); }
+.lamp-down { background: var(--red); box-shadow: 0 0 0 3px color-mix(in srgb, var(--red) 22%, transparent); }
+.lamp-stopped { background: var(--faint); }
+
+/* the heartbeat: 24 one-hour cells, newest on the right; a notch marks hours
+   in which something was deployed */
+.strip { display: flex; gap: 2px; align-items: flex-end; height: 24px; }
+.hb { position: relative; flex: 1; min-width: 4px; height: 100%; border-radius: 2px; background: var(--panel-2); border: 1px solid var(--border); }
+.hb-up { background: color-mix(in srgb, var(--green) 78%, var(--panel)); border-color: transparent; }
+.hb-down { background: var(--red); border-color: transparent; }
+.hb-stopped { background: var(--border-strong); border-color: transparent; height: 40%; }
+.hb-none { background: transparent; border-style: dashed; height: 40%; }
+.hb-deploy::after {
+  content: ""; position: absolute; left: 50%; top: -5px; width: 5px; height: 5px;
+  border-radius: 50%; background: var(--accent); transform: translateX(-50%);
+}
+.strip { padding-top: 5px; }
+
+/* New project / app / service: a button that opens its own small form */
+.disclose { position: relative; }
+.disclose summary { list-style: none; cursor: pointer; user-select: none; }
+.disclose summary::-webkit-details-marker { display: none; }
+.disclose-form { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; }
+.disclose[open] > summary { opacity: 0.7; }
+.disclose-inline { margin-left: auto; }
+.disclose-inline .disclose-form {
+  position: absolute; right: 0; z-index: 4; padding: 12px; background: var(--panel);
+  border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  width: max-content; max-width: calc(100vw - 32px);
+}
+.page-head .disclose .disclose-form {
+  position: absolute; right: 0; z-index: 4; padding: 12px; background: var(--panel);
+  border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  width: max-content; max-width: calc(100vw - 32px);
+}
+
+@media (max-width: 760px) {
+  .app-row { grid-template-columns: 14px 1fr auto; row-gap: 8px; }
+  .row-deploy { grid-column: 2 / 4; flex-direction: row; gap: 8px; align-items: baseline; }
+  .strip { grid-column: 2 / 3; }
+  .row-uptime { grid-column: 3 / 4; }
 }

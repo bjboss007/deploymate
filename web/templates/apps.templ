@@ -103,21 +103,6 @@ templ envBadge(env string) {
 	}
 }
 
-templ appCard(app store.App) {
-	<a class="app-card" href={ "/apps/" + app.Slug }>
-		<div class="card-title">{ app.Name }</div>
-		<div class="card-meta">/{ app.Slug }</div>
-		<div class="app-card-foot">
-			@statusBadge(app.Status)
-			@healthBadge(app.Health)
-			@envBadge(app.Environment)
-			if app.Image != "" {
-				<span class="mono app-image">{ app.Image }</span>
-			}
-		</div>
-	</a>
-}
-
 // AppHeadActions is swapped in whole by the start/stop/restart HTMX calls,
 // so the status badge lives inside it: every action visibly flips the badge
 // and the button set. hx-disabled-elt greys out the clicked button while the

@@ -2,21 +2,6 @@ package templates
 
 import "github.com/habibmuhammad/deploymate/internal/store"
 
-templ serviceCard(sv store.Service) {
-	<a class="app-card" href={ "/services/" + sv.Slug }>
-		<div class="card-title">{ sv.Name }</div>
-		<div class="card-meta">{ sv.Type } · { sv.Image }</div>
-		<div class="app-card-foot">
-			@statusBadge(sv.Status)
-			@envBadge(sv.Environment)
-			if sv.Orphaned {
-				<span class="badge badge-failed">orphaned</span>
-			}
-			<span class="mono app-image">:{ sv.Port }</span>
-		</div>
-	</a>
-}
-
 // BackupView carries a service's backup config + catalog to the page. The
 // objects are a page-local copy — the destination listing is the catalog,
 // so rows are re-listed on every page load.

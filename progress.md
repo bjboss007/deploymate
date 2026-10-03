@@ -7,6 +7,33 @@
 
 ## Where we stopped
 
+**2026-10-03 (UI redesign, step 3: fleet board)** — **Live server restarted
+first on the step-1+2 build** (pid 29055, snapshot `pre-ui1-*.db`, apps
+healthy). Then the **fleet board**: `/projects` is now "Fleet" — a one-line
+status ("3 apps healthy · 2 need attention · 2 stopped"), a **Needs
+attention** list on top (apps not serving, with the *real* reason: the failed
+deploy's error, "failing its health check", "container gone"; each names its
+project), then every project's apps as rows: lamp, name + env + plain-words
+state, running version + age, the **24-hour heartbeat strip** (the page
+signature) and uptime %. The project page uses the same rows for apps and
+services, and the create forms (project / app / service) moved behind small
+"New …" disclosure buttons instead of leading the page (Esc closes, first field
+focuses). **Heartbeat** = `internal/fleet/heartbeat.go` (+tests): 24 hourly
+cells from data DeployMate already records — lifecycle/health *events*
+(`app_started`, `health_unhealthy`, `health_recovered`, `app_stopped`, …) and
+*deployments* (a running deploy = up; each deploy puts a notch on its hour;
+scale/resize are not deploys). Worst state wins per cell (down > up > stopped >
+none); the tail is anchored to the app's current state so the strip never
+disagrees with the lamp. `internal/httpserver/fleet.go` builds rows
+(`appRows`, `attentionFor`, `summarize`); `projects.templ` rewritten;
+`appCard`/`serviceCard` and their CSS removed; tests `fleet_test.go`. Checked
+in the browser pane (dark/light, desktop/375 px) on a seeded scratch fleet.
+Limits to know: the strip is event-derived, not a 30-second sample (apps
+without events show dashed "no data" cells); events are read newest-300 per
+app. **Not on the live server yet.** **Next:** deployment + log pages (failure
+causes in plain words), services pages, login/empty/error states, restyle the
+remaining mono-heavy pages (stats, alerts, releases, history, service page).
+
 **2026-10-02 (UI redesign, step 1+2: foundation + app page)** — Owner asked
 for a UI/UX redesign (designer skill; dark default + light option; start with
 the app page). **Audit:** projects page = names only; app page = one 3,000 px

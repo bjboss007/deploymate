@@ -30,6 +30,10 @@ One Go binary, one server, Docker as the compute substrate.
   select a **runtime** — Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno,
   Elixir, .NET, static sites — built with Railpack, no Dockerfile needed,
   optionally version-pinned
+- **Fleet board** — the home page answers "is anything broken?": one status
+  line, a *Needs attention* list with the real failure reason, and a row per app
+  with a 24-hour heartbeat strip (up/down/stopped per hour, notches for
+  deploys). Dark by default, light theme one click away.
 - **Prebuilt deploys (GitHub Actions)** — for JVM apps too big to build on a
   small server: a workflow in your repo builds the JAR, DeployMate downloads
   that one artifact (fine-grained, read-only token, one repo) and runs it in a

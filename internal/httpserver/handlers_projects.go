@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -44,7 +45,28 @@ func (s *Server) handleProjectsList(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	render(w, r, http.StatusOK, templates.ProjectsPage(s.viewCtx(r), projects))
+	now := time.Now()
+	groups := make([]templates.ProjectGroup, 0, len(projects))
+	for _, p := range projects {
+		apps, err := s.store.ListApps(p.ID)
+		if err != nil {
+			slog.Error("projects: list apps", "err", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		svcs, err := s.store.ListServices(p.ID)
+		if err != nil {
+			slog.Error("projects: list services", "err", err)
+			http.Error(w, "internal error", http.StatusInternalServerError)
+			return
+		}
+		rows := s.appRows(apps, now)
+		for i := range rows {
+			rows[i].Project = p.Name
+		}
+		groups = append(groups, templates.ProjectGroup{Project: p, Rows: rows, Services: svcs})
+	}
+	render(w, r, http.StatusOK, templates.ProjectsPage(s.viewCtx(r), groups, summarize(groups)))
 }
 
 func (s *Server) handleProjectCreate(w http.ResponseWriter, r *http.Request) {
@@ -92,7 +114,7 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, apps, svcs))
+	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, s.appRows(apps, time.Now()), svcs))
 }
 
 func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {

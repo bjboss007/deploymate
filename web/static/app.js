@@ -335,3 +335,15 @@ document.addEventListener("click", (e) => {
   });
   window.addEventListener("hashchange", () => { const d = fromHash(); if (d) show(d.name, { anchor: d.anchor }); });
 })();
+
+
+// --- disclosure forms ("New app", "New project", …) -----------------------
+// Opening one focuses its first field; Escape closes it.
+document.addEventListener("toggle", (e) => {
+  const d = e.target;
+  if (d.classList && d.classList.contains("disclose") && d.open) d.querySelector("input, select")?.focus();
+}, true);
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape") return;
+  document.querySelectorAll("details.disclose[open]").forEach((d) => { d.open = false; });
+});
