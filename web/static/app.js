@@ -17,7 +17,7 @@ document.body.addEventListener("click", (e) => {
   if (!btn) return;
   const src = document.getElementById(btn.dataset.copy || "");
   if (!src) return;
-  const text = src.textContent.trim();
+  const text = (src.innerText || src.textContent).trim();
   const done = () => {
     const old = btn.textContent;
     btn.textContent = "Copied";
@@ -61,6 +61,7 @@ function confirmRestore(form) {
 // hang. Lines are buffered, flushed once per frame, and the panel keeps
 // at most MAX_LOG_LINES nodes.
 const MAX_LOG_LINES = 400;
+const LOG_ERR = /\b(error|exception|fatal|failed|denied|refused|killed|panic)\b/i;
 
 function attachLogStream(panel) {
   const src = panel.dataset.logSrc;
@@ -84,6 +85,7 @@ function attachLogStream(panel) {
     for (const text of pending) {
       const div = document.createElement("div");
       div.textContent = text; // textContent: build logs are data, not HTML
+      if (LOG_ERR.test(text)) div.className = "log-err";
       frag.appendChild(div);
     }
     panel.appendChild(frag);
@@ -346,4 +348,18 @@ document.addEventListener("toggle", (e) => {
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   document.querySelectorAll("details.disclose[open]").forEach((d) => { d.open = false; });
+});
+
+
+// --- "Jump to first error" on the deployment log --------------------------
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-log-jump]");
+  if (!btn) return;
+  const panel = document.getElementById(btn.dataset.logJump);
+  if (!panel) return;
+  panel.querySelectorAll(".log-hit").forEach((n) => n.classList.remove("log-hit"));
+  const hit = [...panel.children].find((n) => n.classList && n.classList.contains("log-err"));
+  if (!hit) { btn.textContent = "No errors in the log"; setTimeout(() => { btn.textContent = "Jump to first error"; }, 1800); return; }
+  hit.classList.add("log-hit");
+  panel.scrollTop = Math.max(0, hit.offsetTop - panel.offsetTop - 40);
 });

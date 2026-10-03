@@ -99,3 +99,36 @@ func TestFleetBoard(t *testing.T) {
 		t.Error("create forms must sit behind a disclosure button")
 	}
 }
+
+// TestDeploymentPageExplainsFailure: a failed deployment shows the raw error,
+// what it usually means, links to the right app tabs, and what is serving.
+func TestDeploymentPageExplainsFailure(t *testing.T) {
+	st, app := replicaTestEnv(t, store.App{Name: "Erp", Slug: "erp", Status: "running", Port: 8080})
+	d, err := st.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "deploy", Status: "failed", Trigger: "dashboard", CommitSHA: "17177b387e9d", CommitMessage: "Add deploymate.yml",
+		Error: `swap: staged container failed readiness probe: Get "http://127.0.0.1:1/": EOF — the container exited with code 1`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := &Server{store: st}
+	req := httptest.NewRequest(http.MethodGet, "/deployments/"+d.ID, nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		"What went wrong", "the container exited with code 1", // the raw error
+		"The app crashed while starting",                 // what it usually means
+		`href="/apps/erp#variables"`,                     // a link to the fix
+		"Failed — the previous version is still serving", // what is serving
+		"Add deploymate.yml", "Jump to first error", "Copy log",
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("deployment page lacks %q", want)
+		}
+	}
+}

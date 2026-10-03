@@ -438,7 +438,7 @@ change.
   `JDBC_DATABASE_URL`, `REDIS_HOST/PORT`, `MYSQL_*`) so
   `DB_USER=${DATABASE_USER}` aliasing just works. Additive: existing apps
   see new variables only.
-- [ ] **Keep evidence when the readiness probe fails** — found by the real-project
+- [x] **Keep evidence when the readiness probe fails** (done 2026-10-03: `runtime.Evidence` + `swap.Options.OnProbeFailed`; the exit state is in the error and the container's last 40 lines are in the build log; the probe window is still 30 x 2 s) — found by the real-project
   test (2026-10-02): a JVM OOM-killed during startup surfaced only as
   `swap: staged container failed readiness probe: ... EOF`, because the staged
   container is removed before anyone reads why it died. Before removing it,

@@ -7,6 +7,31 @@
 
 ## Where we stopped
 
+**2026-10-03 (UI redesign, step 4: deployment page + failure evidence)** —
+**Failures now explain themselves.** (1) *Evidence*: when a new container
+fails its readiness probe, DeployMate now records why BEFORE removing it —
+`runtime.Evidence` (exit code / OOM kill / "running but silent" + the last 40
+log lines, demuxed), handed to `swap.Options.OnProbeFailed` and written into the
+deployment's build log (`── the new container's last output ──`), with the
+state summary appended to the error ("… EOF — the container exited with code
+1"). `runtime.Info` gained `ExitCode`/`OOMKilled`. Tests: `swap_test.go`
+(`TestSwapProbeFailureKeepsEvidence`, OOM naming). Closes the improvements.md
+"keep evidence" item. (2) *Explain*: `internal/builder/explain.go` maps known
+failures (crash on start, OOM on start, silent app, service not ready —
+incl. the Redis-version/volume trap —, build OOM, GitHub token rejected, CI
+artifact shape, git fetch, `deploymate.yml`) to a plain-words title plus hints
+that link to the right app tab (`/apps/{slug}#variables|settings|logs`); nil for
+anything unknown (the raw error always stays visible). Used by the app
+Overview banner and the deployment page. (3) *Deployment page* redesigned:
+title = commit message / image, facts (Result: serving now / failed — previous
+version still serving / failed — nothing serving, Triggered by, Took), "What
+went wrong" (raw error + explanation + links), the log with **Jump to first
+error** and **Copy log** (error lines tinted; copy keeps line breaks), and
+**Roll back to this** when eligible. Checked in the browser pane on a seeded
+failed deploy. **Not on the live server yet.** **Next:** services pages,
+login/empty/error states, remaining mono-heavy pages (stats, alerts, releases,
+history, deploy review).
+
 **2026-10-03 (UI redesign, step 3: fleet board)** — **Live server restarted
 first on the step-1+2 build** (pid 29055, snapshot `pre-ui1-*.db`, apps
 healthy). Then the **fleet board**: `/projects` is now "Fleet" — a one-line
@@ -30,7 +55,7 @@ disagrees with the lamp. `internal/httpserver/fleet.go` builds rows
 in the browser pane (dark/light, desktop/375 px) on a seeded scratch fleet.
 Limits to know: the strip is event-derived, not a 30-second sample (apps
 without events show dashed "no data" cells); events are read newest-300 per
-app. **Not on the live server yet.** **Next:** deployment + log pages (failure
+app. **Live server restarted on this build** (pid 58342, snapshot `pre-fleet-*.db`). **Next:** deployment + log pages (failure
 causes in plain words), services pages, login/empty/error states, restyle the
 remaining mono-heavy pages (stats, alerts, releases, history, service page).
 

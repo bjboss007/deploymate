@@ -11,6 +11,7 @@ import templruntime "github.com/a-h/templ/runtime"
 import (
 	"fmt"
 
+	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -109,7 +110,7 @@ func statusDot(state, label string) templ.Component {
 		var templ_7745c5c3_Var2 string
 		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 72, Col: 8}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 73, Col: 8}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 		if templ_7745c5c3_Err != nil {
@@ -268,7 +269,7 @@ func envBadge(env string) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(env)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 98, Col: 37}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 99, Col: 37}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -286,7 +287,7 @@ func envBadge(env string) templ.Component {
 			var templ_7745c5c3_Var7 string
 			templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(env)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 100, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 101, Col: 40}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 			if templ_7745c5c3_Err != nil {
@@ -304,7 +305,7 @@ func envBadge(env string) templ.Component {
 			var templ_7745c5c3_Var8 string
 			templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(env)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 102, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 103, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 			if templ_7745c5c3_Err != nil {
@@ -362,7 +363,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var10 templ.SafeURL
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/restart")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 116, Col: 64}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 117, Col: 64}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -375,7 +376,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.Slug + "/restart")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 117, Col: 46}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 118, Col: 46}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 			if templ_7745c5c3_Err != nil {
@@ -388,7 +389,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var12 string
 			templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 120, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 121, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var12)
 			if templ_7745c5c3_Err != nil {
@@ -407,7 +408,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var13 templ.SafeURL
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/stop")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 125, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 126, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -420,7 +421,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.Slug + "/stop")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 126, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 127, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var14)
 			if templ_7745c5c3_Err != nil {
@@ -433,7 +434,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var15 string
 			templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 129, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 130, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var15)
 			if templ_7745c5c3_Err != nil {
@@ -451,7 +452,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var16 templ.SafeURL
 			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/start")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 133, Col: 62}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 134, Col: 62}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 			if templ_7745c5c3_Err != nil {
@@ -464,7 +465,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.Slug + "/start")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 134, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 135, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var17)
 			if templ_7745c5c3_Err != nil {
@@ -477,7 +478,7 @@ func AppHeadActions(vc ViewCtx, app store.App) templ.Component {
 			var templ_7745c5c3_Var18 string
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 137, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 138, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var18)
 			if templ_7745c5c3_Err != nil {
@@ -527,7 +528,7 @@ func appVersion(app store.App, deployments []store.Deployment) templ.Component {
 			var templ_7745c5c3_Var20 string
 			templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(versionLabel(cur))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 148, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 149, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 			if templ_7745c5c3_Err != nil {
@@ -540,7 +541,7 @@ func appVersion(app store.App, deployments []store.Deployment) templ.Component {
 			var templ_7745c5c3_Var21 string
 			templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(ago(cur.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 150, Col: 23}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 151, Col: 23}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 			if templ_7745c5c3_Err != nil {
@@ -558,7 +559,7 @@ func appVersion(app store.App, deployments []store.Deployment) templ.Component {
 				var templ_7745c5c3_Var22 string
 				templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(clip(cur.CommitMessage, 60))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 152, Col: 36}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 153, Col: 36}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 				if templ_7745c5c3_Err != nil {
@@ -577,7 +578,7 @@ func appVersion(app store.App, deployments []store.Deployment) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(clip(app.Image, 40))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 156, Col: 51}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 157, Col: 51}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -634,13 +635,19 @@ func appDiagnosis(app store.App, deployments []store.Deployment, healthReason st
 				var templ_7745c5c3_Var25 string
 				templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(clip(deployments[0].Error, 400))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 172, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 173, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 44, "</p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+			}
+			if ex := builder.Explain(deployments[0].Error); ex != nil {
+				templ_7745c5c3_Err = explainBlock(app, ex).Render(ctx, templ_7745c5c3_Buffer)
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
@@ -652,7 +659,7 @@ func appDiagnosis(app store.App, deployments []store.Deployment, healthReason st
 			var templ_7745c5c3_Var26 templ.SafeURL
 			templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/deployments/" + deployments[0].ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 175, Col: 93}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 179, Col: 93}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 			if templ_7745c5c3_Err != nil {
@@ -680,7 +687,7 @@ func appDiagnosis(app store.App, deployments []store.Deployment, healthReason st
 			var templ_7745c5c3_Var27 string
 			templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(healthReason)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 184, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 188, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 			if templ_7745c5c3_Err != nil {
@@ -735,7 +742,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 			var templ_7745c5c3_Var29 templ.SafeURL
 			templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/deployments/" + d.ID))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 215, Col: 74}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 219, Col: 74}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var29))
 			if templ_7745c5c3_Err != nil {
@@ -757,7 +764,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var30 string
 				templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.JoinStringErrs(d.ImageTag)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 220, Col: 21}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 224, Col: 21}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var30))
 				if templ_7745c5c3_Err != nil {
@@ -772,7 +779,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 					var templ_7745c5c3_Var31 templ.SafeURL
 					templ_7745c5c3_Var31, templ_7745c5c3_Err = templ.JoinURLErrs(commitURL)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 223, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 227, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var31))
 					if templ_7745c5c3_Err != nil {
@@ -785,7 +792,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 					var templ_7745c5c3_Var32 string
 					templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(commitURL)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 223, Col: 100}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 227, Col: 100}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 					if templ_7745c5c3_Err != nil {
@@ -798,7 +805,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 					var templ_7745c5c3_Var33 string
 					templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.JoinStringErrs(shortDeployID(d.CommitSHA))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 223, Col: 131}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 227, Col: 131}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var33))
 					if templ_7745c5c3_Err != nil {
@@ -812,7 +819,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 					var templ_7745c5c3_Var34 string
 					templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.JoinStringErrs(shortDeployID(d.CommitSHA))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 225, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 229, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var34))
 					if templ_7745c5c3_Err != nil {
@@ -837,7 +844,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var35 string
 				templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(clip(d.Error, 140))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 232, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 236, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 				if templ_7745c5c3_Err != nil {
@@ -855,7 +862,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var36 string
 				templ_7745c5c3_Var36, templ_7745c5c3_Err = templ.JoinStringErrs(clip(d.CommitMessage, 90))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 234, Col: 57}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 238, Col: 57}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var36))
 				if templ_7745c5c3_Err != nil {
@@ -874,7 +881,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var37 string
 				templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.JoinStringErrs(d.Trigger)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 239, Col: 19}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 243, Col: 19}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var37))
 				if templ_7745c5c3_Err != nil {
@@ -884,7 +891,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var38 string
 				templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.JoinStringErrs(d.Kind)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 241, Col: 16}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 245, Col: 16}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var38))
 				if templ_7745c5c3_Err != nil {
@@ -898,7 +905,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 			var templ_7745c5c3_Var39 string
 			templ_7745c5c3_Var39, templ_7745c5c3_Err = templ.ResolveAttributeValue(shortTime(d.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 244, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 248, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var39)
 			if templ_7745c5c3_Err != nil {
@@ -911,7 +918,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 			var templ_7745c5c3_Var40 string
 			templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.JoinStringErrs(ago(d.CreatedAt))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 244, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 248, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var40))
 			if templ_7745c5c3_Err != nil {
@@ -929,7 +936,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var41 templ.SafeURL
 				templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.JoinURLErrs("/deployments/" + d.ID + "/rollback")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 247, Col: 73}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 251, Col: 73}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var41))
 				if templ_7745c5c3_Err != nil {
@@ -942,7 +949,7 @@ func deploymentsTable(vc ViewCtx, app store.App, ds []store.Deployment, commitUR
 				var templ_7745c5c3_Var42 string
 				templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 248, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 252, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 				if templ_7745c5c3_Err != nil {
@@ -1004,7 +1011,7 @@ func appDeployAction(vc ViewCtx, app store.App, git *GitInfo) templ.Component {
 			var templ_7745c5c3_Var44 templ.SafeURL
 			templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/git/deploy-latest")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 268, Col: 73}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 272, Col: 73}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 			if templ_7745c5c3_Err != nil {
@@ -1017,7 +1024,7 @@ func appDeployAction(vc ViewCtx, app store.App, git *GitInfo) templ.Component {
 			var templ_7745c5c3_Var45 string
 			templ_7745c5c3_Var45, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 269, Col: 57}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 273, Col: 57}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var45)
 			if templ_7745c5c3_Err != nil {
@@ -1035,7 +1042,7 @@ func appDeployAction(vc ViewCtx, app store.App, git *GitInfo) templ.Component {
 			var templ_7745c5c3_Var46 templ.SafeURL
 			templ_7745c5c3_Var46, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + app.Slug + "/deploy-preview"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 273, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 277, Col: 90}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var46))
 			if templ_7745c5c3_Err != nil {
@@ -1090,7 +1097,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var49 string
 			templ_7745c5c3_Var49, templ_7745c5c3_Err = templ.JoinStringErrs(app.Name)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 282, Col: 19}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 286, Col: 19}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var49))
 			if templ_7745c5c3_Err != nil {
@@ -1111,7 +1118,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var50 templ.SafeURL
 			templ_7745c5c3_Var50, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL(previewURL))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 286, Col: 61}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 290, Col: 61}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var50))
 			if templ_7745c5c3_Err != nil {
@@ -1124,7 +1131,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var51 string
 			templ_7745c5c3_Var51, templ_7745c5c3_Err = templ.JoinStringErrs(previewURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 286, Col: 107}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 290, Col: 107}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var51))
 			if templ_7745c5c3_Err != nil {
@@ -1154,7 +1161,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var52 string
 				templ_7745c5c3_Var52, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(len(envVars)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 301, Col: 55}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 305, Col: 55}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var52))
 				if templ_7745c5c3_Err != nil {
@@ -1172,7 +1179,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var53 templ.SafeURL
 			templ_7745c5c3_Var53, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + app.Slug + "/history"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 305, Col: 80}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 309, Col: 80}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var53))
 			if templ_7745c5c3_Err != nil {
@@ -1218,7 +1225,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var54 string
 				templ_7745c5c3_Var54, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d of %d replicas answering", replicas.Healthy, len(replicas.Slots)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 323, Col: 111}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 327, Col: 111}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var54))
 				if templ_7745c5c3_Err != nil {
@@ -1236,7 +1243,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var55 string
 				templ_7745c5c3_Var55, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d replicas", len(replicas.Slots)))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 325, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 329, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var55))
 				if templ_7745c5c3_Err != nil {
@@ -1272,7 +1279,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var56 string
 				templ_7745c5c3_Var56, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d MB", app.MemLimitMB))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 337, Col: 72}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 341, Col: 72}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var56))
 				if templ_7745c5c3_Err != nil {
@@ -1285,7 +1292,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var57 string
 				templ_7745c5c3_Var57, templ_7745c5c3_Err = templ.JoinStringErrs(fmtCPU(app.CPULimit))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 338, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 342, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var57))
 				if templ_7745c5c3_Err != nil {
@@ -1318,7 +1325,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var58 string
 					templ_7745c5c3_Var58, templ_7745c5c3_Err = templ.JoinStringErrs(dm.Hostname)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 352, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 356, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var58))
 					if templ_7745c5c3_Err != nil {
@@ -1373,7 +1380,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var59 string
 					templ_7745c5c3_Var59, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("r%d", sl.Slot))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 376, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 380, Col: 51}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var59)
 					if templ_7745c5c3_Err != nil {
@@ -1386,7 +1393,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var60 string
 					templ_7745c5c3_Var60, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("r%d only", sl.Slot))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 376, Col: 88}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 380, Col: 88}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var60))
 					if templ_7745c5c3_Err != nil {
@@ -1442,7 +1449,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var61 templ.SafeURL
 				templ_7745c5c3_Var61, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/deploy")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 412, Col: 65}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 416, Col: 65}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var61))
 				if templ_7745c5c3_Err != nil {
@@ -1455,7 +1462,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var62 string
 				templ_7745c5c3_Var62, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 413, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 417, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var62)
 				if templ_7745c5c3_Err != nil {
@@ -1468,7 +1475,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var63 string
 				templ_7745c5c3_Var63, templ_7745c5c3_Err = templ.ResolveAttributeValue(app.Image)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 415, Col: 83}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 419, Col: 83}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var63)
 				if templ_7745c5c3_Err != nil {
@@ -1481,7 +1488,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var64 string
 				templ_7745c5c3_Var64, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtPort(app.Port))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 418, Col: 99}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 422, Col: 99}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var64)
 				if templ_7745c5c3_Err != nil {
@@ -1494,7 +1501,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var65 string
 				templ_7745c5c3_Var65, templ_7745c5c3_Err = templ.ResolveAttributeValue(app.Entrypoint)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 421, Col: 107}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 425, Col: 107}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var65)
 				if templ_7745c5c3_Err != nil {
@@ -1507,7 +1514,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var66 string
 				templ_7745c5c3_Var66, templ_7745c5c3_Err = templ.ResolveAttributeValue(app.Command)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 424, Col: 101}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 428, Col: 101}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var66)
 				if templ_7745c5c3_Err != nil {
@@ -1526,7 +1533,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var67 string
 				templ_7745c5c3_Var67, templ_7745c5c3_Err = templ.JoinStringErrs(git.RepoURL)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 435, Col: 38}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 439, Col: 38}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var67))
 				if templ_7745c5c3_Err != nil {
@@ -1539,7 +1546,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var68 string
 				templ_7745c5c3_Var68, templ_7745c5c3_Err = templ.JoinStringErrs(git.DefaultBranch)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 436, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 440, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var68))
 				if templ_7745c5c3_Err != nil {
@@ -1571,7 +1578,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var69 templ.SafeURL
 					templ_7745c5c3_Var69, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/git/test")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 444, Col: 69}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 448, Col: 69}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var69))
 					if templ_7745c5c3_Err != nil {
@@ -1584,7 +1591,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var70 string
 					templ_7745c5c3_Var70, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 445, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 449, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var70)
 					if templ_7745c5c3_Err != nil {
@@ -1607,7 +1614,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var71 templ.SafeURL
 			templ_7745c5c3_Var71, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/apps/" + app.Slug + "/releases"))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 455, Col: 82}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 459, Col: 82}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var71))
 			if templ_7745c5c3_Err != nil {
@@ -1645,7 +1652,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var72 string
 					templ_7745c5c3_Var72, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprintf("r%d", sl.Slot))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 472, Col: 51}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 476, Col: 51}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var72)
 					if templ_7745c5c3_Err != nil {
@@ -1658,7 +1665,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var73 string
 					templ_7745c5c3_Var73, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("r%d only", sl.Slot))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 472, Col: 88}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 476, Col: 88}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var73))
 					if templ_7745c5c3_Err != nil {
@@ -1681,7 +1688,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var74 string
 			templ_7745c5c3_Var74, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.Slug + "/logs")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 477, Col: 81}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 481, Col: 81}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var74)
 			if templ_7745c5c3_Err != nil {
@@ -1709,7 +1716,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var75 string
 					templ_7745c5c3_Var75, templ_7745c5c3_Err = templ.JoinStringErrs(v.Key)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 493, Col: 33}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 497, Col: 33}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var75))
 					if templ_7745c5c3_Err != nil {
@@ -1732,7 +1739,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 						var templ_7745c5c3_Var76 string
 						templ_7745c5c3_Var76, templ_7745c5c3_Err = templ.JoinStringErrs(v.Value)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 497, Col: 36}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 501, Col: 36}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var76))
 						if templ_7745c5c3_Err != nil {
@@ -1750,7 +1757,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var77 templ.SafeURL
 					templ_7745c5c3_Var77, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/env/" + v.ID + "/delete")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 500, Col: 87}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 504, Col: 87}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var77))
 					if templ_7745c5c3_Err != nil {
@@ -1763,7 +1770,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var78 string
 					templ_7745c5c3_Var78, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 501, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 505, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var78)
 					if templ_7745c5c3_Err != nil {
@@ -1786,7 +1793,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var79 templ.SafeURL
 			templ_7745c5c3_Var79, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/env/bulk")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 510, Col: 66}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 514, Col: 66}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var79))
 			if templ_7745c5c3_Err != nil {
@@ -1799,7 +1806,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var80 string
 			templ_7745c5c3_Var80, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 511, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 515, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var80)
 			if templ_7745c5c3_Err != nil {
@@ -1812,7 +1819,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var81 string
 			templ_7745c5c3_Var81, templ_7745c5c3_Err = templ.ResolveAttributeValue("DB_URL=jdbc:postgresql://host:5432/app\nDB_USER=dm\nDB_PASSWORD=...\n# comments and blank lines are fine")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 526, Col: 195}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 530, Col: 195}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var81)
 			if templ_7745c5c3_Err != nil {
@@ -1825,7 +1832,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var82 string
 			templ_7745c5c3_Var82, templ_7745c5c3_Err = templ.JoinStringErrs("${MYSQL_URL}")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 532, Col: 228}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 536, Col: 228}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var82))
 			if templ_7745c5c3_Err != nil {
@@ -1838,7 +1845,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var83 string
 			templ_7745c5c3_Var83, templ_7745c5c3_Err = templ.JoinStringErrs("${REDIS_URL}")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 532, Col: 285}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 536, Col: 285}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var83))
 			if templ_7745c5c3_Err != nil {
@@ -1851,7 +1858,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var84 string
 			templ_7745c5c3_Var84, templ_7745c5c3_Err = templ.JoinStringErrs("${DATABASE_URL}")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 532, Col: 308}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 536, Col: 308}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var84))
 			if templ_7745c5c3_Err != nil {
@@ -1869,7 +1876,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var85 templ.SafeURL
 				templ_7745c5c3_Var85, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/git")
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 549, Col: 62}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 553, Col: 62}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var85))
 				if templ_7745c5c3_Err != nil {
@@ -1882,7 +1889,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var86 string
 				templ_7745c5c3_Var86, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 550, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 554, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var86)
 				if templ_7745c5c3_Err != nil {
@@ -1900,7 +1907,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var87 string
 				templ_7745c5c3_Var87, templ_7745c5c3_Err = templ.JoinStringErrs(git.RepoURL)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 573, Col: 39}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 577, Col: 39}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var87))
 				if templ_7745c5c3_Err != nil {
@@ -1913,7 +1920,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var88 string
 				templ_7745c5c3_Var88, templ_7745c5c3_Err = templ.JoinStringErrs(git.Provider)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 573, Col: 77}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 577, Col: 77}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var88))
 				if templ_7745c5c3_Err != nil {
@@ -1926,7 +1933,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var89 string
 				templ_7745c5c3_Var89, templ_7745c5c3_Err = templ.JoinStringErrs(git.DefaultBranch)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 573, Col: 100}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 577, Col: 100}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var89))
 				if templ_7745c5c3_Err != nil {
@@ -1939,7 +1946,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var90 string
 				templ_7745c5c3_Var90, templ_7745c5c3_Err = templ.JoinStringErrs(git.PublicKey)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 577, Col: 50}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 581, Col: 50}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var90))
 				if templ_7745c5c3_Err != nil {
@@ -1952,7 +1959,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var91 string
 				templ_7745c5c3_Var91, templ_7745c5c3_Err = templ.JoinStringErrs(git.WebhookPath)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 581, Col: 60}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 585, Col: 60}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var91))
 				if templ_7745c5c3_Err != nil {
@@ -1965,7 +1972,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 				var templ_7745c5c3_Var92 string
 				templ_7745c5c3_Var92, templ_7745c5c3_Err = templ.JoinStringErrs(git.WebhookSecret)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 585, Col: 45}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 589, Col: 45}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var92))
 				if templ_7745c5c3_Err != nil {
@@ -1983,7 +1990,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var93 templ.SafeURL
 					templ_7745c5c3_Var93, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/git/deploy-latest")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 591, Col: 79}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 595, Col: 79}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var93))
 					if templ_7745c5c3_Err != nil {
@@ -1996,7 +2003,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var94 string
 					templ_7745c5c3_Var94, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 592, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 596, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var94)
 					if templ_7745c5c3_Err != nil {
@@ -2009,7 +2016,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var95 templ.SafeURL
 					templ_7745c5c3_Var95, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/git/test")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 595, Col: 70}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 599, Col: 70}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var95))
 					if templ_7745c5c3_Err != nil {
@@ -2022,7 +2029,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var96 string
 					templ_7745c5c3_Var96, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 596, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 600, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var96)
 					if templ_7745c5c3_Err != nil {
@@ -2040,7 +2047,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var97 templ.SafeURL
 					templ_7745c5c3_Var97, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/deploy-preview")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 600, Col: 81}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 604, Col: 81}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var97))
 					if templ_7745c5c3_Err != nil {
@@ -2063,7 +2070,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var98 string
 					templ_7745c5c3_Var98, templ_7745c5c3_Err = templ.JoinStringErrs(git.DefaultBranch)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 605, Col: 149}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 609, Col: 149}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var98))
 					if templ_7745c5c3_Err != nil {
@@ -2081,7 +2088,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var99 string
 					templ_7745c5c3_Var99, templ_7745c5c3_Err = templ.JoinStringErrs(git.DefaultBranch)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 607, Col: 162}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 611, Col: 162}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var99))
 					if templ_7745c5c3_Err != nil {
@@ -2104,7 +2111,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var100 templ.SafeURL
 					templ_7745c5c3_Var100, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/deploy-mode")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 612, Col: 72}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 616, Col: 72}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var100))
 					if templ_7745c5c3_Err != nil {
@@ -2117,7 +2124,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var101 string
 					templ_7745c5c3_Var101, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 613, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 617, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var101)
 					if templ_7745c5c3_Err != nil {
@@ -2150,7 +2157,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var102 string
 					templ_7745c5c3_Var102, templ_7745c5c3_Err = templ.ResolveAttributeValue(git.WorkflowPath)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 621, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 625, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var102)
 					if templ_7745c5c3_Err != nil {
@@ -2163,7 +2170,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var103 string
 					templ_7745c5c3_Var103, templ_7745c5c3_Err = templ.ResolveAttributeValue(git.ArtifactName)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 624, Col: 94}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 628, Col: 94}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var103)
 					if templ_7745c5c3_Err != nil {
@@ -2206,7 +2213,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 						var templ_7745c5c3_Var104 string
 						templ_7745c5c3_Var104, templ_7745c5c3_Err = templ.JoinStringErrs(git.WorkflowPath)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 641, Col: 88}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 645, Col: 88}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var104))
 						if templ_7745c5c3_Err != nil {
@@ -2219,7 +2226,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 						var templ_7745c5c3_Var105 string
 						templ_7745c5c3_Var105, templ_7745c5c3_Err = templ.JoinStringErrs(git.WorkflowGradle)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 644, Col: 49}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 648, Col: 49}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var105))
 						if templ_7745c5c3_Err != nil {
@@ -2232,7 +2239,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 						var templ_7745c5c3_Var106 string
 						templ_7745c5c3_Var106, templ_7745c5c3_Err = templ.JoinStringErrs(git.WorkflowMaven)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 649, Col: 47}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 653, Col: 47}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var106))
 						if templ_7745c5c3_Err != nil {
@@ -2256,7 +2263,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var107 templ.SafeURL
 			templ_7745c5c3_Var107, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/runtime")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 659, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 663, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var107))
 			if templ_7745c5c3_Err != nil {
@@ -2269,7 +2276,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var108 string
 			templ_7745c5c3_Var108, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 660, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 664, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var108)
 			if templ_7745c5c3_Err != nil {
@@ -2402,7 +2409,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var109 string
 			templ_7745c5c3_Var109, templ_7745c5c3_Err = templ.ResolveAttributeValue(runtimeVersion(app.Runtime))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 678, Col: 127}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 682, Col: 127}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var109)
 			if templ_7745c5c3_Err != nil {
@@ -2430,7 +2437,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var110 templ.SafeURL
 			templ_7745c5c3_Var110, templ_7745c5c3_Err = templ.JoinURLErrs(previewURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 700, Col: 53}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 704, Col: 53}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var110))
 			if templ_7745c5c3_Err != nil {
@@ -2443,7 +2450,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var111 string
 			templ_7745c5c3_Var111, templ_7745c5c3_Err = templ.JoinStringErrs(previewURL)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 700, Col: 99}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 704, Col: 99}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var111))
 			if templ_7745c5c3_Err != nil {
@@ -2471,7 +2478,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var112 string
 					templ_7745c5c3_Var112, templ_7745c5c3_Err = templ.JoinStringErrs(dm.Hostname)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 716, Col: 47}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 720, Col: 47}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var112))
 					if templ_7745c5c3_Err != nil {
@@ -2484,7 +2491,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var113 string
 					templ_7745c5c3_Var113, templ_7745c5c3_Err = templ.JoinStringErrs(dm.TLSStatus)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 717, Col: 27}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 721, Col: 27}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var113))
 					if templ_7745c5c3_Err != nil {
@@ -2497,7 +2504,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var114 templ.SafeURL
 					templ_7745c5c3_Var114, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/domains/" + dm.ID + "/delete")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 719, Col: 92}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 723, Col: 92}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var114))
 					if templ_7745c5c3_Err != nil {
@@ -2510,7 +2517,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 					var templ_7745c5c3_Var115 string
 					templ_7745c5c3_Var115, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 720, Col: 65}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 724, Col: 65}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var115)
 					if templ_7745c5c3_Err != nil {
@@ -2533,7 +2540,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var116 templ.SafeURL
 			templ_7745c5c3_Var116, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/domains")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 729, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 733, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var116))
 			if templ_7745c5c3_Err != nil {
@@ -2546,7 +2553,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var117 string
 			templ_7745c5c3_Var117, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 730, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 734, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var117)
 			if templ_7745c5c3_Err != nil {
@@ -2559,7 +2566,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var118 string
 			templ_7745c5c3_Var118, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.Slug + "/port")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 734, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 738, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var118)
 			if templ_7745c5c3_Err != nil {
@@ -2572,7 +2579,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var119 string
 			templ_7745c5c3_Var119, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmtPort(app.Port))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 734, Col: 125}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 738, Col: 125}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var119)
 			if templ_7745c5c3_Err != nil {
@@ -2585,7 +2592,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var120 string
 			templ_7745c5c3_Var120, templ_7745c5c3_Err = templ.ResolveAttributeValue("/apps/" + app.Slug + "/port")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 735, Col: 91}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 739, Col: 91}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var120)
 			if templ_7745c5c3_Err != nil {
@@ -2621,7 +2628,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var121 templ.SafeURL
 			templ_7745c5c3_Var121, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/environment")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 754, Col: 69}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 758, Col: 69}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var121))
 			if templ_7745c5c3_Err != nil {
@@ -2634,7 +2641,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var122 string
 			templ_7745c5c3_Var122, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 755, Col: 59}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 759, Col: 59}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var122)
 			if templ_7745c5c3_Err != nil {
@@ -2677,7 +2684,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var123 string
 			templ_7745c5c3_Var123, templ_7745c5c3_Err = templ.JoinStringErrs("deploymate.{env}.yml")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 765, Col: 266}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 769, Col: 266}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var123))
 			if templ_7745c5c3_Err != nil {
@@ -2690,7 +2697,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var124 templ.SafeURL
 			templ_7745c5c3_Var124, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/delete")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 773, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 777, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var124))
 			if templ_7745c5c3_Err != nil {
@@ -2703,7 +2710,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			var templ_7745c5c3_Var125 string
 			templ_7745c5c3_Var125, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 774, Col: 60}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 778, Col: 60}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var125)
 			if templ_7745c5c3_Err != nil {
@@ -2754,7 +2761,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var127 templ.SafeURL
 		templ_7745c5c3_Var127, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/replicas")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 789, Col: 64}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 793, Col: 64}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var127))
 		if templ_7745c5c3_Err != nil {
@@ -2767,7 +2774,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var128 string
 		templ_7745c5c3_Var128, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 790, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 794, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var128)
 		if templ_7745c5c3_Err != nil {
@@ -2780,7 +2787,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var129 string
 		templ_7745c5c3_Var129, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(ri.Max))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 792, Col: 92}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 796, Col: 92}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var129)
 		if templ_7745c5c3_Err != nil {
@@ -2793,7 +2800,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var130 string
 		templ_7745c5c3_Var130, templ_7745c5c3_Err = templ.ResolveAttributeValue(fmt.Sprint(ri.Desired))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 792, Col: 125}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 796, Col: 125}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var130)
 		if templ_7745c5c3_Err != nil {
@@ -2806,7 +2813,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var131 templ.SafeURL
 		templ_7745c5c3_Var131, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + app.Slug + "/health-path")
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 796, Col: 67}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 800, Col: 67}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var131))
 		if templ_7745c5c3_Err != nil {
@@ -2819,7 +2826,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var132 string
 		templ_7745c5c3_Var132, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 797, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 801, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var132)
 		if templ_7745c5c3_Err != nil {
@@ -2832,7 +2839,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var133 string
 		templ_7745c5c3_Var133, templ_7745c5c3_Err = templ.ResolveAttributeValue(ri.HealthPath)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 799, Col: 79}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 803, Col: 79}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var133)
 		if templ_7745c5c3_Err != nil {
@@ -2855,7 +2862,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 				var templ_7745c5c3_Var134 string
 				templ_7745c5c3_Var134, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("r%d", sl.Slot))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 811, Col: 53}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 815, Col: 53}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var134))
 				if templ_7745c5c3_Err != nil {
@@ -2868,7 +2875,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 				var templ_7745c5c3_Var135 string
 				templ_7745c5c3_Var135, templ_7745c5c3_Err = templ.JoinStringErrs(sl.Name)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 812, Col: 33}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 816, Col: 33}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var135))
 				if templ_7745c5c3_Err != nil {
@@ -2928,7 +2935,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 					var templ_7745c5c3_Var136 templ.SafeURL
 					templ_7745c5c3_Var136, templ_7745c5c3_Err = templ.JoinURLErrs(templ.SafeURL("/deployments/" + sl.DeployID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 827, Col: 83}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 831, Col: 83}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var136))
 					if templ_7745c5c3_Err != nil {
@@ -2941,7 +2948,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 					var templ_7745c5c3_Var137 string
 					templ_7745c5c3_Var137, templ_7745c5c3_Err = templ.JoinStringErrs(shortDeployID(sl.DeployID))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 827, Col: 114}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 831, Col: 114}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var137))
 					if templ_7745c5c3_Err != nil {
@@ -2980,7 +2987,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 			var templ_7745c5c3_Var138 string
 			templ_7745c5c3_Var138, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d/%d replicas on the current deployment %s", ri.OnTarget, len(ri.Slots), shortDeployID(ri.Target)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 840, Col: 126}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 844, Col: 126}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var138))
 			if templ_7745c5c3_Err != nil {
@@ -2995,7 +3002,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 			var templ_7745c5c3_Var139 string
 			templ_7745c5c3_Var139, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d desired, %d running — applied on the next deploy or scale.", ri.Desired, len(ri.Slots)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 843, Col: 111}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 847, Col: 111}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var139))
 			if templ_7745c5c3_Err != nil {
@@ -3013,7 +3020,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var140 string
 		templ_7745c5c3_Var140, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprint(ri.Max))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 845, Col: 42}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 849, Col: 42}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var140))
 		if templ_7745c5c3_Err != nil {
@@ -3026,7 +3033,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 		var templ_7745c5c3_Var141 string
 		templ_7745c5c3_Var141, templ_7745c5c3_Err = templ.JoinStringErrs(ri.HealthPath)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 845, Col: 168}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 849, Col: 168}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var141))
 		if templ_7745c5c3_Err != nil {
@@ -3044,7 +3051,7 @@ func replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) templ.Component {
 			var templ_7745c5c3_Var142 string
 			templ_7745c5c3_Var142, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d MB · %s CPU", app.MemLimitMB*ri.Desired, fmtCPU(app.CPULimit*float64(ri.Desired))))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 848, Col: 161}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/apps.templ`, Line: 852, Col: 161}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var142))
 			if templ_7745c5c3_Err != nil {

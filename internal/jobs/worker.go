@@ -502,6 +502,27 @@ func (w *Worker) swapSlot(ctx context.Context, app store.App, slot int, o slotOp
 		ProbeURL:      w.probeURL,
 		ProbeAttempts: w.probeAttempts,
 		ProbeInterval: w.probeInterval,
+		// The failed container is removed right after; keep what it said.
+		OnProbeFailed: func(summary string, lines []string) {
+			emit := func(line string) {
+				if err := w.store.AppendBuildLog(o.routerDeployID, "system", line); err != nil {
+					slog.Error("worker: append build log", "err", err)
+				}
+				w.publish("deploy:"+app.Slug, "log", line)
+			}
+			if summary != "" {
+				emit("the new container failed its health probe: " + summary)
+			}
+			if len(lines) == 0 {
+				emit("(the container printed nothing)")
+				return
+			}
+			emit("── the new container's last output ──")
+			for _, l := range lines {
+				emit(l)
+			}
+			emit("── end of container output ──")
+		},
 	})
 }
 

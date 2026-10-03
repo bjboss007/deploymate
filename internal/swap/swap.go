@@ -46,7 +46,15 @@ type Options struct {
 	// SIGKILL, so an app that shuts down gracefully finishes its in-flight
 	// requests instead of having them reset. Default DefaultDrainTimeoutSec.
 	DrainTimeoutSec int
+	// OnProbeFailed, when set, receives the new container's evidence (a
+	// one-sentence state summary and its last log lines) just before it is
+	// removed for failing its readiness probe — once it is gone nobody can
+	// ask it why.
+	OnProbeFailed func(summary string, lines []string)
 }
+
+// evidenceLines is how much of a failing container's output is kept.
+const evidenceLines = 40
 
 // DefaultDrainTimeoutSec is the old container's SIGTERM grace period.
 const DefaultDrainTimeoutSec = 10
@@ -89,7 +97,14 @@ func Swap(ctx context.Context, rt runtime.Runtime, canonical string, spec runtim
 	// nothing and skip the probe — the swap is start→remove→rename only.
 	if spec.HostPort > 0 {
 		if err := probeReady(ctx, probeURL(spec.HostPort), attempts, interval); err != nil {
+			summary, lines := runtime.Evidence(ctx, rt, spec.Name, evidenceLines)
+			if o.OnProbeFailed != nil {
+				o.OnProbeFailed(summary, lines)
+			}
 			_ = rt.Remove(ctx, spec.Name)
+			if summary != "" {
+				return fmt.Errorf("%w: %v — %s", ErrStagedFailed, err, summary)
+			}
 			return fmt.Errorf("%w: %v", ErrStagedFailed, err)
 		}
 	}

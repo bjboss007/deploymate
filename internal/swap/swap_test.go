@@ -216,3 +216,61 @@ func TestSwapDrainsOldContainer(t *testing.T) {
 		t.Fatalf("removed = %v, want the old container after its drain", rt.removed)
 	}
 }
+
+// dyingRuntime is a recordingRuntime whose container has exited: Inspect
+// reports the exit, Logs returns docker's multiplexed stream (stdcopy
+// frames: 1 = stdout, 2 = stderr).
+type dyingRuntime struct {
+	*recordingRuntime
+	info runtime.Info
+	logs []byte
+}
+
+func (d *dyingRuntime) Inspect(context.Context, string) (runtime.Info, error) { return d.info, nil }
+func (d *dyingRuntime) Logs(context.Context, string, bool, int) (io.ReadCloser, error) {
+	return io.NopCloser(strings.NewReader(string(d.logs))), nil
+}
+
+func frame(stream byte, text string) []byte {
+	n := len(text)
+	h := []byte{stream, 0, 0, 0, byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}
+	return append(h, text...)
+}
+
+// TestSwapProbeFailureKeepsEvidence: when the staged container fails its
+// probe, its exit state and last output are handed to OnProbeFailed (and the
+// state summarised in the error) BEFORE it is removed — the gap that made an
+// app crashing at startup read only "readiness probe: EOF".
+func TestSwapProbeFailureKeepsEvidence(t *testing.T) {
+	logs := append(frame(1, "Starting TradeStackApplication\n"), frame(2, "ERROR Flyway: Unable to obtain connection from database\n")...)
+	rt := &dyingRuntime{recordingRuntime: &recordingRuntime{}, info: runtime.Info{State: "exited", ExitCode: 1}, logs: logs}
+	var gotSummary string
+	var gotLines []string
+	err := Swap(context.Background(), rt, "dm-erp", stagedSpec(27001), Options{
+		ProbeURL:      func(int) string { return "http://127.0.0.1:1/" },
+		ProbeAttempts: 1,
+		ProbeInterval: time.Millisecond,
+		OnProbeFailed: func(summary string, lines []string) { gotSummary, gotLines = summary, lines },
+	})
+	if !errors.Is(err, ErrStagedFailed) || !strings.Contains(err.Error(), "the container exited with code 1") {
+		t.Fatalf("err = %v, want ErrStagedFailed mentioning the exit code", err)
+	}
+	if gotSummary != "the container exited with code 1" {
+		t.Errorf("summary = %q", gotSummary)
+	}
+	if len(gotLines) != 2 || !strings.Contains(gotLines[1], "Flyway: Unable to obtain connection") {
+		t.Errorf("lines = %q", gotLines)
+	}
+	if len(rt.removed) == 0 {
+		t.Error("the failed container must still be removed after the evidence is taken")
+	}
+
+	// An OOM kill is named as such.
+	rt2 := &dyingRuntime{recordingRuntime: &recordingRuntime{}, info: runtime.Info{State: "exited", ExitCode: 137, OOMKilled: true}}
+	err = Swap(context.Background(), rt2, "dm-erp", stagedSpec(27001), Options{
+		ProbeURL: func(int) string { return "http://127.0.0.1:1/" }, ProbeAttempts: 1, ProbeInterval: time.Millisecond,
+	})
+	if err == nil || !strings.Contains(err.Error(), "killed for lack of memory") {
+		t.Errorf("OOM err = %v", err)
+	}
+}

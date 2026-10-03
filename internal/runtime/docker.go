@@ -233,6 +233,8 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		Running:        ctr.State.Running,
 		State:          ctr.State.Status,
 		Restarts:       ctr.RestartCount,
+		ExitCode:       ctr.State.ExitCode,
+		OOMKilled:      ctr.State.OOMKilled,
 		PublishedPorts: ports,
 		MemLimitMB:     ctr.HostConfig.Memory >> 20,
 		CPULimit:       float64(ctr.HostConfig.NanoCPUs) / 1e9,

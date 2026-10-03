@@ -3,6 +3,7 @@ package templates
 import (
 	"fmt"
 
+	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -170,6 +171,9 @@ templ appDiagnosis(app store.App, deployments []store.Deployment, healthReason s
 			<div class="diagnosis-title">The last deploy failed</div>
 			if deployments[0].Error != "" {
 				<p class="diagnosis-body">{ clip(deployments[0].Error, 400) }</p>
+			}
+			if ex := builder.Explain(deployments[0].Error); ex != nil {
+				@explainBlock(app, ex)
 			}
 			<div class="diagnosis-actions">
 				<a class="btn btn-ghost btn-sm" href={ templ.SafeURL("/deployments/" + deployments[0].ID) }>Read the build log</a>

@@ -1,6 +1,67 @@
 package templates
 
-import "github.com/habibmuhammad/deploymate/internal/store"
+import (
+	"fmt"
+	"time"
+
+	"github.com/habibmuhammad/deploymate/internal/builder"
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+// deployResult says in one phrase what this deployment amounts to right now.
+func deployResult(app store.App, d store.Deployment) (text, tone string) {
+	switch d.Status {
+	case "queued", "building":
+		return "In progress", "warn"
+	case "failed":
+		if app.Status == "running" {
+			return "Failed — the previous version is still serving", "warn"
+		}
+		return "Failed — nothing is serving", "bad"
+	case "running":
+		if app.CurrentDeploymentID == d.ID {
+			return "Serving now", "ok"
+		}
+		return "Replaced by a newer deployment", "quiet"
+	}
+	return d.Status, "quiet"
+}
+
+// deployTook is how long the deployment ran, "" until it has finished.
+func deployTook(d store.Deployment) string {
+	s, err1 := time.Parse(time.RFC3339Nano, d.StartedAt)
+	f, err2 := time.Parse(time.RFC3339Nano, d.FinishedAt)
+	if err1 != nil || err2 != nil || f.Before(s) {
+		return ""
+	}
+	dur := f.Sub(s).Round(time.Second)
+	if dur < time.Minute {
+		return fmt.Sprintf("%d s", int(dur.Seconds()))
+	}
+	return fmt.Sprintf("%d min %d s", int(dur.Minutes()), int(dur.Seconds())%60)
+}
+
+func canRollBack(app store.App, d store.Deployment) bool {
+	return d.ImageTag != "" && d.ID != app.CurrentDeploymentID && d.Kind != "rollback" && d.Kind != "scale" && d.Status == "running"
+}
+
+// explainBlock is the "what this usually means / what to try" part of a
+// failure, shared by the Overview banner and the deployment page.
+templ explainBlock(app store.App, ex *builder.Explanation) {
+	<div class="explain">
+		<div class="explain-title">{ ex.Title }</div>
+		<ul class="explain-hints">
+			for _, h := range ex.Hints {
+				<li>
+					{ h.Text }
+					if h.Tab != "" {
+						<a class="text-link" href={ templ.SafeURL("/apps/" + app.Slug + "#" + h.Tab) }>Open { h.Tab } →</a>
+					}
+				</li>
+			}
+		</ul>
+	</div>
+}
 
 templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.Deployment, commitURL string) {
 	@Layout(vc, "Deploy "+app.Name, "", []Crumb{
@@ -10,35 +71,89 @@ templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.D
 	}) {
 		<div class="page-head">
 			<div>
-				<h1>Deployment</h1>
-				<p class="muted">
-					if d.CommitSHA != "" {
-						if commitURL != "" {
-							<a class="mono deploy-link" href={ commitURL } target="_blank" rel="noopener">{ d.CommitSHA } ↗</a>
-						} else {
-							<span class="mono">{ d.CommitSHA }</span>
-						}
-						if d.CommitMessage != "" {
-							<span> — { d.CommitMessage }</span>
-						}
+				<h1>
+					if d.CommitMessage != "" {
+						{ clip(d.CommitMessage, 90) }
+					} else if d.ImageTag != "" {
+						Deploy { d.ImageTag }
 					} else {
-						<span>manual deploy</span>
+						Deployment
+					}
+				</h1>
+				<p class="muted-text dep-sub">
+					{ app.Name }
+					if d.CommitSHA != "" {
+						·
+						if commitURL != "" {
+							<a class="mono deploy-link" href={ commitURL } target="_blank" rel="noopener">{ shortDeployID(d.CommitSHA) } ↗</a>
+						} else {
+							<span class="mono">{ shortDeployID(d.CommitSHA) }</span>
+						}
 					}
 				</p>
 			</div>
-			<div class="head-actions">
+			<div class="app-actions">
 				@statusBadge(d.Status)
+				if canRollBack(app, d) {
+					<form method="post" action={ "/deployments/" + d.ID + "/rollback" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-ghost" type="submit">Roll back to this</button>
+					</form>
+				}
+				<a class="btn btn-ghost" href={ templ.SafeURL("/apps/" + app.Slug + "#deployments") }>All deployments</a>
 			</div>
 		</div>
 
-		if d.Error != "" {
-			<div class="flash flash-error">{ d.Error }</div>
+		<div class="facts facts-4">
+			<div class="fact fact-wide">
+				<div class="fact-label">Result</div>
+				{{ text, tone := deployResult(app, d) }}
+				<div class={ "fact-main", "result-" + tone }>{ text }</div>
+			</div>
+			<div class="fact">
+				<div class="fact-label">Triggered by</div>
+				<div class="fact-main">
+					if d.Trigger != "" {
+						{ d.Trigger }
+					} else {
+						{ d.Kind }
+					}
+				</div>
+				<div class="fact-sub">{ ago(d.CreatedAt) }</div>
+			</div>
+			<div class="fact">
+				<div class="fact-label">Took</div>
+				if took := deployTook(d); took != "" {
+					<div class="fact-main">{ took }</div>
+				} else {
+					<div class="fact-main muted-text">—</div>
+				}
+			</div>
+		</div>
+
+		if d.Status == "failed" {
+			<div class="diagnosis diagnosis-bad" role="alert">
+				<div class="diagnosis-title">What went wrong</div>
+				if d.Error != "" {
+					<pre class="diagnosis-raw">{ d.Error }</pre>
+				} else {
+					<p class="diagnosis-body">No error was recorded. The log below has what happened.</p>
+				}
+				if ex := builder.Explain(d.Error); ex != nil {
+					@explainBlock(app, ex)
+				}
+			</div>
 		}
 
 		<div class="panel">
-			<div class="panel-title">Build &amp; deploy log</div>
-			<div id="logs" class="log-panel" data-log-src={ "/deployments/" + d.ID + "/stream" }>
-				<span class="log-wait">connecting — history replays automatically…</span>
+			<div class="panel-title">Build &amp; deploy log
+				<span class="log-tools">
+					<button class="btn btn-ghost btn-sm" type="button" data-log-jump="logs">Jump to first error</button>
+					<button class="btn btn-ghost btn-sm js-copy" type="button" data-copy="logs">Copy log</button>
+				</span>
+			</div>
+			<div id="logs" class="log-panel log-tall" data-log-src={ "/deployments/" + d.ID + "/stream" }>
+				<span class="log-wait">Connecting — history replays automatically…</span>
 			</div>
 		</div>
 	}
