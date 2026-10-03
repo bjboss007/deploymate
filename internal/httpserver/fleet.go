@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/fleet"
+	"github.com/habibmuhammad/deploymate/internal/services"
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
@@ -133,4 +135,80 @@ func summarize(groups []templates.ProjectGroup) templates.FleetSummary {
 		}
 	}
 	return sm
+}
+
+// appServices are the services an app receives: those of its project in the
+// same environment (the connection-URL injection rule).
+func appServices(app store.App, svcs []store.Service) []store.Service {
+	var out []store.Service
+	for _, sv := range svcs {
+		if sv.Environment == app.Environment {
+			out = append(out, sv)
+		}
+	}
+	return out
+}
+
+// applyResourceHealth turns "the app is running but a database or cache it
+// uses is not" into an attention reason — the app answers, but it is about to
+// fail the first request that needs its data. Failed or already-unhealthy
+// apps keep their own, more specific, reason.
+func applyResourceHealth(rows []templates.AppRow, svcs []store.Service) {
+	for i := range rows {
+		r := &rows[i]
+		if r.App.Status != "running" || r.Attention == "bad" {
+			continue
+		}
+		for _, sv := range appServices(r.App, svcs) {
+			if sv.Status == "running" {
+				continue
+			}
+			label := sv.Type
+			if tpl, ok := services.ForType(sv.Type); ok {
+				label = tpl.Label
+			}
+			r.Attention, r.Reason = "bad", "Running, but its "+label+" is down."
+			break
+		}
+	}
+}
+
+// buildAppCards groups each app with the resources it uses, and returns the
+// services no app in the project gets (their environment has no apps).
+func buildAppCards(rows []templates.AppRow, svcs []store.Service) (cards []templates.AppCard, unused []templates.ResourceChip) {
+	chip := func(sv store.Service) templates.ResourceChip {
+		c := templates.ResourceChip{Service: sv, EnvKey: sv.Type}
+		if tpl, ok := services.ForType(sv.Type); ok {
+			c.EnvKey = tpl.URLEnv
+		}
+		var peers []string
+		for _, r := range rows {
+			if r.App.Environment == sv.Environment {
+				peers = append(peers, r.App.Name)
+			}
+		}
+		c.Shared = len(peers) > 1
+		c.Peers = strings.Join(peers, ", ")
+		return c
+	}
+	for _, r := range rows {
+		card := templates.AppCard{Row: r, Identity: stack.Resolve(r.App)}
+		for _, sv := range appServices(r.App, svcs) {
+			card.Resources = append(card.Resources, chip(sv))
+		}
+		cards = append(cards, card)
+	}
+	for _, sv := range svcs {
+		used := false
+		for _, r := range rows {
+			if r.App.Environment == sv.Environment {
+				used = true
+				break
+			}
+		}
+		if !used {
+			unused = append(unused, chip(sv))
+		}
+	}
+	return cards, unused
 }

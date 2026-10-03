@@ -125,3 +125,24 @@ func TestCIIdempotencyAndOrdering(t *testing.T) {
 		t.Errorf("latest = %d after a non-CI deployment, want 4", n)
 	}
 }
+
+func TestAppearanceColumns(t *testing.T) {
+	st, app := newReplicaTestApp(t)
+	if app.Logo != "" || app.Accent != "" || app.Stack != "" {
+		t.Fatalf("defaults must be empty (automatic): %+v", app)
+	}
+	if err := st.UpdateAppAppearance(app.ID, "react", "pink"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpdateAppStack(app.ID, "spring"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := st.GetAppBySlug(app.Slug)
+	if err != nil || got.Logo != "react" || got.Accent != "pink" || got.Stack != "spring" {
+		t.Fatalf("round trip = %+v, %v", got, err)
+	}
+	byID, _ := st.GetAppByID(app.ID)
+	if byID.Logo != "react" {
+		t.Errorf("GetAppByID lost the logo: %+v", byID)
+	}
+}

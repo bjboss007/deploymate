@@ -214,3 +214,81 @@ func TestPendingEnvBanner(t *testing.T) {
 		t.Error("banner/Redeploy missing after a variable change")
 	}
 }
+
+// TestProjectPageGroupsAppsWithTheirResources: each app is one card carrying
+// its identity colour and logo, with the databases/caches of its environment
+// inside it; a service that is down turns its apps red; services no app gets
+// are listed apart.
+func TestProjectPageGroupsAppsWithTheirResources(t *testing.T) {
+	st, web := replicaTestEnv(t, store.App{Name: "Web", Slug: "web", Status: "running", Health: "healthy", Port: 8080, Environment: "dev", Runtime: "node:22"})
+	erp, err := st.CreateApp(store.App{ProjectID: web.ProjectID, Name: "Erp", Slug: "erp", Status: "running", Health: "healthy", Port: 8080, Environment: "dev", DeployMode: store.DeployModeArtifact, Stack: "spring"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = erp
+	mk := func(name, slug, typ, image, status, env string) {
+		if _, err := st.CreateService(store.Service{ProjectID: web.ProjectID, Type: typ, Name: name, Slug: slug, Image: image, Status: status, Environment: env, Port: 5432}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mk("dev-postgres", "dev-postgres", "postgres", "postgres:16-alpine", "running", "dev")
+	mk("dev-redis", "dev-redis", "redis", "redis:7-alpine", "stopped", "dev")          // down
+	mk("prod-cache", "prod-cache", "redis", "redis:7-alpine", "running", "production") // no production app -> unused
+
+	s := &Server{store: st}
+	req := httptest.NewRequest(http.MethodGet, "/projects/test", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	s.Handler().ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status %d", rec.Code)
+	}
+	body := rec.Body.String()
+	for _, want := range []string{
+		`class="acard`, "Resources this app uses", // the card
+		"Spring on Java 21", "Node.js 22", // stack labels (detected framework / runtime)
+		"PostgreSQL 16", "Redis 7", "DATABASE_URL", "REDIS_URL", // resource chips
+		"Running, but its Redis is down.", // a down resource is surfaced on the app
+		"Stopped · start it",
+		"Not used by any app in this project", "prod-cache", // services nobody gets
+		`class="tile id-`, // identity colour on the logo tile
+		`<path d="M`,      // a real logo mark is drawn
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("project page lacks %q", want)
+		}
+	}
+	if n := strings.Count(body, `class="acard`); n < 2 {
+		t.Errorf("app cards = %d, want 2", n)
+	}
+	if !strings.Contains(body, ">shared<") {
+		t.Error("services used by both apps should be marked shared")
+	}
+}
+
+func TestAppearanceHandler(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	_, loc := e.post(t, "/apps/api/appearance", url.Values{"logo": {"react"}, "accent": {"pink"}})
+	if !strings.Contains(flashOf(t, loc), "Appearance saved") {
+		t.Errorf("flash = %q", flashOf(t, loc))
+	}
+	app, _ := e.reload(t)
+	if app.Logo != "react" || app.Accent != "pink" {
+		t.Fatalf("saved = %q / %q", app.Logo, app.Accent)
+	}
+	// Invalid choices are refused and change nothing.
+	for _, bad := range []url.Values{{"logo": {"not-a-logo"}, "accent": {"pink"}}, {"logo": {"react"}, "accent": {"red"}}} {
+		_, loc := e.post(t, "/apps/api/appearance", bad)
+		if f := flashOf(t, loc); !strings.Contains(f, "isn't available") {
+			t.Errorf("flash = %q", f)
+		}
+	}
+	if app, _ = e.reload(t); app.Logo != "react" || app.Accent != "pink" {
+		t.Errorf("a refused save changed the app: %q / %q", app.Logo, app.Accent)
+	}
+	// Back to automatic.
+	e.post(t, "/apps/api/appearance", url.Values{"logo": {""}, "accent": {""}})
+	if app, _ = e.reload(t); app.Logo != "" || app.Accent != "" {
+		t.Errorf("automatic not restored: %q / %q", app.Logo, app.Accent)
+	}
+}

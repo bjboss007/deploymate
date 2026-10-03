@@ -7,6 +7,35 @@
 
 ## Where we stopped
 
+**2026-10-03 (UI: app cards with logos + identity colour)** — Owner asked to
+group an app with its own resources in one card with technology logos
+(React, Java, Postgres…), then asked that cards be visually distinct. Mockups
+approved ("previous layout with this identity colour"). **Built:** the project
+page now shows each app as a **card**: logo tile (framework, e.g. Spring, with
+the runtime — Java/Node — as a corner badge), name, env, plain-words state with
+the stack label ("Spring on Java 21"), running version and age, and inside it
+the **resources the app uses** as chips (PostgreSQL/MySQL/Redis logo, state,
+engine+version, the variable it receives, a "shared" badge when several apps in
+the environment get it). Rule: an app uses the services of its project in the
+same environment (the existing URL-injection rule). A running app whose
+database/cache is down is flagged ("Running, but its Redis is down." — also on
+the fleet board, `applyResourceHealth`). Services no app gets are listed apart.
+**Identity colour:** a left bar + tinted logo tile from an 8-colour palette that
+avoids red/green/amber (those mean states), stable per app (hash of the slug),
+override in Settings → **Appearance** (also a logo override). The app page
+header shows the same tile. **Pieces:** `internal/logos` (28 Simple Icons marks,
+CC0, generated into `data.go`; trademarks noted), `internal/stack`
+(`Resolve`, `AccentKeyFor`, `DetectDir` — package.json/Gradle/Maven/Python/
+Composer/Gemfile —, `DetectJar` — Spring Boot fat jars), migration **0018**
+(`apps.logo`, `apps.accent`, `apps.stack`), `store.UpdateAppAppearance/Stack`,
+worker records the detected framework on git builds and prebuilt (JAR) deploys
+(an inconclusive scan never clears it), `web/templates/cards.templ`,
+`POST /apps/{slug}/appearance`. Tests added for all of it; checked in the
+browser pane (dark + light). **Not on the live server yet — restarting applies
+migration 18 (snapshot first).** Not done: the fleet-board rows don't show
+the identity colour (project page + app header only); framework detection is a
+best guess (override exists).
+
 **2026-10-03 (Redeploy: applying changed variables)** — Owner saved new env
 vars on `erp` and asked "what about the restart button?". **Restart only
 restarts the existing container, which keeps the env it was created with** —

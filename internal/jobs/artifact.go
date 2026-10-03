@@ -12,6 +12,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/githubci"
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -89,6 +90,7 @@ func (w *Worker) runArtifactDeploy(ctx context.Context, app store.App, d store.D
 	if err != nil {
 		return err
 	}
+	w.recordStack(app, stack.DetectJar(filepath.Join(ctxDir, "app.jar"))) // Spring Boot fat jars show the Spring logo
 	major := builder.JavaMajor(app.Runtime)
 	say(fmt.Sprintf("wrapping %s (%d KB) in eclipse-temurin:%s-jre", jarName, jarSize>>10, major))
 	dockerfile, err := builder.JavaWrapperDockerfile(major)

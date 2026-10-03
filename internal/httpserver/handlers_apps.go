@@ -24,10 +24,12 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/githubci"
+	"github.com/habibmuhammad/deploymate/internal/logos"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/swap"
@@ -1057,4 +1059,33 @@ func (s *Server) envPending(app store.App, deployments []store.Deployment) bool 
 		}
 	}
 	return false
+}
+
+
+// handleAppearance saves the owner's logo and identity-colour choices for
+// the app's cards ("" for either means automatic).
+func (s *Server) handleAppearance(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+	}
+	logo := strings.TrimSpace(r.FormValue("logo"))
+	accent := strings.TrimSpace(r.FormValue("accent"))
+	if logo != "" && !logos.Has(logo) {
+		back("That logo isn't available.")
+		return
+	}
+	if !stack.ValidAccent(accent) {
+		back("That colour isn't available.")
+		return
+	}
+	if err := s.store.UpdateAppAppearance(app.ID, logo, accent); err != nil {
+		slog.Error("apps: save appearance", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	back("Appearance saved.")
 }

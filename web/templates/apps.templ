@@ -4,6 +4,8 @@ import (
 	"fmt"
 
 	"github.com/habibmuhammad/deploymate/internal/builder"
+	"github.com/habibmuhammad/deploymate/internal/logos"
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -296,13 +298,16 @@ templ appDeployAction(vc ViewCtx, app store.App, git *GitInfo) {
 templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo, envPending bool) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<header class="app-head">
-			<div class="app-id">
+			<div class="app-id app-id-tiled">
+				@appTile(stack.Resolve(app))
+				<div class="app-id-text">
 				<div class="app-title">
 					<h1>{ app.Name }</h1>
 					@envBadge(app.Environment)
 				</div>
 				<div class="app-meta">
 					<a class="app-url mono" href={ templ.SafeURL(previewURL) } target="_blank" rel="noopener">{ previewURL } ↗</a>
+				</div>
 				</div>
 			</div>
 			<div class="app-actions">
@@ -573,6 +578,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 				<a href="#set-domains">Domains &amp; access</a>
 				<a href="#set-scaling">Scaling</a>
 				<a href="#set-environment">Environment</a>
+				<a href="#set-appearance">Appearance</a>
 				<a href="#set-danger">Danger zone</a>
 			</nav>
 			<div class="settings-group" id="set-source">
@@ -798,6 +804,31 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 				</form>
 				<p class="muted panel-hint">Which environment this app runs in (new apps start in dev). Each environment resolves its own services (dev apps get dev-postgres, staging apps get staging-postgres, production apps get postgres) and can use a { "deploymate.{env}.yml" } overlay in the repo. One container per app — switching is instant, the next deploy applies it.</p>
 			</div>
+			</div>
+			<div class="settings-group" id="set-appearance">
+				<div class="group-head"><h2>Appearance</h2><p>The logo and colour that identify this app on cards.</p></div>
+				<div class="panel">
+					<form method="post" action={ "/apps/" + app.Slug + "/appearance" } class="appearance-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<label>Logo
+							<select name="logo">
+								<option value="" selected?={ app.Logo == "" }>Automatic ({ stack.Resolve(app).Label })</option>
+								for _, l := range logos.Choices() {
+									<option value={ l.Key } selected?={ app.Logo == l.Key }>{ l.Name }</option>
+								}
+							</select>
+						</label>
+						<fieldset class="swatches">
+							<legend>Colour</legend>
+							<label class="swatch"><input type="radio" name="accent" value="" checked?={ app.Accent == "" }/><span class="sw-name">Automatic</span></label>
+							for _, sw := range stack.Palette {
+								<label class={ "swatch", "id-" + sw.Key }><input type="radio" name="accent" value={ sw.Key } checked?={ app.Accent == sw.Key }/><span class="sw-dot"></span><span class="sw-name">{ sw.Name }</span></label>
+							}
+						</fieldset>
+						<button class="btn btn-primary" type="submit">Save appearance</button>
+					</form>
+					<p class="muted panel-hint">Automatic picks the logo from what DeployMate detects (a framework in the repository or JAR, the runtime, or the image) and a colour from the app's name. Colours avoid red, green and amber, which always mean a state.</p>
+				</div>
 			</div>
 			<div class="settings-group" id="set-danger">
 				<div class="group-head"><h2>Danger zone</h2><p>Actions that can’t be undone.</p></div>

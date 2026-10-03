@@ -376,3 +376,32 @@ func TestBuildModeAppsKeepTheirOldPath(t *testing.T) {
 		t.Errorf("build-mode deploy = %q %q, want the git path's own error", got.Status, got.Error)
 	}
 }
+
+// A Spring Boot fat jar gets the Spring logo: the framework is detected from
+// the jar's entries, stored on the app, and an inconclusive jar never clears
+// it.
+func TestArtifactDeployDetectsSpringBoot(t *testing.T) {
+	s := newArtifactSetup(t)
+	fatJar := zipOf(t, map[string]string{
+		"META-INF/MANIFEST.MF":                "Main-Class: org.springframework.boot.loader.JarLauncher",
+		"BOOT-INF/lib/spring-boot-3.4.4.jar":  "x",
+		"BOOT-INF/classes/com/acme/App.class": "x",
+	})
+	s.goodRun(t, 300, string(fatJar))
+	if got := s.result(t, s.queueRun(t, 300, 30)); got.Status != "running" {
+		t.Fatalf("deployment = %q (%s)", got.Status, got.Error)
+	}
+	app, _ := s.st.GetAppByID(s.app.ID)
+	if app.Stack != "spring" {
+		t.Errorf("app.Stack = %q, want spring", app.Stack)
+	}
+
+	// A later jar that is not recognisably Spring must not erase what is known.
+	s.goodRun(t, 301, "PLAIN-JAR")
+	if got := s.result(t, s.queueRun(t, 301, 31)); got.Status != "running" {
+		t.Fatalf("deployment = %q (%s)", got.Status, got.Error)
+	}
+	if app, _ = s.st.GetAppByID(s.app.ID); app.Stack != "spring" {
+		t.Errorf("an inconclusive scan cleared the stack: %q", app.Stack)
+	}
+}

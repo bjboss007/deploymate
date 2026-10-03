@@ -1,0 +1,146 @@
+package templates
+
+import (
+	"strings"
+
+	"github.com/habibmuhammad/deploymate/internal/logos"
+	"github.com/habibmuhammad/deploymate/internal/stack"
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+// ResourceChip is one database/cache shown inside an app's card.
+type ResourceChip struct {
+	Service store.Service
+	EnvKey  string // the variable apps receive, e.g. DATABASE_URL
+	Shared  bool   // more than one app in the project gets this service
+	Peers   string // names of the apps that get it, for the tooltip
+}
+
+// AppCard is an application with the resources it uses, as one card.
+type AppCard struct {
+	Row       AppRow
+	Identity  stack.Identity
+	Resources []ResourceChip
+}
+
+// engineLabel renders "PostgreSQL 16" from the service's logo name and image
+// tag; a floating tag (latest) or none leaves just the name.
+func engineLabel(sv store.Service) string {
+	name := logos.Get(serviceLogo(sv.Type)).Name
+	tag := ""
+	if i := strings.LastIndex(sv.Image, ":"); i >= 0 {
+		tag = sv.Image[i+1:]
+	}
+	if tag == "" || tag == "latest" {
+		return name
+	}
+	// "16-alpine" -> "16"
+	if j := strings.IndexAny(tag, "-_"); j > 0 {
+		tag = tag[:j]
+	}
+	return name + " " + tag
+}
+
+func serviceLogo(svcType string) string {
+	switch svcType {
+	case "postgres", "mysql", "redis":
+		return svcType
+	}
+	return "docker"
+}
+
+// logoMark draws a technology logo inline; marks whose brand colour is black
+// follow the text colour so they stay visible in both themes.
+templ logoMark(key string) {
+	{{ l := logos.Get(key) }}
+	<svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+		if l.Color != "" {
+			<path d={ l.Path } fill={ l.Color }></path>
+		} else {
+			<path d={ l.Path } fill="currentColor"></path>
+		}
+	</svg>
+}
+
+// appTile is the app's logo in its identity colour, with the runtime as a
+// small corner badge when the logo is a framework.
+templ appTile(id stack.Identity) {
+	<span class={ "tile", "id-" + id.AccentKey } title={ id.Label }>
+		@logoMark(id.Tile)
+		if id.Badge != "" {
+			<span class="tile-badge">
+				@logoMark(id.Badge)
+			</span>
+		}
+	</span>
+}
+
+templ resourceChip(c ResourceChip) {
+	<a class={ "rchip", templ.KV("rchip-bad", c.Service.Status != "running") } href={ templ.SafeURL("/services/" + c.Service.Slug) }>
+		<span class="rtile">
+			@logoMark(serviceLogo(c.Service.Type))
+		</span>
+		<span class="rtext">
+			<span class="rname">
+				{ c.Service.Name }
+				if c.Shared {
+					<span class="badge" title={ "Also used by " + c.Peers }>shared</span>
+				}
+			</span>
+			<span class="rsub">
+				<span class={ "lamp-dot", "lamp-" + svcLamp(c.Service.Status) }></span>
+				if c.Service.Status == "running" {
+					Running
+				} else if c.Service.Status == "failed" {
+					Failed to start · open it
+				} else {
+					Stopped · start it
+				}
+				· { engineLabel(c.Service) } · { c.EnvKey }
+			</span>
+		</span>
+	</a>
+}
+
+// appCardView is the project page's unit: the app (logo, state, version) and,
+// beneath it, the resources it uses.
+templ appCardView(c AppCard) {
+	<div class={ "acard", "id-" + c.Identity.AccentKey, templ.KV("acard-bad", c.Row.Attention == "bad") }>
+		<span class="idbar" aria-hidden="true"></span>
+		<div class="acard-main">
+			<a class="acard-head" href={ templ.SafeURL("/apps/" + c.Row.App.Slug) }>
+				@appTile(c.Identity)
+				<span class="acard-id">
+					<span class="row-title">
+						<span class="row-name">{ c.Row.App.Name }</span>
+						@envBadge(c.Row.App.Environment)
+					</span>
+					<span class="row-sub">
+						<span class={ "lamp-dot", "lamp-" + lampState(c.Row.App) }></span>
+						if c.Row.Reason != "" {
+							<span class={ "row-reason", templ.KV("row-reason-warn", c.Row.Attention == "warn") }>{ c.Row.Reason }</span>
+						} else {
+							{ statusText(c.Row.App) }
+						}
+						· { c.Identity.Label }
+						if c.Row.Last != nil {
+							· <span class="mono">{ versionLabel(*c.Row.Last) }</span> · { ago(c.Row.Last.CreatedAt) }
+						}
+					</span>
+				</span>
+				<span class="acard-go" aria-hidden="true">›</span>
+			</a>
+			<div class="acard-res">
+				<div class="rl">Resources this app uses</div>
+				<div class="rwrap">
+					for _, r := range c.Resources {
+						@resourceChip(r)
+					}
+					if len(c.Resources) == 0 {
+						<a class="rchip rchip-add" href="#services">+ Add a database or cache</a>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+}

@@ -30,6 +30,11 @@ One Go binary, one server, Docker as the compute substrate.
   select a **runtime** — Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno,
   Elixir, .NET, static sites — built with Railpack, no Dockerfile needed,
   optionally version-pinned
+- **App cards** — on a project page each app is one card: its technology logo
+  (React, Spring, Python, nginx… detected from the repo/JAR, the runtime or the
+  image, overridable) with the runtime badge, a stable identity colour, and the
+  databases/caches it uses inside it with their logos and state; a down
+  dependency is flagged on the app.
 - **Fleet board** — the home page answers "is anything broken?": one status
   line, a *Needs attention* list with the real failure reason, and a row per app
   with a 24-hour heartbeat strip (up/down/stopped per hour, notches for

@@ -22,6 +22,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/swap"
@@ -222,6 +223,9 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 		d.CommitSHA, d.CommitMessage = sha, message
 		_ = w.store.UpdateDeployment(d)
 	}
+	// Remember the framework (React, Spring, …) for the app's card. A best
+	// guess from the manifests; nothing from the repo is executed.
+	w.recordStack(app, stack.DetectDir(filepath.Join(checkoutDir, filepath.Clean("/"+app.RootDirectory))))
 	// Webhook deploys skip the review page — leave the same range record in
 	// the build log so every deploy shows what shipped.
 	w.logDiffRecord(ctx, app, gs, d)
@@ -775,3 +779,16 @@ func shortCommit(sha string) string {
 }
 
 func removeTree(dir string) error { return os.RemoveAll(dir) }
+
+
+// recordStack saves a detected framework on the app (for its card logo). An
+// empty detection never clears a known one: an inconclusive scan is not
+// evidence the app changed.
+func (w *Worker) recordStack(app store.App, detected string) {
+	if detected == "" || detected == app.Stack {
+		return
+	}
+	if err := w.store.UpdateAppStack(app.ID, detected); err != nil {
+		slog.Warn("worker: record stack", "app", app.Slug, "err", err)
+	}
+}

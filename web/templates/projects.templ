@@ -286,12 +286,12 @@ templ ProjectsPage(vc ViewCtx, groups []ProjectGroup, sm FleetSummary) {
 	}
 }
 
-templ ProjectPage(vc ViewCtx, p store.Project, rows []AppRow, svcs []store.Service) {
+templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []ResourceChip, anyServices bool) {
 	@Layout(vc, p.Name, "", []Crumb{{Label: p.Name}}) {
 		<div class="page-head">
 			<div>
 				<h1>{ p.Name }</h1>
-				<p class="muted-text">{ plural(len(rows), "app", "apps") } · { plural(len(svcs), "database or cache", "databases and caches") }</p>
+				<p class="muted-text">{ plural(len(cards), "app", "apps") }</p>
 			</div>
 		</div>
 		<section class="fleet-group">
@@ -306,20 +306,20 @@ templ ProjectPage(vc ViewCtx, p store.Project, rows []AppRow, svcs []store.Servi
 					</form>
 				</details>
 			</div>
-			if len(rows) == 0 {
+			if len(cards) == 0 {
 				<div class="empty">
 					<p>No apps yet.</p>
 					<p>Create an app, then deploy a container image or connect a git repository.</p>
 				</div>
 			} else {
-				<div class="rows">
-					for _, r := range rows {
-						@appRow(r, false)
+				<div class="acards">
+					for _, c := range cards {
+						@appCardView(c)
 					}
 				</div>
 			}
 		</section>
-		<section class="fleet-group">
+		<section class="fleet-group" id="services">
 			<div class="group-bar">
 				<h2>Databases &amp; caches</h2>
 				<details class="disclose disclose-inline">
@@ -336,15 +336,18 @@ templ ProjectPage(vc ViewCtx, p store.Project, rows []AppRow, svcs []store.Servi
 					</form>
 				</details>
 			</div>
-			if len(svcs) == 0 {
+			if !anyServices {
 				<div class="empty">
 					<p>No databases or caches yet.</p>
-					<p>Create one and apps in this project get its connection URL automatically.</p>
+					<p>Create one and apps in the same environment get its connection URL automatically.</p>
 				</div>
+			} else if len(unused) == 0 {
+				<p class="muted-text">Every database and cache here is used by an app above.</p>
 			} else {
-				<div class="rows">
-					for _, sv := range svcs {
-						@serviceRow(sv)
+				<p class="muted-text group-empty">Not used by any app in this project</p>
+				<div class="rwrap">
+					for _, r := range unused {
+						@resourceChip(r)
 					}
 				</div>
 			}

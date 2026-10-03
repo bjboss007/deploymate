@@ -139,6 +139,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/git/deploy", am.CheckCSRF(s.handleGitDeploy))
 		r.Post("/apps/{slug}/git/deploy-latest", am.CheckCSRF(s.handleDeployLatest))
 		r.Post("/apps/{slug}/redeploy", am.CheckCSRF(s.handleRedeploy))
+		r.Post("/apps/{slug}/appearance", am.CheckCSRF(s.handleAppearance))
 		r.Post("/apps/{slug}/git/test", am.CheckCSRF(s.handleGitTest))
 		r.Post("/apps/{slug}/deploy-mode", am.CheckCSRF(s.handleDeployMode))
 		r.Post("/apps/{slug}/domains", am.CheckCSRF(s.handleDomainCreate))

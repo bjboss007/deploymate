@@ -61,6 +61,7 @@ func (s *Server) handleProjectsList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rows := s.appRows(apps, now)
+		applyResourceHealth(rows, svcs)
 		for i := range rows {
 			rows[i].Project = p.Name
 		}
@@ -114,7 +115,10 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, s.appRows(apps, time.Now()), svcs))
+	rows := s.appRows(apps, time.Now())
+	applyResourceHealth(rows, svcs)
+	cards, unused := buildAppCards(rows, svcs)
+	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, cards, unused, len(svcs) > 0))
 }
 
 func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {

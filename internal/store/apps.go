@@ -40,6 +40,12 @@ type App struct {
 	DeployMode   string
 	WorkflowPath string
 	ArtifactName string
+
+	// Appearance (migration 0018): Logo and Accent are the owner's choices
+	// ("" = automatic); Stack is the framework detected at deploy time.
+	Logo   string
+	Accent string
+	Stack  string
 }
 
 // Deploy modes (apps.deploy_mode).
@@ -55,7 +61,7 @@ const (
 )
 
 // appColumns is the column list every app SELECT reads, in scan order.
-const appColumns = `id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name`
+const appColumns = `id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name, logo, accent, stack`
 
 // ErrSlugTaken is returned when a slug is already in use.
 var ErrSlugTaken = errors.New("store: slug already exists")
@@ -86,10 +92,10 @@ func (s *Store) CreateApp(a App) (App, error) {
 		gitSourceID = a.GitSourceID
 	}
 	_, err := s.db.Exec(
-		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO apps (id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name, logo, accent, stack)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		a.ID, a.ProjectID, a.Name, a.Slug, gitSourceID, a.BuildType, a.RootDirectory,
-		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.PreviewHostPort, a.Entrypoint, a.Command, a.CreatedAt, a.Replicas, a.HealthPath, a.DeployMode, a.WorkflowPath, a.ArtifactName,
+		a.Status, a.CurrentDeploymentID, a.Image, a.Port, a.Runtime, a.Environment, a.Health, a.MemLimitMB, a.CPULimit, a.PreviewHostPort, a.Entrypoint, a.Command, a.CreatedAt, a.Replicas, a.HealthPath, a.DeployMode, a.WorkflowPath, a.ArtifactName, a.Logo, a.Accent, a.Stack,
 	)
 	if err != nil && strings.Contains(err.Error(), "UNIQUE") {
 		return a, ErrSlugTaken
@@ -120,7 +126,7 @@ func (s *Store) GetAppBySlug(slug string) (App, error) {
 		 FROM apps WHERE slug = ?`,
 		slug,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -213,7 +219,7 @@ func (s *Store) GetAppByID(id string) (App, error) {
 		 FROM apps WHERE id = ?`,
 		id,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -266,11 +272,25 @@ func scanApps(rows *sql.Rows) ([]App, error) {
 		var a App
 		var gitSourceID sql.NullString
 		if err := rows.Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType,
-			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName); err != nil {
+			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack); err != nil {
 			return nil, err
 		}
 		a.GitSourceID = gitSourceID.String
 		out = append(out, a)
 	}
 	return out, rows.Err()
+}
+
+
+// UpdateAppAppearance saves the owner's logo and identity-colour choices
+// ("" = automatic for each).
+func (s *Store) UpdateAppAppearance(id, logo, accent string) error {
+	_, err := s.db.Exec(`UPDATE apps SET logo = ?, accent = ? WHERE id = ?`, logo, accent, id)
+	return err
+}
+
+// UpdateAppStack records the framework detected at deploy time ("" clears it).
+func (s *Store) UpdateAppStack(id, stack string) error {
+	_, err := s.db.Exec(`UPDATE apps SET stack = ? WHERE id = ?`, stack, id)
+	return err
 }

@@ -769,3 +769,79 @@ select { cursor: pointer; }
 .nf-title { font-size: 22px; margin: 6px 0 6px; }
 .nf-btn { margin-top: 18px; }
 .redeploy-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }
+
+/* ==========================================================================
+   App cards — an app with the resources it uses, in its identity colour
+   The identity colour (bar + logo tile tint) is chosen from a palette that
+   avoids red/green/amber, so it can never be mistaken for a state.
+   ========================================================================== */
+.id-violet { --id: #7F77DD; } .id-pink { --id: #D4537E; } .id-sky { --id: #378ADD; } .id-teal { --id: #1D9E75; }
+.id-coral { --id: #D85A30; } .id-indigo { --id: #5B6CE0; } .id-magenta { --id: #B24BC6; } .id-sand { --id: #A68B5B; }
+
+.acards { display: flex; flex-direction: column; gap: 14px; }
+.acard {
+  display: flex; background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+  overflow: hidden; box-shadow: var(--shadow);
+}
+.acard-bad { border-color: color-mix(in srgb, var(--red) 55%, var(--border)); }
+.idbar { width: 6px; flex: none; background: var(--id, var(--border-strong)); }
+.acard-main { flex: 1; min-width: 0; }
+.acard-head { display: flex; align-items: center; gap: 14px; padding: 14px 16px; transition: background 0.12s; }
+.acard-head:hover { background: var(--panel-2); }
+.acard-id { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.acard-go { color: var(--faint); font-size: 22px; line-height: 1; }
+.acard-head:hover .acard-go { color: var(--text); }
+
+.tile {
+  position: relative; width: 46px; height: 46px; flex: none; border-radius: 12px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--id, var(--border-strong)) 16%, var(--panel));
+  border: 1px solid color-mix(in srgb, var(--id, var(--border-strong)) 38%, var(--border));
+  color: var(--text);
+}
+.tile .logo { width: 28px; height: 28px; }
+.tile-badge {
+  position: absolute; right: -6px; bottom: -6px; width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel); border: 1px solid var(--border-strong); color: var(--text);
+}
+.tile-badge .logo { width: 13px; height: 13px; }
+.lamp-dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; background: var(--border-strong); }
+.lamp-dot.lamp-up { background: var(--green); } .lamp-dot.lamp-down { background: var(--red); } .lamp-dot.lamp-stopped { background: var(--faint); }
+
+.acard-res { border-top: 1px solid var(--border); background: var(--panel-2); padding: 10px 16px 14px; }
+.rl { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+.rwrap { display: flex; flex-wrap: wrap; gap: 10px; }
+.rchip {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 220px; min-width: 0;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px;
+  transition: border-color 0.12s;
+}
+.rchip:hover { border-color: var(--border-strong); }
+.rchip-bad { border-color: color-mix(in srgb, var(--red) 50%, var(--border)); }
+.rchip-add { border-style: dashed; color: var(--muted); justify-content: center; font-size: 13px; }
+.rchip-add:hover { color: var(--text); }
+.rtile {
+  width: 32px; height: 32px; flex: none; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--panel-2); color: var(--text);
+}
+.rtile .logo { width: 20px; height: 20px; }
+.rtext { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.rname { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.rname .badge { margin: 0; font-size: 11px; }
+.rsub { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.rchip-bad .rsub { color: var(--red); }
+
+@media (max-width: 760px) { .acard-head { padding: 12px; } .rchip { flex-basis: 100%; } }
+.app-id-tiled { display: flex; align-items: center; gap: 16px; }
+.app-id-text { min-width: 0; }
+.appearance-form { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+.appearance-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+.swatches { border: 0; padding: 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.swatches legend { font-size: 13px; color: var(--muted); margin-bottom: 6px; float: left; width: 100%; }
+.swatch { flex-direction: row !important; align-items: center; gap: 6px !important; padding: 5px 10px; border: 1px solid var(--border); border-radius: 999px; cursor: pointer; color: var(--text) !important; }
+.swatch input { position: absolute; opacity: 0; pointer-events: none; }
+.swatch:has(input:checked) { border-color: var(--id, var(--accent)); background: color-mix(in srgb, var(--id, var(--accent)) 12%, transparent); }
+.swatch:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sw-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--id); }
+.sw-name { font-size: 13px; }
