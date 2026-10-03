@@ -28,8 +28,7 @@ to find it), "Nothing new to deploy" empty state. **404**: a designed
 standalone not-found page (`NotFoundPage`) for unknown routes and for
 `http.NotFound` calls in handlers (all 11 now use `notFoundPage`). Login copy
 and brand tidied. Tests updated for the new copy; new: `history_text_test.go`,
-`TestNotFoundPage`. Checked in the browser pane. **Not on the live server
-yet.** Open polish ideas (not done): service list rows could show the apps
+`TestNotFoundPage`. Checked in the browser pane. **Live server restarted on this build** (pid 67085, snapshot `pre-pages-*.db`). Open polish ideas (not done): service list rows could show the apps
 using each service; "Needs attention" could offer one-click retry; sticky
 mobile bottom bar for the app page actions.
 
