@@ -162,6 +162,21 @@ templ appVersion(app store.App, deployments []store.Deployment) {
 	}
 }
 
+// pendingEnvBanner tells the owner saved variables are not running yet and
+// offers the one action that applies them.
+templ pendingEnvBanner(vc ViewCtx, app store.App, pending bool) {
+	if pending {
+		<div class="diagnosis diagnosis-warn" role="status">
+			<div class="diagnosis-title">Variables changed since the last deploy</div>
+			<p class="diagnosis-body">The running container still has the old values. Redeploy to apply them: it restarts the app on its current version, with no new build.</p>
+			<form method="post" action={ "/apps/" + app.Slug + "/redeploy" } class="diagnosis-actions">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-primary btn-sm" type="submit">Redeploy now</button>
+			</form>
+		</div>
+	}
+}
+
 // appDiagnosis answers "why isn't it working?" at the top of Overview: the
 // last deployment's real error, or the health check's reason, with the way to
 // read the full log. It renders nothing when everything is fine.
@@ -278,7 +293,7 @@ templ appDeployAction(vc ViewCtx, app store.App, git *GitInfo) {
 	}
 }
 
-templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo) {
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo, envPending bool) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<header class="app-head">
 			<div class="app-id">
@@ -310,6 +325,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 		</nav>
 
 		<section class="tab-panel" id="tab-overview" data-tab="overview" aria-label="Overview">
+			@pendingEnvBanner(vc, app, envPending)
 			@appDiagnosis(app, deployments, healthReason)
 			<div class="facts">
 				<div class="fact">
@@ -444,6 +460,12 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					</div>
 					<div class="git-deploy">
 						@appDeployAction(vc, app, git)
+						if app.CurrentDeploymentID != "" {
+							<form method="post" action={ "/apps/" + app.Slug + "/redeploy" } class="inline-form">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<button class="btn btn-ghost" type="submit" title="Restart on the current version with the saved settings">Redeploy current version</button>
+							</form>
+						}
 						if git.GitHub && git.DeployMode == "artifact" {
 							<form method="post" action={ "/apps/" + app.Slug + "/git/test" } class="inline-form">
 								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
@@ -485,6 +507,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 		</section>
 
 		<section class="tab-panel" id="tab-variables" data-tab="variables" aria-label="Variables">
+			@pendingEnvBanner(vc, app, envPending)
 			<div class="panel">
 				<div class="panel-title">Environment variables</div>
 				if len(envVars) == 0 {
@@ -533,7 +556,14 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					</details>
 				</form>
 				<p class="muted panel-hint">Add as many rows as you need, then <strong>Save</strong> stores them all at once (an existing name is updated). If any row is invalid, nothing is saved. Names containing PASSWORD, SECRET, TOKEN or KEY are always stored masked.</p>
-				<p class="muted panel-hint">Values are encrypted at rest and apply on the next deploy. They can reference injected connection strings — e.g. set <span class="mono">DATABASE_URL</span> to <span class="mono">{ "${MYSQL_URL}" }</span> to alias a MySQL service (also { "${REDIS_URL}" }, { "${DATABASE_URL}" }).</p>
+				if app.CurrentDeploymentID != "" {
+				<form method="post" action={ "/apps/" + app.Slug + "/redeploy" } class="redeploy-row">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-ghost" type="submit">Redeploy now</button>
+					<span class="muted-text">Restarts the app on its current version with the saved variables. No new build.</span>
+				</form>
+			}
+			<p class="muted panel-hint">Values are encrypted at rest and apply on the next deploy. They can reference injected connection strings — e.g. set <span class="mono">DATABASE_URL</span> to <span class="mono">{ "${MYSQL_URL}" }</span> to alias a MySQL service (also { "${REDIS_URL}" }, { "${DATABASE_URL}" }).</p>
 			</div>
 		</section>
 

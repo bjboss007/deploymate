@@ -60,8 +60,11 @@ func describeEvent(kind string) (title, category, tone string) {
 func describeDeployment(d store.Deployment) (title, tone string) {
 	switch d.Status {
 	case "running":
-		if d.Kind == "rollback" {
+		switch d.Kind {
+		case "rollback":
 			return "Rolled back", "good"
+		case "redeploy":
+			return "Redeployed with current settings", "good"
 		}
 		return "Deployed", "good"
 	case "failed":

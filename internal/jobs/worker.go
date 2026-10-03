@@ -127,7 +127,7 @@ func (w *Worker) process(ctx context.Context, d store.Deployment) {
 		}
 		w.publish(topic, "deploy", "scaled ✓")
 		return
-	case "rollback", "resize":
+	case "rollback", "resize", "redeploy":
 		err = w.runRollback(ctx, app, d)
 	case "manual":
 		err = w.runManualDeploy(ctx, app, d)
@@ -368,8 +368,11 @@ func (w *Worker) runRollback(ctx context.Context, app store.App, d store.Deploym
 		return errors.New("target has no image tag")
 	}
 	verb := "rolling back to"
-	if d.Kind == "resize" {
+	switch d.Kind {
+	case "resize":
 		verb = "applying resized limits, image"
+	case "redeploy":
+		verb = "redeploying with the current settings, image"
 	}
 	w.log(d, "system", verb+" "+d.ImageTag)
 	w.publish("deploy:"+app.Slug, "log", verb+" "+d.ImageTag)

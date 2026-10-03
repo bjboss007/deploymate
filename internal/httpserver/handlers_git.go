@@ -178,12 +178,12 @@ func (s *Server) handleDeployPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	render(w, r, http.StatusOK, templates.DeployPreviewPage(s.viewCtx(r), project, app, templates.DeployPreview{
-		Range:        rg,
-		DeployedSHA:  deployedSHA,
-		CommitURL:    gitpkg.CommitURL(gs.RepoURL, rg.Head),
-		FirstDeploy:  deployedSHA == "",
-		NothingToDo:  deployedSHA != "" && deployedSHA == rg.Head,
-		Prebuilt:     app.DeployMode == store.DeployModeArtifact,
+		Range:       rg,
+		DeployedSHA: deployedSHA,
+		CommitURL:   gitpkg.CommitURL(gs.RepoURL, rg.Head),
+		FirstDeploy: deployedSHA == "",
+		NothingToDo: deployedSHA != "" && deployedSHA == rg.Head,
+		Prebuilt:    app.DeployMode == store.DeployModeArtifact,
 	}))
 }
 
@@ -430,4 +430,39 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/deployments/"+rb.ID, http.StatusSeeOther)
+}
+
+// handleRedeploy restarts the app on the version it is already running, so
+// changed settings (environment variables, resource limits) take effect
+// without a new build or a new CI run. It is a "redeploy" deployment: the
+// worker reuses the current deployment's local image and runs the same
+// zero-downtime swap, with the app's settings read fresh. Prebuilt apps need
+// this most — their CI run can only be deployed once.
+func (s *Server) handleRedeploy(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+	}
+	if app.CurrentDeploymentID == "" {
+		back("Nothing is deployed yet — deploy first.")
+		return
+	}
+	cur, err := s.store.GetDeployment(app.CurrentDeploymentID)
+	if err != nil || cur.ImageTag == "" {
+		back("The current version has no saved image to redeploy — deploy again.")
+		return
+	}
+	d, err := s.store.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: "redeploy", Status: "queued", Trigger: "dashboard",
+		ImageTag: cur.ImageTag, CommitSHA: cur.CommitSHA, CommitMessage: cur.CommitMessage,
+	})
+	if err != nil {
+		slog.Error("deployments: queue redeploy", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
 }

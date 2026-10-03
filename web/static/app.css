@@ -768,3 +768,4 @@ select { cursor: pointer; }
 .app-row-compact { grid-template-columns: 14px minmax(160px, 1fr) auto; padding: 10px 16px; }
 .nf-title { font-size: 22px; margin: 6px 0 6px; }
 .nf-btn { margin-top: 18px; }
+.redeploy-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 16px; }

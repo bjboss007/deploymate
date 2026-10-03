@@ -7,6 +7,23 @@
 
 ## Where we stopped
 
+**2026-10-03 (Redeploy: applying changed variables)** — Owner saved new env
+vars on `erp` and asked "what about the restart button?". **Restart only
+restarts the existing container, which keeps the env it was created with** —
+variables apply only to a container created from now on, and a prebuilt app
+could not get a new deploy (its CI run is "already handled"). Added
+**Redeploy**: `POST /apps/{slug}/redeploy` (`handleRedeploy`) queues a
+`redeploy` deployment on the current deployment's local image (same swap,
+settings read fresh; worker: `case "rollback","resize","redeploy"`). Buttons:
+Variables tab ("Redeploy now"), Deployments tab ("Redeploy current version"),
+and a **banner** (Overview + Variables) "Variables changed since the last
+deploy" when an env_changed/env_removed event is newer than the running
+deployment (`envPending`). History titles it "Redeployed with current
+settings". Tests: `TestRedeployQueuesCurrentImage`, `TestPendingEnvBanner`;
+`make e2e-artifact` now proves a redeploy applies a new variable on the same
+image. Same day: `pickArtifact` message for expired artifacts (see previous
+entry) is live after this restart.
+
 **2026-10-03 (erp first prebuilt deploy: expired artifact)** — The owner's
 first **Deploy latest run** picked run 37016133185 (yesterday's) and failed:
 "uploaded no artifact named … (it has: none)". Cause: the generated workflow

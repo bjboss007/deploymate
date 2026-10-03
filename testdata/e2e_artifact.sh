@@ -246,7 +246,20 @@ for i in $(seq 1 120); do
 done
 loc="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "csrf_token=$CSRF" "$BASE/apps/$SLUG3/git/deploy-latest")"
 flash "$loc" | grep -q "already handled" || fail "second press must say already handled ($(flash "$loc"))"
-log "PASS: UI — switch to prebuilt, token encrypted and never rendered, Test connection (+scope warning), Deploy latest skips the fork run, repeat is a no-op"
+# Redeploy: apply changed settings to the version already running (no CI run).
+IMG3_BEFORE="$(docker inspect -f '{{.Config.Image}}' "dm-$SLUG3")"
+curl -s -b "$JAR" -o /dev/null -d "key=E2E_REDEPLOY&value=applied&csrf_token=$CSRF" "$BASE/apps/$SLUG3/env"
+loc="$(curl -s -b "$JAR" -o /dev/null -w '%{redirect_url}' -d "csrf_token=$CSRF" "$BASE/apps/$SLUG3/redeploy")"
+RD="${loc##*/deployments/}"; [ -n "$RD" ] && [ "$RD" != "$loc" ] || fail "redeploy did not queue ($(flash "$loc"))"
+[ "$(db "SELECT kind FROM deployments WHERE id='$RD'")" = "redeploy" ] || fail "redeploy row has the wrong kind"
+for i in $(seq 1 90); do
+  st="$(db "SELECT status FROM deployments WHERE id='$RD'")"; [ "$st" = running ] && break
+  [ "$st" = failed ] && fail "redeploy failed: $(db "SELECT error FROM deployments WHERE id='$RD'")"
+  sleep 1; [ "$i" = 90 ] && fail "redeploy never reached running"
+done
+[ "$(docker inspect -f '{{.Config.Image}}' "dm-$SLUG3")" = "$IMG3_BEFORE" ] || fail "redeploy must keep the same image"
+docker exec "dm-$SLUG3" sh -c 'echo "$E2E_REDEPLOY"' | grep -q applied || fail "redeploy did not apply the new environment variable"
+log "PASS: UI — switch to prebuilt, token encrypted and never rendered, Test connection (+scope warning), Deploy latest skips the fork run, repeat is a no-op, redeploy applies new env on the same image"
 
 # 6. Rollback with GitHub DOWN: the kept local image is all it needs.
 kill "$GH_PID" 2>/dev/null; wait "$GH_PID" 2>/dev/null || true; GH_PID=""

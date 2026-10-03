@@ -409,7 +409,7 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs, s.replicasInfo(app)))
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs, s.replicasInfo(app), s.envPending(app, deployments)))
 }
 
 // replicasInfo builds the app page's replicas panel from the replica table.
@@ -1023,4 +1023,38 @@ func (s *Server) handleAppReplicas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
+}
+
+
+// envPending reports whether environment variables were changed after the
+// version the app is running was deployed — they only apply to a container
+// created from now on, so the page offers a Redeploy. Changes are read from
+// the app's event log (names only; values are never recorded there).
+func (s *Server) envPending(app store.App, deployments []store.Deployment) bool {
+	if app.CurrentDeploymentID == "" {
+		return false
+	}
+	var since time.Time
+	for _, d := range deployments {
+		if d.ID == app.CurrentDeploymentID {
+			since, _ = time.Parse(time.RFC3339Nano, d.CreatedAt)
+			break
+		}
+	}
+	if since.IsZero() {
+		return false
+	}
+	evs, err := s.store.ListEvents(app.ID, 100)
+	if err != nil {
+		return false
+	}
+	for _, e := range evs {
+		if e.Kind != store.EventEnvChanged && e.Kind != store.EventEnvRemoved {
+			continue
+		}
+		if t, err := time.Parse(time.RFC3339Nano, e.TS); err == nil && t.After(since) {
+			return true
+		}
+	}
+	return false
 }

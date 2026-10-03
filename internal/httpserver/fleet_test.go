@@ -3,8 +3,10 @@ package httpserver
 import (
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/store"
@@ -146,5 +148,69 @@ func TestNotFoundPage(t *testing.T) {
 		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Page not found") || !strings.Contains(rec.Body.String(), `href="/projects"`) {
 			t.Errorf("%s: status %d, body lacks the not-found screen", path, rec.Code)
 		}
+	}
+}
+
+// TestRedeployQueuesCurrentImage: "Redeploy" re-runs the version the app is
+// serving (so new settings apply without a build or a new CI run) and refuses
+// politely when nothing is deployed.
+func TestRedeployQueuesCurrentImage(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	post := func() (int, string) { return e.post(t, "/apps/api/redeploy", url.Values{}) }
+
+	if _, loc := post(); !strings.Contains(flashOf(t, loc), "Nothing is deployed yet") {
+		t.Errorf("no current deployment: flash = %q", flashOf(t, loc))
+	}
+
+	cur, err := e.st.CreateDeployment(store.Deployment{AppID: e.app.ID, Kind: "deploy", Status: "running", ImageTag: "deploymate/apps/api:abc", CommitSHA: "17177b38", CommitMessage: "ship it"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SetAppCurrentDeployment(e.app.ID, cur.ID); err != nil {
+		t.Fatal(err)
+	}
+	code, loc := post()
+	if code != http.StatusSeeOther || !strings.HasPrefix(loc, "/deployments/") {
+		t.Fatalf("redeploy: %d %q", code, loc)
+	}
+	ds, _ := e.st.ListDeployments(e.app.ID, 5)
+	if len(ds) != 2 {
+		t.Fatalf("deployments = %d, want 2", len(ds))
+	}
+	d := ds[0]
+	if d.Kind != "redeploy" || d.Status != "queued" || d.ImageTag != "deploymate/apps/api:abc" || d.CommitSHA != "17177b38" || d.CommitMessage != "ship it" {
+		t.Errorf("redeploy row = %+v", d)
+	}
+}
+
+// Variables saved after the running deployment was created only apply to a
+// new container, so the app page says so and offers Redeploy.
+func TestPendingEnvBanner(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	cur, err := e.st.CreateDeployment(store.Deployment{AppID: e.app.ID, Kind: "deploy", Status: "running", ImageTag: "deploymate/apps/api:abc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.SetAppCurrentDeployment(e.app.ID, cur.ID); err != nil {
+		t.Fatal(err)
+	}
+	page := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET /apps/api: %d", rec.Code)
+		}
+		return rec.Body.String()
+	}
+	if strings.Contains(page(), "Variables changed since the last deploy") {
+		t.Fatal("banner shown with no variable changes")
+	}
+	time.Sleep(5 * time.Millisecond) // the event must be strictly newer than the deployment
+	e.post(t, "/apps/api/env/bulk", url.Values{"key_0": {"A"}, "value_0": {"1"}})
+	body := page()
+	if !strings.Contains(body, "Variables changed since the last deploy") || !strings.Contains(body, `action="/apps/api/redeploy"`) {
+		t.Error("banner/Redeploy missing after a variable change")
 	}
 }
