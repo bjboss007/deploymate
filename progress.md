@@ -12,7 +12,7 @@ leads with "Detected: <logo> <label>" plus its source (framework found in repo/J
 vs runtime/image only), says when the owner's choice overrides it, and has a
 **Use detected** button (posts logo="" keeping the colour). `stack.Detected`,
 `detectedLogo` templ, `TestAppearancePanelShowsDetectedLogo`,
-`TestDetectedIgnoresTheOwnersChoice`. **Not yet restarted live** (no migration).
+`TestDetectedIgnoresTheOwnersChoice`. **Live server restarted on this build** (pid 94913, snapshot `pre-restart-c-*.db`, no migration).
 Next: memory preflight (P3).
 
 **2026-10-04 (expired runs + Run workflow now)** — `deployLatestRun` now
