@@ -14,7 +14,7 @@ is under 5 GiB (`builder.MemoryAdvice`, `Worker.memoryPreflight`, optional
 Same note on the app page's Git panel for build-mode Java apps
 (`GitInfo.MemoryNote`, `.notice-warn`). Advisory only. Tests:
 `TestMemoryAdvice`, `TestMemoryPreflightAdvisesOnlyForJVMOnSmallDocker`,
-`TestJVMMemoryNoteOnAppPage`. **Not yet restarted live** (no migration).
+`TestJVMMemoryNoteOnAppPage`. **Live server restarted on this build** (pid 96959, snapshot `pre-restart-d-*.db`, no migration).
 
 **2026-10-04 (framework detection correction)** — Settings → Appearance now
 leads with "Detected: <logo> <label>" plus its source (framework found in repo/JAR
