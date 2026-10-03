@@ -7,6 +7,20 @@
 
 ## Where we stopped
 
+**2026-10-03 (ERP switched to prebuilt)** — Owner asked to switch the live
+`erp` app (Acme Starter, repo `bjboss007/tradestack-dm-test`, branch
+`development`) to **prebuilt mode**. Done at the data layer with a one-off
+program (deleted afterwards; the UI needs a session I don't have): snapshot
+`data/backups/pre-erp-prebuilt-*.db`; verified the owner's `DM_ARTIFACT_TOKEN`
+reaches the repo (private, 2 successful runs of the workflow); stored it
+encrypted on the app's git source (`api_token_enc`) with the live key; set
+`deploy_mode=artifact` (workflow `.github/workflows/deploymate.yml`, artifact
+`deploymate-app`). erp's env vars (DB_URL/DB_USER/DB_PASSWORD/REDIS_*) and its
+own services (`acme-starter-dev-postgres`/`-redis`, running) were already in
+place. **Not yet deployed** — the owner clicks **Deploy latest run** on the app
+page. Note: `DB_PASSWORD` on erp was saved before bulk-add existed and is stored
+unmasked (`is_secret=0`); re-save it with "secret" ticked.
+
 **2026-10-03 (UI redesign, step 5: the remaining pages)** — **Live server
 restarted first on the deployment-page build** (pid 61910, snapshot
 `pre-dep-*.db`). Then, in the new type/token system: **History**
