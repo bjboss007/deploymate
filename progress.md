@@ -12,8 +12,8 @@
 live connection state, marks opted-out apps, and has **Stop sending / Send again**
 that come back to the service page (`ServiceUser`, `handleServicePage`,
 `back` param on `handleServiceExclusion`, validated). Test:
-`TestServicePageListsConsumersWithUsageAndOptOut`. **Not yet restarted live**
-(no migration).
+`TestServicePageListsConsumersWithUsageAndOptOut`. **Live server restarted on this
+build** (pid 97639, snapshot `pre-restart-e-*.db`, no migration).
 
 **2026-10-04 (P3 memory preflight)** — Before an on-server Java build the worker
 logs "Heads-up: Docker has X GiB … switch to Prebuilt mode" when Docker's memory
