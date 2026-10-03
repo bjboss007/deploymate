@@ -1127,7 +1127,13 @@ func (s *Server) handleServiceExclusion(w http.ResponseWriter, r *http.Request) 
 		event = "service " + sv.Name + " no longer sent to this app"
 	}
 	_ = s.store.RecordEvent(app.ID, store.EventEnvChanged, event)
-	http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL(msg+" Redeploy "+app.Name+" to apply."), http.StatusSeeOther)
+	dest := "/projects/" + project.Slug
+	// The service page posts here too and wants to come back to itself; only
+	// a local /services/ path is honoured.
+	if b := r.FormValue("back"); strings.HasPrefix(b, "/services/") && !strings.ContainsAny(b, "?#\\") && !strings.Contains(b, "//") {
+		dest = b
+	}
+	http.Redirect(w, r, dest+"?flash="+flashURL(msg+" Redeploy "+app.Name+" to apply."), http.StatusSeeOther)
 }
 
 // jvmMemoryNote is the "this build may run out of memory" advice for an app

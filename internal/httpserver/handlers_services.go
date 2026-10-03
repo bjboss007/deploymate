@@ -1,10 +1,12 @@
 package httpserver
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -90,12 +92,20 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 	}
 	// Apps that receive this service's connection URL: the same project and
 	// environment (the injection rule).
-	var users []store.App
+	var users []templates.ServiceUser
 	if apps, err := s.store.ListApps(project.ID); err == nil {
+		var envApps []store.App
 		for _, a := range apps {
 			if a.Environment == svc.Environment {
-				users = append(users, a)
+				envApps = append(envApps, a)
 			}
+		}
+		excl := s.exclusionsFor(envApps)
+		ctx, cancel := context.WithTimeout(r.Context(), 6*time.Second)
+		defer cancel()
+		usage := s.serviceUsage(ctx, envApps, []store.Service{svc}, excl)
+		for _, a := range envApps {
+			users = append(users, templates.ServiceUser{App: a, Excluded: excl[a.ID][svc.ID], Usage: usage[a.ID][svc.ID]})
 		}
 	}
 	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc), users))

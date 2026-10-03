@@ -461,3 +461,66 @@ func TestJVMMemoryNoteOnAppPage(t *testing.T) {
 		t.Error("a prebuilt app is not built here; no advice")
 	}
 }
+
+// The service page lists the apps that receive it with their live connection
+// state, shows an opted-out app as such, and Stop sending / Send again return
+// to the service page.
+func TestServicePageListsConsumersWithUsageAndOptOut(t *testing.T) {
+	st, web := replicaTestEnv(t, store.App{Name: "Web", Slug: "web", Status: "running", Health: "healthy", Port: 8080, Environment: "dev"})
+	if _, err := st.CreateApp(store.App{ProjectID: web.ProjectID, Name: "Api", Slug: "api", Status: "running", Health: "healthy", Port: 8080, Environment: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+	redis, err := st.CreateService(store.Service{ProjectID: web.ProjectID, Type: "redis", Name: "dev-redis", Slug: "dev-redis", Image: "redis:7-alpine", Status: "running", Environment: "dev", Port: 6379})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rt := &usageRuntime{
+		ips:     map[string][]string{"dm-web": {"172.25.0.8"}, "dm-api": {"172.25.0.9"}},
+		clients: "id=1 addr=172.25.0.9:5000 fd=8\n",
+	}
+	s := &Server{store: st, rt: rt, encKey: [32]byte{3}}
+	enc, _ := crypto.Encrypt(s.encKey, "")
+	if err := st.SetServiceCredentials(redis.ID, map[string]string{"password": enc}); err != nil {
+		t.Fatal(err)
+	}
+	get := func(path string) string {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	post := func(path string, f url.Values) string {
+		f.Set("csrf_token", "csrf")
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(f.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec.Header().Get("Location")
+	}
+
+	page := get("/services/dev-redis")
+	for _, want := range []string{"Web", "Api", "Connected now", "Not connected right now", "Stop sending"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("service page lacks %q", want)
+		}
+	}
+	loc := post("/apps/web/services/"+redis.ID+"/exclusion", url.Values{"excluded": {"1"}, "back": {"/services/dev-redis"}})
+	if !strings.HasPrefix(loc, "/services/dev-redis?flash=") {
+		t.Errorf("redirect = %q, want back to the service page", loc)
+	}
+	page = get("/services/dev-redis")
+	if !strings.Contains(page, "not sent to this app") || !strings.Contains(page, "Send again") {
+		t.Error("an opted-out app should be shown as not sent, with Send again")
+	}
+	// An off-site or odd back target is ignored.
+	for _, bad := range []string{"https://evil.test/", "//evil.test", "/services/x?y=1", "/apps/web"} {
+		if loc := post("/apps/web/services/"+redis.ID+"/exclusion", url.Values{"excluded": {"0"}, "back": {bad}}); !strings.HasPrefix(loc, "/projects/") {
+			t.Errorf("back=%q redirected to %q", bad, loc)
+		}
+	}
+}

@@ -5,6 +5,15 @@ import "github.com/habibmuhammad/deploymate/internal/store"
 // BackupView carries a service's backup config + catalog to the page. The
 // objects are a page-local copy — the destination listing is the catalog,
 // so rows are re-listed on every page load.
+// ServiceUser is an app in the service's project and environment: whether it
+// receives the connection URL (or opted out) and whether it is connected now
+// ("connected", "idle", "" = unknown).
+type ServiceUser struct {
+	App      store.App
+	Excluded bool
+	Usage    string
+}
+
 type BackupView struct {
 	Enabled     bool
 	Schedule    string
@@ -26,7 +35,7 @@ type BackupObject struct {
 // ServicePage is the service's front panel: state, a spec plate, the
 // connection readout the service exists to hand out, and — for postgres —
 // the backups section.
-templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []store.App) {
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []ServiceUser) {
 	@Layout(vc, sv.Name, "", []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: sv.Name}}) {
 		<div class="page-head">
 			<div>
@@ -109,12 +118,34 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 				<p class="muted-text">No app in this project's { sv.Environment } environment yet. Apps there get this service's connection URL as { urlEnvKey } the next time they deploy.</p>
 			} else {
 				<div class="rows rows-flush">
-					for _, a := range users {
-						<a class="app-row app-row-compact" href={ templ.SafeURL("/apps/" + a.Slug) }>
-							<span class={ "lamp", "lamp-" + lampState(a) } aria-hidden="true"></span>
-							<span class="row-main"><span class="row-name">{ a.Name }</span><span class="row-sub">{ statusText(a) }</span></span>
-							<span class="muted-text">gets { urlEnvKey }</span>
-						</a>
+					for _, u := range users {
+						<div class={ "app-row", "app-row-compact", "user-row", templ.KV("user-off", u.Excluded) }>
+							<span class={ "lamp", "lamp-" + lampState(u.App) } aria-hidden="true"></span>
+							<a class="row-main" href={ templ.SafeURL("/apps/" + u.App.Slug) }>
+								<span class="row-name">{ u.App.Name }</span>
+								<span class="row-sub">
+									{ statusText(u.App) }
+									if u.Excluded {
+										· not sent to this app
+									} else if u.Usage == "connected" {
+										· <span class="rusage rusage-on">Connected now</span>
+									} else if u.Usage == "idle" {
+										· <span class="rusage" title="This app is given the URL, but no live connection from it was seen just now. Apps that connect only when a request needs data can show this too.">Not connected right now</span>
+									}
+								</span>
+							</a>
+							<form method="post" action={ "/apps/" + u.App.Slug + "/services/" + sv.ID + "/exclusion" } class="rx">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<input type="hidden" name="back" value={ "/services/" + sv.Slug }/>
+								if u.Excluded {
+									<input type="hidden" name="excluded" value="0"/>
+									<button class="btn btn-ghost btn-sm" type="submit">Send again</button>
+								} else {
+									<input type="hidden" name="excluded" value="1"/>
+									<button class="btn btn-ghost btn-sm" type="submit" title={ u.App.Name + " doesn't use " + sv.Name + ": stop sending it " + urlEnvKey }>Stop sending</button>
+								}
+							</form>
+						</div>
 					}
 				</div>
 			}

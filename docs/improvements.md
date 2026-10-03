@@ -26,8 +26,11 @@ change.
 - [ ] **Usage signal can't prove "unused"** — apps that connect per request
   look idle; consider a longer sampling window before suggesting **Stop
   sending**.
-- [ ] **Service list rows should show which apps consume them** (reverse of the
-  app cards).
+- [x] **Service page shows which apps use it** — done 2026-10-04: "Used by"
+  now lists every app that receives the service, with live "Connected now" /
+  "Not connected right now", opted-out apps marked "not sent to this app", and
+  **Stop sending / Send again** that return to the service page (`back` is
+  accepted only for local `/services/…` paths).
 - [ ] **One-click retry on a failed deployment; mobile sticky action bar** —
   UI polish ideas from the redesign.
 - [ ] **Owner/ops (not code):** rotate the R2 backup keys that were printed to
