@@ -71,7 +71,7 @@ func clipText(s string, n int) string {
 func (s *Server) appRows(apps []store.App, now time.Time) []templates.AppRow {
 	rows := make([]templates.AppRow, 0, len(apps))
 	for _, a := range apps {
-		row := templates.AppRow{App: a}
+		row := templates.AppRow{App: a, Identity: stack.Resolve(a)}
 		deps, err := s.store.ListDeployments(a.ID, 40)
 		if err != nil {
 			slog.Error("fleet: list deployments", "app", a.Slug, "err", err)

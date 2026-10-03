@@ -18,8 +18,8 @@ change.
   now** button, `POST /apps/{slug}/git/run-workflow`, `workflow_dispatch`).
   Starting runs needs the token's Actions permission read **and write** — the
   button explains this on a 403; deploys themselves stay read-only.
-- [ ] **Fleet board rows don't show the app's identity colour/logo** — only the
-  project page and app header do.
+- [x] **Fleet board rows show the app's logo + identity colour** — done
+  2026-10-04 (same tile as the card, small; `AppRow.Identity`).
 - [ ] **Framework detection is a best guess** — surface "detected: X" with a
   one-click correction beside the Appearance override.
 - [ ] **Usage signal can't prove "unused"** — apps that connect per request

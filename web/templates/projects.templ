@@ -3,6 +3,7 @@ package templates
 import (
 	"fmt"
 
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -16,6 +17,7 @@ type StripCell struct {
 // AppRow is everything the fleet board shows about one app.
 type AppRow struct {
 	App         store.App
+	Identity    stack.Identity // logo + colour, same as the app's card
 	Last        *store.Deployment // newest deployment, nil if never deployed
 	Strip       []StripCell
 	UptimePct   float64
@@ -125,6 +127,8 @@ func attentionCount(groups []ProjectGroup) int {
 templ appRow(r AppRow, showProject bool) {
 	<a class={ "app-row", templ.KV("app-row-attn", r.Attention != "") } href={ templ.SafeURL("/apps/" + r.App.Slug) }>
 		<span class={ "lamp", "lamp-" + lampState(r.App) } aria-hidden="true"></span>
+		<span class="row-ident">
+			@appTile(r.Identity)
 		<span class="row-main">
 			<span class="row-title">
 				<span class="row-name">{ r.App.Name }</span>
@@ -140,6 +144,7 @@ templ appRow(r AppRow, showProject bool) {
 					{ statusText(r.App) }
 				}
 			</span>
+		</span>
 		</span>
 		<span class="row-deploy">
 			if r.Last != nil {
