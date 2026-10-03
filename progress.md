@@ -31,8 +31,7 @@ Composer/Gemfile —, `DetectJar` — Spring Boot fat jars), migration **0018**
 worker records the detected framework on git builds and prebuilt (JAR) deploys
 (an inconclusive scan never clears it), `web/templates/cards.templ`,
 `POST /apps/{slug}/appearance`. Tests added for all of it; checked in the
-browser pane (dark + light). **Not on the live server yet — restarting applies
-migration 18 (snapshot first).** Not done: the fleet-board rows don't show
+browser pane (dark + light). **Live server restarted on this build** (pid 88759, snapshot `pre-0018-*.db`, migration 18 applied). Not done: the fleet-board rows don't show
 the identity colour (project page + app header only); framework detection is a
 best guess (override exists).
 
