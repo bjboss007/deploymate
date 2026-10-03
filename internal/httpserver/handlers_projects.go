@@ -61,7 +61,7 @@ func (s *Server) handleProjectsList(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		rows := s.appRows(apps, now)
-		applyResourceHealth(rows, svcs)
+		applyResourceHealth(rows, svcs, s.exclusionsFor(apps))
 		for i := range rows {
 			rows[i].Project = p.Name
 		}
@@ -116,8 +116,9 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	rows := s.appRows(apps, time.Now())
-	applyResourceHealth(rows, svcs)
-	cards, unused := buildAppCards(rows, svcs)
+	excl := s.exclusionsFor(apps)
+	applyResourceHealth(rows, svcs, excl)
+	cards, unused := buildAppCards(rows, svcs, excl, s.serviceUsage(r.Context(), apps, svcs, excl))
 	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, cards, unused, len(svcs) > 0))
 }
 

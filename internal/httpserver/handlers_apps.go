@@ -868,9 +868,10 @@ func (s *Server) AppEnv(app store.App) []string {
 	project, err := s.store.GetProjectByID(app.ProjectID)
 	if err == nil {
 		svcs, err := s.store.ListServices(project.ID)
+		excluded, _ := s.store.ListAppServiceExclusions(app.ID) // services this app opted out of
 		if err == nil {
 			for _, svc := range svcs {
-				if svc.Status != "running" || svc.Environment != app.Environment {
+				if svc.Status != "running" || svc.Environment != app.Environment || excluded[svc.ID] {
 					continue
 				}
 				tpl, ok := services.ForType(svc.Type)
@@ -1088,4 +1089,40 @@ func (s *Server) handleAppearance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	back("Appearance saved.")
+}
+
+
+// handleServiceExclusion opts an app out of (or back into) receiving one
+// service's connection URL. It takes effect when the app's container is next
+// created, so the change is recorded like an environment change — the app
+// page then offers Redeploy.
+func (s *Server) handleServiceExclusion(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	sv, err := s.store.GetServiceByID(chi.URLParam(r, "id"))
+	if err != nil || sv.ProjectID != app.ProjectID {
+		notFoundPage(w, r)
+		return
+	}
+	project, err := s.store.GetProjectByID(app.ProjectID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	excluded := r.FormValue("excluded") == "1"
+	if err := s.store.SetAppServiceExcluded(app.ID, sv.ID, excluded); err != nil {
+		slog.Error("apps: set service exclusion", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	msg := sv.Name + " will be sent to " + app.Name + " again."
+	event := "service " + sv.Name + " sent to this app again"
+	if excluded {
+		msg = sv.Name + " will no longer be sent to " + app.Name + "."
+		event = "service " + sv.Name + " no longer sent to this app"
+	}
+	_ = s.store.RecordEvent(app.ID, store.EventEnvChanged, event)
+	http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL(msg+" Redeploy "+app.Name+" to apply."), http.StatusSeeOther)
 }

@@ -7,6 +7,32 @@
 
 ## Where we stopped
 
+**2026-10-04 (app cards: honest wording, live usage, per-app opt-out)** —
+Owner asked whether `shortlink-web` really uses the Postgres/Redis its card
+showed. Investigation: DeployMate **injects** every service of the project +
+environment into every app (`AppEnv`); both shortlink containers received
+`DATABASE_URL`/`REDIS_URL` but neither held a connection (Postgres showed no
+clients; Redis clients were other addresses) — `shortlink-web` is a frontend
+with `BACKEND_*_URL` vars. So "Resources this app uses" over-claimed. **Fixed
+(1) wording:** the card heading is now "Available to this app" (tooltip
+explains the injection rule). **(2) live usage:** `internal/usage` asks the
+service who is connected (`psql … pg_stat_activity.client_addr`, `redis-cli
+client list`, MySQL `information_schema.processlist`), the server matches client
+IPs to the app containers' IPs (`runtime.Info.IPs`) and each chip shows
+"Connected now" / "Not connected right now" (tooltip: apps that connect per
+request can look idle) or nothing when unknown/stopped; probes run in parallel,
+4 s timeout, cached 15 s per service (`usage.go`). **(3) opt-out:** migration
+**0019** `app_service_exclusions`; `store.ListAppServiceExclusions` /
+`SetAppServiceExcluded`; `AppEnv` skips excluded services; chips have **Stop
+sending** / **Send again** (`POST /apps/{slug}/services/{id}/exclusion`);
+excluded services are listed under "Not sent to this app"; the change is
+recorded as an `env_changed` event so the app page shows the "Variables changed
+… Redeploy now" banner; a down service the app opted out of no longer flags it.
+Tests: `internal/usage`, `internal/store` (exclusions), handler tests
+(`TestResourceCardsShowRealUsageAndHonourOptOut`, updated card test). Clicked
+through in the browser pane. **Not on the live server yet — restart applies
+migration 19 (snapshot first).**
+
 **2026-10-03 (UI: app cards with logos + identity colour)** — Owner asked to
 group an app with its own resources in one card with technology logos
 (React, Java, Postgres…), then asked that cards be visually distinct. Mockups

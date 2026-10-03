@@ -1034,7 +1034,7 @@ func ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resource
 					return templ_7745c5c3_Err
 				}
 				for _, c := range cards {
-					templ_7745c5c3_Err = appCardView(c).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = appCardView(c, vc.CSRF).Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}
@@ -1090,7 +1090,7 @@ func ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resource
 					return templ_7745c5c3_Err
 				}
 				for _, r := range unused {
-					templ_7745c5c3_Err = resourceChip(r).Render(ctx, templ_7745c5c3_Buffer)
+					templ_7745c5c3_Err = resourceChip(r, "").Render(ctx, templ_7745c5c3_Buffer)
 					if templ_7745c5c3_Err != nil {
 						return templ_7745c5c3_Err
 					}

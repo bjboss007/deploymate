@@ -314,7 +314,7 @@ templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resourc
 			} else {
 				<div class="acards">
 					for _, c := range cards {
-						@appCardView(c)
+						@appCardView(c, vc.CSRF)
 					}
 				</div>
 			}
@@ -347,7 +347,7 @@ templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resourc
 				<p class="muted-text group-empty">Not used by any app in this project</p>
 				<div class="rwrap">
 					for _, r := range unused {
-						@resourceChip(r)
+						@resourceChip(r, "")
 					}
 				</div>
 			}

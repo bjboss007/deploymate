@@ -226,6 +226,15 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		ports = append(ports, string(p))
 	}
 	sort.Strings(ports)
+	var ips []string
+	if ctr.NetworkSettings != nil {
+		for _, n := range ctr.NetworkSettings.Networks {
+			if n != nil && n.IPAddress != "" {
+				ips = append(ips, n.IPAddress)
+			}
+		}
+	}
+	sort.Strings(ips)
 	return Info{
 		ID:             ctr.ID,
 		Name:           name,
@@ -235,6 +244,7 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		Restarts:       ctr.RestartCount,
 		ExitCode:       ctr.State.ExitCode,
 		OOMKilled:      ctr.State.OOMKilled,
+		IPs:            ips,
 		PublishedPorts: ports,
 		MemLimitMB:     ctr.HostConfig.Memory >> 20,
 		CPULimit:       float64(ctr.HostConfig.NanoCPUs) / 1e9,

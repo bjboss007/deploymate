@@ -53,6 +53,9 @@ type Info struct {
 	// ExitCode and OOMKilled describe how a stopped container ended.
 	ExitCode  int
 	OOMKilled bool
+	// IPs are the container's addresses on its networks (for matching
+	// database client connections back to the container).
+	IPs []string
 	// PublishedPorts lists the container's host-published ports
 	// ("8080/tcp" → loopback binding); empty means nothing is reachable
 	// from the host, so the health probe can never connect.

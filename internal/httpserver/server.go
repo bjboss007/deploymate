@@ -39,6 +39,8 @@ type Server struct {
 	dns         dns.Manager  // nil disables auto-DNS
 	backups     *backup.Manager // nil disables the backups UI/actions
 	githubAPI   string          // GitHub REST base URL for prebuilt-deploy actions; "" = the real API
+	usageMu     sync.Mutex
+	usageCache  map[string]usageEntry // service id -> who was connected, briefly cached
 	previewRR   sync.Map        // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
@@ -140,6 +142,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/git/deploy-latest", am.CheckCSRF(s.handleDeployLatest))
 		r.Post("/apps/{slug}/redeploy", am.CheckCSRF(s.handleRedeploy))
 		r.Post("/apps/{slug}/appearance", am.CheckCSRF(s.handleAppearance))
+		r.Post("/apps/{slug}/services/{id}/exclusion", am.CheckCSRF(s.handleServiceExclusion))
 		r.Post("/apps/{slug}/git/test", am.CheckCSRF(s.handleGitTest))
 		r.Post("/apps/{slug}/deploy-mode", am.CheckCSRF(s.handleDeployMode))
 		r.Post("/apps/{slug}/domains", am.CheckCSRF(s.handleDomainCreate))

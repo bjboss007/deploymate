@@ -137,29 +137,48 @@ func summarize(groups []templates.ProjectGroup) templates.FleetSummary {
 	return sm
 }
 
-// appServices are the services an app receives: those of its project in the
-// same environment (the connection-URL injection rule).
-func appServices(app store.App, svcs []store.Service) []store.Service {
-	var out []store.Service
+// appServices splits the project's services into those an app receives (its
+// environment's, minus the ones it opted out of) and those it opted out of.
+func appServices(app store.App, svcs []store.Service, excluded map[string]bool) (sent, notSent []store.Service) {
 	for _, sv := range svcs {
-		if sv.Environment == app.Environment {
-			out = append(out, sv)
+		if sv.Environment != app.Environment {
+			continue
 		}
+		if excluded[sv.ID] {
+			notSent = append(notSent, sv)
+		} else {
+			sent = append(sent, sv)
+		}
+	}
+	return sent, notSent
+}
+
+// exclusionsFor loads each app's opt-outs, keyed by app id.
+func (s *Server) exclusionsFor(apps []store.App) map[string]map[string]bool {
+	out := make(map[string]map[string]bool, len(apps))
+	for _, a := range apps {
+		ex, err := s.store.ListAppServiceExclusions(a.ID)
+		if err != nil {
+			slog.Error("fleet: list exclusions", "app", a.Slug, "err", err)
+		}
+		out[a.ID] = ex
 	}
 	return out
 }
 
 // applyResourceHealth turns "the app is running but a database or cache it
-// uses is not" into an attention reason — the app answers, but it is about to
-// fail the first request that needs its data. Failed or already-unhealthy
-// apps keep their own, more specific, reason.
-func applyResourceHealth(rows []templates.AppRow, svcs []store.Service) {
+// is given is not" into an attention reason — the app answers, but it is
+// about to fail the first request that needs its data. Services the app opted
+// out of never count. Failed or already-unhealthy apps keep their own, more
+// specific, reason.
+func applyResourceHealth(rows []templates.AppRow, svcs []store.Service, excl map[string]map[string]bool) {
 	for i := range rows {
 		r := &rows[i]
 		if r.App.Status != "running" || r.Attention == "bad" {
 			continue
 		}
-		for _, sv := range appServices(r.App, svcs) {
+		sent, _ := appServices(r.App, svcs, excl[r.App.ID])
+		for _, sv := range sent {
 			if sv.Status == "running" {
 				continue
 			}
@@ -173,28 +192,37 @@ func applyResourceHealth(rows []templates.AppRow, svcs []store.Service) {
 	}
 }
 
-// buildAppCards groups each app with the resources it uses, and returns the
-// services no app in the project gets (their environment has no apps).
-func buildAppCards(rows []templates.AppRow, svcs []store.Service) (cards []templates.AppCard, unused []templates.ResourceChip) {
-	chip := func(sv store.Service) templates.ResourceChip {
-		c := templates.ResourceChip{Service: sv, EnvKey: sv.Type}
+// buildAppCards groups each app with the resources it is given (and the ones
+// it opted out of), and returns the services no app in the project gets
+// (their environment has no apps). usage[appID][serviceID] is "connected",
+// "idle" or "" (unknown).
+func buildAppCards(rows []templates.AppRow, svcs []store.Service, excl map[string]map[string]bool, usage map[string]map[string]string) (cards []templates.AppCard, unused []templates.ResourceChip) {
+	chip := func(sv store.Service, app store.App) templates.ResourceChip {
+		c := templates.ResourceChip{Service: sv, EnvKey: sv.Type, AppSlug: app.Slug, AppName: app.Name}
 		if tpl, ok := services.ForType(sv.Type); ok {
 			c.EnvKey = tpl.URLEnv
 		}
 		var peers []string
 		for _, r := range rows {
-			if r.App.Environment == sv.Environment {
+			if r.App.Environment == sv.Environment && !excl[r.App.ID][sv.ID] {
 				peers = append(peers, r.App.Name)
 			}
 		}
 		c.Shared = len(peers) > 1
 		c.Peers = strings.Join(peers, ", ")
+		c.Usage = usage[app.ID][sv.ID]
 		return c
 	}
 	for _, r := range rows {
 		card := templates.AppCard{Row: r, Identity: stack.Resolve(r.App)}
-		for _, sv := range appServices(r.App, svcs) {
-			card.Resources = append(card.Resources, chip(sv))
+		sent, notSent := appServices(r.App, svcs, excl[r.App.ID])
+		for _, sv := range sent {
+			card.Resources = append(card.Resources, chip(sv, r.App))
+		}
+		for _, sv := range notSent {
+			c := chip(sv, r.App)
+			c.Excluded, c.Usage = true, ""
+			card.NotSent = append(card.NotSent, c)
 		}
 		cards = append(cards, card)
 	}
@@ -207,8 +235,15 @@ func buildAppCards(rows []templates.AppRow, svcs []store.Service) (cards []templ
 			}
 		}
 		if !used {
-			unused = append(unused, chip(sv))
+			unused = append(unused, templates.ResourceChip{Service: sv, EnvKey: envKeyFor(sv.Type)})
 		}
 	}
 	return cards, unused
+}
+
+func envKeyFor(svcType string) string {
+	if tpl, ok := services.ForType(svcType); ok {
+		return tpl.URLEnv
+	}
+	return svcType
 }

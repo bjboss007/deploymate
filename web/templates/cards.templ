@@ -14,13 +14,21 @@ type ResourceChip struct {
 	EnvKey  string // the variable apps receive, e.g. DATABASE_URL
 	Shared  bool   // more than one app in the project gets this service
 	Peers   string // names of the apps that get it, for the tooltip
+	// For a chip inside an app's card: which app, whether it opted out of the
+	// service, and whether a connection from it was seen ("connected",
+	// "idle", or "" = unknown).
+	AppSlug  string
+	AppName  string
+	Excluded bool
+	Usage    string
 }
 
 // AppCard is an application with the resources it uses, as one card.
 type AppCard struct {
 	Row       AppRow
 	Identity  stack.Identity
-	Resources []ResourceChip
+	Resources []ResourceChip // given to the app
+	NotSent   []ResourceChip // services it opted out of
 }
 
 // engineLabel renders "PostgreSQL 16" from the service's logo name and image
@@ -75,36 +83,55 @@ templ appTile(id stack.Identity) {
 	</span>
 }
 
-templ resourceChip(c ResourceChip) {
-	<a class={ "rchip", templ.KV("rchip-bad", c.Service.Status != "running") } href={ templ.SafeURL("/services/" + c.Service.Slug) }>
-		<span class="rtile">
-			@logoMark(serviceLogo(c.Service.Type))
-		</span>
-		<span class="rtext">
-			<span class="rname">
-				{ c.Service.Name }
-				if c.Shared {
-					<span class="badge" title={ "Also used by " + c.Peers }>shared</span>
+templ resourceChip(c ResourceChip, csrf string) {
+	<div class={ "rchip", templ.KV("rchip-bad", c.Service.Status != "running" && !c.Excluded), templ.KV("rchip-off", c.Excluded) }>
+		<a class="rlink" href={ templ.SafeURL("/services/" + c.Service.Slug) }>
+			<span class="rtile">
+				@logoMark(serviceLogo(c.Service.Type))
+			</span>
+			<span class="rtext">
+				<span class="rname">
+					{ c.Service.Name }
+					if c.Shared {
+						<span class="badge" title={ "Also sent to " + c.Peers }>shared</span>
+					}
+				</span>
+				<span class="rsub">
+					<span class={ "lamp-dot", "lamp-" + svcLamp(c.Service.Status) }></span>
+					if c.Service.Status == "running" {
+						Running
+					} else if c.Service.Status == "failed" {
+						Failed to start · open it
+					} else {
+						Stopped · start it
+					}
+					· { engineLabel(c.Service) } · { c.EnvKey }
+				</span>
+				if c.Usage == "connected" {
+					<span class="rusage rusage-on">Connected now</span>
+				} else if c.Usage == "idle" {
+					<span class="rusage" title="This app is given the URL, but no live connection from it was seen just now. Apps that connect only when a request needs data can show this too.">Not connected right now</span>
 				}
 			</span>
-			<span class="rsub">
-				<span class={ "lamp-dot", "lamp-" + svcLamp(c.Service.Status) }></span>
-				if c.Service.Status == "running" {
-					Running
-				} else if c.Service.Status == "failed" {
-					Failed to start · open it
+		</a>
+		if c.AppSlug != "" {
+			<form method="post" action={ "/apps/" + c.AppSlug + "/services/" + c.Service.ID + "/exclusion" } class="rx">
+				<input type="hidden" name="csrf_token" value={ csrf }/>
+				if c.Excluded {
+					<input type="hidden" name="excluded" value="0"/>
+					<button class="btn btn-ghost btn-sm" type="submit" title={ "Send " + c.Service.Name + "'s connection URL to " + c.AppName + " again" }>Send again</button>
 				} else {
-					Stopped · start it
+					<input type="hidden" name="excluded" value="1"/>
+					<button class="btn btn-ghost btn-sm" type="submit" title={ c.AppName + " doesn't use " + c.Service.Name + ": stop sending it the connection URL" }>Stop sending</button>
 				}
-				· { engineLabel(c.Service) } · { c.EnvKey }
-			</span>
-		</span>
-	</a>
+			</form>
+		}
+	</div>
 }
 
 // appCardView is the project page's unit: the app (logo, state, version) and,
 // beneath it, the resources it uses.
-templ appCardView(c AppCard) {
+templ appCardView(c AppCard, csrf string) {
 	<div class={ "acard", "id-" + c.Identity.AccentKey, templ.KV("acard-bad", c.Row.Attention == "bad") }>
 		<span class="idbar" aria-hidden="true"></span>
 		<div class="acard-main">
@@ -131,15 +158,26 @@ templ appCardView(c AppCard) {
 				<span class="acard-go" aria-hidden="true">›</span>
 			</a>
 			<div class="acard-res">
-				<div class="rl">Resources this app uses</div>
+				<div class="rl" title="DeployMate gives every app the connection URL of each database and cache in its project and environment. Whether the app actually connects is shown on each chip.">Available to this app</div>
 				<div class="rwrap">
 					for _, r := range c.Resources {
-						@resourceChip(r)
+						@resourceChip(r, csrf)
 					}
-					if len(c.Resources) == 0 {
+					if len(c.Resources) == 0 && len(c.NotSent) == 0 {
 						<a class="rchip rchip-add" href="#services">+ Add a database or cache</a>
 					}
+					if len(c.Resources) == 0 && len(c.NotSent) > 0 {
+						<span class="muted-text">Nothing is sent to this app.</span>
+					}
 				</div>
+				if len(c.NotSent) > 0 {
+					<div class="rl rl-off">Not sent to this app</div>
+					<div class="rwrap">
+						for _, r := range c.NotSent {
+							@resourceChip(r, csrf)
+						}
+					</div>
+				}
 			</div>
 		</div>
 	</div>

@@ -146,3 +146,36 @@ func TestAppearanceColumns(t *testing.T) {
 		t.Errorf("GetAppByID lost the logo: %+v", byID)
 	}
 }
+
+func TestAppServiceExclusions(t *testing.T) {
+	st, app := newReplicaTestApp(t)
+	sv, err := st.CreateService(Service{ProjectID: app.ProjectID, Type: "redis", Name: "r", Slug: "r", Image: "redis:7"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.ListAppServiceExclusions(app.ID); len(got) != 0 {
+		t.Fatalf("default exclusions = %v", got)
+	}
+	for i := 0; i < 2; i++ { // idempotent
+		if err := st.SetAppServiceExcluded(app.ID, sv.ID, true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, _ := st.ListAppServiceExclusions(app.ID); !got[sv.ID] || len(got) != 1 {
+		t.Fatalf("after exclude = %v", got)
+	}
+	if err := st.SetAppServiceExcluded(app.ID, sv.ID, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.ListAppServiceExclusions(app.ID); len(got) != 0 {
+		t.Fatalf("after include = %v", got)
+	}
+	// Deleting the service clears its exclusions (FK cascade).
+	_ = st.SetAppServiceExcluded(app.ID, sv.ID, true)
+	if err := st.DeleteService(sv.ID); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := st.ListAppServiceExclusions(app.ID); len(got) != 0 {
+		t.Fatalf("exclusion survived its service: %v", got)
+	}
+}

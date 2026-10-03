@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -9,6 +10,8 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -245,7 +248,7 @@ func TestProjectPageGroupsAppsWithTheirResources(t *testing.T) {
 	}
 	body := rec.Body.String()
 	for _, want := range []string{
-		`class="acard`, "Resources this app uses", // the card
+		`class="acard`, "Available to this app", // the card
 		"Spring on Java 21", "Node.js 22", // stack labels (detected framework / runtime)
 		"PostgreSQL 16", "Redis 7", "DATABASE_URL", "REDIS_URL", // resource chips
 		"Running, but its Redis is down.", // a down resource is surfaced on the app
@@ -290,5 +293,102 @@ func TestAppearanceHandler(t *testing.T) {
 	e.post(t, "/apps/api/appearance", url.Values{"logo": {""}, "accent": {""}})
 	if app, _ = e.reload(t); app.Logo != "" || app.Accent != "" {
 		t.Errorf("automatic not restored: %q / %q", app.Logo, app.Accent)
+	}
+}
+
+// usageRuntime reports per-container IPs and a Redis/Postgres client list.
+type usageRuntime struct {
+	fakeRuntime
+	ips     map[string][]string // container name -> addresses
+	clients string              // output of the probe (any service type)
+}
+
+func (u *usageRuntime) Inspect(_ context.Context, name string) (runtime.Info, error) {
+	return runtime.Info{Running: true, IPs: u.ips[name]}, nil
+}
+func (u *usageRuntime) Exec(context.Context, string, []string) (string, error) { return u.clients, nil }
+
+// TestResourceCardsShowRealUsageAndHonourOptOut: a chip says whether the app
+// really holds a connection ("Connected now" / "Not connected right now"),
+// and "Stop sending" removes the service from the app's injected environment
+// (and its card), flags the app for a redeploy, and can be undone.
+func TestResourceCardsShowRealUsageAndHonourOptOut(t *testing.T) {
+	st, web := replicaTestEnv(t, store.App{Name: "Web", Slug: "web", Status: "running", Health: "healthy", Port: 8080, Environment: "dev"})
+	api, err := st.CreateApp(store.App{ProjectID: web.ProjectID, Name: "Api", Slug: "api", Status: "running", Health: "healthy", Port: 8080, Environment: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	redis, err := st.CreateService(store.Service{ProjectID: web.ProjectID, Type: "redis", Name: "dev-redis", Slug: "dev-redis", Image: "redis:7-alpine", Status: "running", Environment: "dev", Port: 6379})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Only api (172.25.0.9) is connected to the redis; web (172.25.0.8) is not.
+	rt := &usageRuntime{
+		ips:     map[string][]string{"dm-web": {"172.25.0.8"}, "dm-api": {"172.25.0.9"}},
+		clients: "id=1 addr=172.25.0.9:5000 fd=8\n",
+	}
+	s := &Server{store: st, rt: rt, encKey: [32]byte{3}}
+	enc, err := crypto.Encrypt(s.encKey, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetServiceCredentials(redis.ID, map[string]string{"password": enc}); err != nil {
+		t.Fatal(err)
+	}
+	if env := strings.Join(s.AppEnv(web), "\n"); !strings.Contains(env, "REDIS_URL") {
+		t.Fatalf("before opting out, web should receive REDIS_URL: %s", env)
+	}
+	get := func(path string) string {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s: %d", path, rec.Code)
+		}
+		return rec.Body.String()
+	}
+	post := func(path string, f url.Values) string {
+		f.Set("csrf_token", "csrf")
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(f.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		return rec.Header().Get("Location")
+	}
+
+	page := get("/projects/test")
+	if !strings.Contains(page, "Connected now") || !strings.Contains(page, "Not connected right now") {
+		t.Errorf("usage states missing: connected=%v idle=%v", strings.Contains(page, "Connected now"), strings.Contains(page, "Not connected right now"))
+	}
+	if !strings.Contains(page, "Stop sending") {
+		t.Error("each resource chip needs a Stop sending action")
+	}
+
+	// Web doesn't use Redis: stop sending it.
+	loc := post("/apps/web/services/"+redis.ID+"/exclusion", url.Values{"excluded": {"1"}})
+	if !strings.Contains(flashOf(t, loc), "no longer be sent to Web") {
+		t.Errorf("flash = %q", flashOf(t, loc))
+	}
+	// Its environment no longer carries REDIS_URL — api's still does.
+	if env := strings.Join(s.AppEnv(web), "\n"); strings.Contains(env, "REDIS_URL") {
+		t.Errorf("web still receives REDIS_URL: %s", env)
+	}
+	if env := strings.Join(s.AppEnv(api), "\n"); !strings.Contains(env, "REDIS_URL") {
+		t.Errorf("api lost REDIS_URL: %s", env)
+	}
+	page = get("/projects/test")
+	if !strings.Contains(page, "Not sent to this app") || !strings.Contains(page, "Send again") {
+		t.Error("the opted-out service should be listed as not sent, with Send again")
+	}
+	// A service from another project can't be attached.
+	if loc := post("/apps/web/services/does-not-exist/exclusion", url.Values{"excluded": {"1"}}); loc != "" {
+		t.Errorf("unknown service accepted: %q", loc)
+	}
+	// And it can be undone.
+	post("/apps/web/services/"+redis.ID+"/exclusion", url.Values{"excluded": {"0"}})
+	if ex, _ := st.ListAppServiceExclusions(web.ID); len(ex) != 0 {
+		t.Errorf("exclusion not removed: %v", ex)
 	}
 }

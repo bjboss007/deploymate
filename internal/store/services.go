@@ -101,6 +101,21 @@ func (s *Store) GetServiceBySlug(slug string) (Service, error) {
 	return sv, err
 }
 
+// GetServiceByID loads a service by its id.
+func (s *Store) GetServiceByID(id string) (Service, error) {
+	var sv Service
+	err := s.db.QueryRow(
+		`SELECT id, project_id, type, name, slug, image, status, volume_name, port, environment, origin, orphaned, created_at
+		 FROM services WHERE id = ?`,
+		id,
+	).Scan(&sv.ID, &sv.ProjectID, &sv.Type, &sv.Name, &sv.Slug, &sv.Image, &sv.Status,
+		&sv.VolumeName, &sv.Port, &sv.Environment, &sv.Origin, &sv.Orphaned, &sv.CreatedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return sv, ErrNotFound
+	}
+	return sv, err
+}
+
 // UpdateServiceStatus sets the service's runtime status.
 func (s *Store) UpdateServiceStatus(id, status string) error {
 	_, err := s.db.Exec(`UPDATE services SET status = ? WHERE id = ?`, status, id)
