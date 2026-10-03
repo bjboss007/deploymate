@@ -470,3 +470,88 @@ func TestRunWorkflowNow(t *testing.T) {
 		t.Errorf("422 flash = %q", f)
 	}
 }
+
+// Retry queues a copy of the app's newest failed deployment (same commit and
+// CI run), and refuses anything that could deploy the wrong thing.
+func TestRetryFailedDeployment(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	failed, err := e.st.CreateDeployment(store.Deployment{
+		AppID: e.app.ID, Kind: "deploy", Status: "failed", Trigger: "webhook",
+		CommitSHA: "abc123", CommitMessage: "ship it", CIRun: 55, CIRunNumber: 9,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A deployment that did not fail cannot be retried.
+	ok, _ := e.st.CreateDeployment(store.Deployment{AppID: e.app.ID, Kind: "deploy", Status: "running", CommitSHA: "old"})
+	_, loc := e.post(t, "/deployments/"+ok.ID+"/retry", url.Values{})
+	if !strings.Contains(flashOf(t, loc), "Only a failed") {
+		t.Errorf("running deployment flash = %q", flashOf(t, loc))
+	}
+	// A newer deployment exists (ok was created after failed) -> refused.
+	_, loc = e.post(t, "/deployments/"+failed.ID+"/retry", url.Values{})
+	if !strings.Contains(flashOf(t, loc), "newer deployment") {
+		t.Errorf("stale retry flash = %q", flashOf(t, loc))
+	}
+
+	// Fresh app state: the failed one is the newest.
+	e2 := newPrebuiltEnv(t)
+	failed, _ = e2.st.CreateDeployment(store.Deployment{
+		AppID: e2.app.ID, Kind: "deploy", Status: "failed", Trigger: "webhook",
+		CommitSHA: "abc123", CommitMessage: "ship it", CIRun: 55, CIRunNumber: 9,
+	})
+	code, loc := e2.post(t, "/deployments/"+failed.ID+"/retry", url.Values{})
+	if code != http.StatusSeeOther || !strings.HasPrefix(loc, "/deployments/") || strings.Contains(loc, failed.ID) {
+		t.Fatalf("retry: %d %q", code, loc)
+	}
+	ds, _ := e2.st.ListDeployments(e2.app.ID, 5)
+	if len(ds) != 2 {
+		t.Fatalf("deployments = %d, want 2", len(ds))
+	}
+	nd := ds[0]
+	if nd.Status != "queued" || nd.Kind != "deploy" || nd.CommitSHA != "abc123" || nd.CIRun != 55 || nd.CIRunNumber != 9 || nd.Trigger != "dashboard" {
+		t.Errorf("retry deployment = %+v", nd)
+	}
+	// A second click while one is in flight goes to that one, queuing nothing.
+	code, loc2 := e2.post(t, "/deployments/"+failed.ID+"/retry", url.Values{})
+	if code != http.StatusSeeOther || loc2 != "/deployments/"+nd.ID {
+		t.Errorf("double click -> %q, want the in-flight deployment", loc2)
+	}
+	if ds, _ := e2.st.ListDeployments(e2.app.ID, 5); len(ds) != 2 {
+		t.Errorf("double click queued another (%d)", len(ds))
+	}
+
+	// A prebuilt run whose artifact expired is refused with a pointer to
+	// Run workflow now.
+	e3 := newPrebuiltEnv(t)
+	e3.enablePrebuilt(t)
+	e3.arts = map[int64]string{77: `[{"id":1,"name":"deploymate-app","expired":true}]`}
+	f3, _ := e3.st.CreateDeployment(store.Deployment{AppID: e3.app.ID, Kind: "deploy", Status: "failed", CIRun: 77, CIRunNumber: 4})
+	_, loc = e3.post(t, "/deployments/"+f3.ID+"/retry", url.Values{})
+	if !strings.Contains(flashOf(t, loc), "Run workflow now") {
+		t.Errorf("expired retry flash = %q", flashOf(t, loc))
+	}
+	if ds, _ := e3.st.ListDeployments(e3.app.ID, 5); len(ds) != 1 {
+		t.Errorf("expired retry queued a deployment (%d)", len(ds))
+	}
+}
+
+func TestRetryButtonShowsOnlyOnNewestFailedDeployment(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	old, _ := e.st.CreateDeployment(store.Deployment{AppID: e.app.ID, Kind: "deploy", Status: "failed"})
+	get := func(id string) string {
+		req := httptest.NewRequest(http.MethodGet, "/deployments/"+id, nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	if !strings.Contains(get(old.ID), "Retry this deploy") {
+		t.Error("the newest failed deployment should offer Retry")
+	}
+	time.Sleep(1100 * time.Millisecond) // created_at has one-second resolution
+	e.st.CreateDeployment(store.Deployment{AppID: e.app.ID, Kind: "deploy", Status: "running"})
+	if strings.Contains(get(old.ID), "Retry this deploy") {
+		t.Error("an older failed deployment must not offer Retry")
+	}
+}

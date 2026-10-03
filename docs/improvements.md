@@ -31,8 +31,13 @@ change.
   "Not connected right now", opted-out apps marked "not sent to this app", and
   **Stop sending / Send again** that return to the service page (`back` is
   accepted only for local `/services/…` paths).
-- [ ] **One-click retry on a failed deployment; mobile sticky action bar** —
-  UI polish ideas from the redesign.
+- [x] **One-click retry on a failed deployment** — done 2026-10-04: **Retry
+  this deploy** on the deployment page and the Overview failure banner
+  (`POST /deployments/{id}/retry`) queues a copy (same commit / CI run / image).
+  Refused when the deployment didn't fail, isn't the app's newest, another one
+  is in flight (the click goes to that one), or a prebuilt run's artifact has
+  expired (points at Run workflow now).
+- [ ] **Mobile sticky action bar** — UI polish idea from the redesign.
 - [ ] **Owner/ops (not code):** rotate the R2 backup keys that were printed to
   the terminal while copying the live env (then restart once more); start
   `dm-svc-main-mysql` from the dashboard; BeyondCredit org must approve the

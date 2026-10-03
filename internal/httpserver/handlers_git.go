@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	cryptoRand "crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -14,6 +15,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/githubci"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
 	"github.com/habibmuhammad/deploymate/internal/sse"
 	"github.com/habibmuhammad/deploymate/internal/store"
@@ -348,7 +350,13 @@ func (s *Server) handleDeploymentPage(w http.ResponseWriter, r *http.Request) {
 			commitURL = gitpkg.CommitURL(gs.RepoURL, d.CommitSHA)
 		}
 	}
-	render(w, r, http.StatusOK, templates.DeploymentPage(s.viewCtx(r), project, app, d, commitURL))
+	retry := false
+	if d.Status == "failed" {
+		if ds, err := s.store.ListDeployments(app.ID, 1); err == nil && len(ds) == 1 && ds[0].ID == d.ID {
+			retry = true // only the newest deployment can be retried
+		}
+	}
+	render(w, r, http.StatusOK, templates.DeploymentPage(s.viewCtx(r), project, app, d, commitURL, retry))
 }
 
 // handleDeploymentStream replays stored build lines then streams live events
@@ -430,6 +438,78 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/deployments/"+rb.ID, http.StatusSeeOther)
+}
+
+// handleRetry queues a copy of a failed deployment — same commit, same CI run,
+// same image — so a transient failure (a flaky build, a registry blip, a
+// service that was down) is one click, not a re-entry of what was deployed.
+// It refuses anything that could deploy the wrong thing: a deployment that did
+// not fail, one that is not the app's newest (a newer deploy exists), a second
+// click while one is already in flight, and a CI run whose artifact is gone.
+func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
+	d, err := s.store.GetDeployment(chi.URLParam(r, "id"))
+	if errors.Is(err, store.ErrNotFound) {
+		notFoundPage(w, r)
+		return
+	}
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	app, err := s.store.GetAppByID(d.AppID)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/deployments/"+d.ID+"?flash="+flashURL(msg), http.StatusSeeOther)
+	}
+	if d.Status != "failed" {
+		back("Only a failed deployment can be retried.")
+		return
+	}
+	recent, err := s.store.ListDeployments(app.ID, 5)
+	if err != nil || len(recent) == 0 {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	for _, o := range recent {
+		if o.Status == "queued" || o.Status == "building" {
+			http.Redirect(w, r, "/deployments/"+o.ID, http.StatusSeeOther) // already in flight
+			return
+		}
+	}
+	if recent[0].ID != d.ID {
+		back("A newer deployment exists — deploy the latest instead of retrying this one.")
+		return
+	}
+	// A prebuilt run whose artifact has expired can never succeed.
+	if d.CIRun != 0 && app.DeployMode == store.DeployModeArtifact && app.GitSourceID != "" {
+		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil {
+			if repo, ok := githubci.ParseRepoURL(gs.RepoURL); ok {
+				if gh, ok := s.githubClient(gs); ok {
+					ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+					arts, err := gh.ListRunArtifacts(ctx, repo, d.CIRun)
+					cancel()
+					if err == nil && !hasLiveArtifact(arts, app.ArtifactName) {
+						back(fmt.Sprintf("CI run #%d has no artifact any more (GitHub deletes them after the workflow's retention-days). Use Run workflow now on the app page to build a fresh one.", d.CIRunNumber))
+						return
+					}
+				}
+			}
+		}
+	}
+	nd, err := s.store.CreateDeployment(store.Deployment{
+		AppID: app.ID, Kind: d.Kind, Status: "queued", Trigger: "dashboard",
+		CommitSHA: d.CommitSHA, CommitMessage: d.CommitMessage, ImageTag: d.ImageTag,
+		CIRun: d.CIRun, CIRunNumber: d.CIRunNumber,
+	})
+	if err != nil {
+		slog.Error("deployments: queue retry", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/deployments/"+nd.ID, http.StatusSeeOther)
 }
 
 // handleRedeploy restarts the app on the version it is already running, so

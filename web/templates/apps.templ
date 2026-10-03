@@ -183,7 +183,7 @@ templ pendingEnvBanner(vc ViewCtx, app store.App, pending bool) {
 // appDiagnosis answers "why isn't it working?" at the top of Overview: the
 // last deployment's real error, or the health check's reason, with the way to
 // read the full log. It renders nothing when everything is fine.
-templ appDiagnosis(app store.App, deployments []store.Deployment, healthReason string) {
+templ appDiagnosis(vc ViewCtx, app store.App, deployments []store.Deployment, healthReason string) {
 	if len(deployments) > 0 && deployments[0].Status == "failed" {
 		<div class="diagnosis diagnosis-bad" role="alert">
 			<div class="diagnosis-title">The last deploy failed</div>
@@ -194,6 +194,10 @@ templ appDiagnosis(app store.App, deployments []store.Deployment, healthReason s
 				@explainBlock(app, ex)
 			}
 			<div class="diagnosis-actions">
+				<form method="post" action={ "/deployments/" + deployments[0].ID + "/retry" } class="inline-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-primary btn-sm" type="submit">Retry this deploy</button>
+				</form>
 				<a class="btn btn-ghost btn-sm" href={ templ.SafeURL("/deployments/" + deployments[0].ID) }>Read the build log</a>
 				if app.Status == "running" {
 					<span class="muted-text">The previous version is still serving.</span>
@@ -332,7 +336,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 
 		<section class="tab-panel" id="tab-overview" data-tab="overview" aria-label="Overview">
 			@pendingEnvBanner(vc, app, envPending)
-			@appDiagnosis(app, deployments, healthReason)
+			@appDiagnosis(vc, app, deployments, healthReason)
 			<div class="facts">
 				<div class="fact">
 					<div class="fact-label">Health</div>

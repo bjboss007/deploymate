@@ -154,6 +154,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/deployments/{id}", s.handleDeploymentPage)
 		r.Get("/deployments/{id}/stream", s.handleDeploymentStream)
 		r.Post("/deployments/{id}/rollback", am.CheckCSRF(s.handleRollback))
+		r.Post("/deployments/{id}/retry", am.CheckCSRF(s.handleRetry))
 		r.Get("/services/{slug}", s.handleServicePage)
 		r.Post("/services/{slug}/start", am.CheckCSRF(s.handleServiceStart))
 		r.Post("/services/{slug}/stop", am.CheckCSRF(s.handleServiceStop))

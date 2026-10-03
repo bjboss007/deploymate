@@ -63,7 +63,7 @@ templ explainBlock(app store.App, ex *builder.Explanation) {
 	</div>
 }
 
-templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.Deployment, commitURL string) {
+templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.Deployment, commitURL string, canRetry bool) {
 	@Layout(vc, "Deploy "+app.Name, "", []Crumb{
 		{Label: project.Name, Href: "/projects/" + project.Slug},
 		{Label: app.Name, Href: "/apps/" + app.Slug},
@@ -94,6 +94,12 @@ templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.D
 			</div>
 			<div class="app-actions">
 				@statusBadge(d.Status)
+				if canRetry {
+					<form method="post" action={ "/deployments/" + d.ID + "/retry" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn btn-primary" type="submit">Retry this deploy</button>
+					</form>
+				}
 				if canRollBack(app, d) {
 					<form method="post" action={ "/deployments/" + d.ID + "/rollback" }>
 						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
