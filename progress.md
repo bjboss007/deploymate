@@ -30,8 +30,7 @@ recorded as an `env_changed` event so the app page shows the "Variables changed
 … Redeploy now" banner; a down service the app opted out of no longer flags it.
 Tests: `internal/usage`, `internal/store` (exclusions), handler tests
 (`TestResourceCardsShowRealUsageAndHonourOptOut`, updated card test). Clicked
-through in the browser pane. **Not on the live server yet — restart applies
-migration 19 (snapshot first).**
+through in the browser pane. **Live server restarted on this build** (pid 91747, snapshot `pre-0019-*.db`, migration 19 applied).
 
 **2026-10-03 (UI: app cards with logos + identity colour)** — Owner asked to
 group an app with its own resources in one card with technology logos
