@@ -812,6 +812,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 			<div class="settings-group" id="set-appearance">
 				<div class="group-head"><h2>Appearance</h2><p>The logo and colour that identify this app on cards.</p></div>
 				<div class="panel">
+					@detectedLogo(vc, app)
 					<form method="post" action={ "/apps/" + app.Slug + "/appearance" } class="appearance-form">
 						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 						<label>Logo
@@ -917,5 +918,37 @@ templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
 				Limits are per replica — total ask <span class="mono">{ fmt.Sprintf("%d MB · %s CPU", app.MemLimitMB*ri.Desired, fmtCPU(app.CPULimit*float64(ri.Desired))) }</span>.
 			}
 		</p>
+	</div>
+}
+
+// detectedLogo says what DeployMate detected and whether the owner's choice
+// overrides it, with a one-click way back to the detected logo.
+templ detectedLogo(vc ViewCtx, app store.App) {
+	{{ det, fromFw := stack.Detected(app) }}
+	<div class="detected">
+		@appTile(det)
+		<div class="detected-text">
+			<strong>Detected: { det.Label }</strong>
+			<span class="muted-text">
+				if fromFw {
+					Found in the repository or JAR at the last deploy.
+				} else if app.DeployMode == "artifact" || app.Runtime != "" || app.Image != "" {
+					No framework found — showing the runtime or image. Pick a logo below if that's wrong.
+				} else {
+					Nothing detected yet — deploy once, or pick a logo below.
+				}
+			</span>
+			if app.Logo != "" {
+				<span class="muted-text">You chose { logos.Get(app.Logo).Name }, which overrides it.</span>
+			}
+		</div>
+		if app.Logo != "" {
+			<form method="post" action={ "/apps/" + app.Slug + "/appearance" }>
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<input type="hidden" name="logo" value=""/>
+				<input type="hidden" name="accent" value={ app.Accent }/>
+				<button class="btn btn-ghost btn-sm" type="submit">Use detected</button>
+			</form>
+		}
 	</div>
 }

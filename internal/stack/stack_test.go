@@ -139,3 +139,14 @@ func TestDetectJar(t *testing.T) {
 		t.Error("a missing jar detects nothing")
 	}
 }
+
+func TestDetectedIgnoresTheOwnersChoice(t *testing.T) {
+	app := store.App{Slug: "web", Runtime: "node:22", Stack: "react", Logo: "next"}
+	id, fw := Detected(app)
+	if id.Tile != "react" || !fw {
+		t.Errorf("Detected = %q fw=%v, want react/true", id.Tile, fw)
+	}
+	if _, fw := Detected(store.App{Slug: "api", Runtime: "python:3.13"}); fw {
+		t.Error("a runtime-only app has no detected framework")
+	}
+}

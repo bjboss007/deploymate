@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-04 (framework detection correction)** — Settings → Appearance now
+leads with "Detected: <logo> <label>" plus its source (framework found in repo/JAR
+vs runtime/image only), says when the owner's choice overrides it, and has a
+**Use detected** button (posts logo="" keeping the colour). `stack.Detected`,
+`detectedLogo` templ, `TestAppearancePanelShowsDetectedLogo`,
+`TestDetectedIgnoresTheOwnersChoice`. **Not yet restarted live** (no migration).
+Next: memory preflight (P3).
+
 **2026-10-04 (expired runs + Run workflow now)** — `deployLatestRun` now
 checks each candidate run's artifacts and skips ones with no live artifact of the
 configured name (lookup failures don't skip); all expired → flash pointing at

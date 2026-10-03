@@ -20,8 +20,9 @@ change.
   button explains this on a 403; deploys themselves stay read-only.
 - [x] **Fleet board rows show the app's logo + identity colour** — done
   2026-10-04 (same tile as the card, small; `AppRow.Identity`).
-- [ ] **Framework detection is a best guess** — surface "detected: X" with a
-  one-click correction beside the Appearance override.
+- [x] **Framework detection is a best guess** — done 2026-10-04: Settings →
+  Appearance shows "Detected: …" (and where it came from), flags an owner
+  override, and **Use detected** returns to it in one click (`stack.Detected`).
 - [ ] **Usage signal can't prove "unused"** — apps that connect per request
   look idle; consider a longer sampling window before suggesting **Stop
   sending**.

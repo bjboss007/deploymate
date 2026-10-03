@@ -46,6 +46,14 @@ var imageLogo = map[string]string{
 	"openjdk": "java", "eclipse-temurin": "java", "httpd": "static", "caddy": "static",
 }
 
+// Detected is how the app would be drawn if the owner had made no logo choice:
+// what DeployMate itself found. FromFramework says whether a framework was
+// found (repository scan or JAR) rather than only a runtime or image.
+func Detected(app store.App) (id Identity, fromFramework bool) {
+	app.Logo = ""
+	return Resolve(app), logos.Has(app.Stack)
+}
+
 // Resolve works out how to draw an app.
 func Resolve(app store.App) Identity {
 	id := Identity{AccentKey: AccentKeyFor(app), Accent: AccentFor(app)}

@@ -392,3 +392,32 @@ func TestResourceCardsShowRealUsageAndHonourOptOut(t *testing.T) {
 		t.Errorf("exclusion not removed: %v", ex)
 	}
 }
+
+// The Appearance panel says what was detected, and offers a way back to it
+// only when the owner's choice overrides it.
+func TestAppearancePanelShowsDetectedLogo(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	if err := e.st.UpdateAppStack(e.app.ID, "spring"); err != nil {
+		t.Fatal(err)
+	}
+	page := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	body := page()
+	if !strings.Contains(body, "Detected: Spring") || strings.Contains(body, "Use detected") {
+		t.Error("detected framework should show without an override button")
+	}
+	e.post(t, "/apps/api/appearance", url.Values{"logo": {"react"}, "accent": {""}})
+	body = page()
+	if !strings.Contains(body, "Detected: Spring") || !strings.Contains(body, "overrides it") || !strings.Contains(body, "Use detected") {
+		t.Error("an override should be flagged with a Use detected button")
+	}
+	e.post(t, "/apps/api/appearance", url.Values{"logo": {""}, "accent": {""}})
+	if app, _ := e.reload(t); app.Logo != "" {
+		t.Errorf("Use detected left logo %q", app.Logo)
+	}
+}
