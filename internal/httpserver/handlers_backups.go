@@ -110,12 +110,12 @@ func (s *Server) handleBackupKey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if s.backups == nil {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	hexKey, err := s.backups.ServiceKeyHex(svc.ID)
 	if errors.Is(err, backup.ErrDisabled) || errors.Is(err, backup.ErrNoKey) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {

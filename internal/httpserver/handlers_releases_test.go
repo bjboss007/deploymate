@@ -95,14 +95,14 @@ func TestReleasesPageShowsAllRows(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"webhook", "dashboard", "badge badge-running", "badge badge-failed", "badge-accent", "current", "deploymate/apps/web:old", "newsha", "badsha", "Rollback", "1m0s"} {
+	for _, want := range []string{"webhook", "dashboard", "badge badge-running", "badge badge-failed", "badge-accent", "current", "deploymate/apps/web:old", "newsha", "badsha", "Roll back", "1m0s"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q", want)
 		}
 	}
 	// The failed deployment is not rollbackable and neither is the current
 	// one: exactly one Rollback form.
-	if n := strings.Count(body, ">Rollback</button>"); n != 1 {
+	if n := strings.Count(body, ">Roll back</button>"); n != 1 {
 		t.Fatalf("rollback buttons = %d, want 1", n)
 	}
 }

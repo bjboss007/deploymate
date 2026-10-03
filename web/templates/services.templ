@@ -26,7 +26,7 @@ type BackupObject struct {
 // ServicePage is the service's front panel: state, a spec plate, the
 // connection readout the service exists to hand out, and — for postgres —
 // the backups section.
-templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView) {
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []store.App) {
 	@Layout(vc, sv.Name, "", []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: sv.Name}}) {
 		<div class="page-head">
 			<div>
@@ -61,10 +61,6 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 						<button class="btn btn-ghost" type="submit">Keep</button>
 					</form>
 				}
-				<form method="post" action={ "/services/" + sv.Slug + "/delete" } onsubmit="return confirm('Delete this service? Its data volume will be kept.')">
-					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-					<button class="btn btn-danger" type="submit">Delete</button>
-				</form>
 			</div>
 		</div>
 
@@ -107,9 +103,35 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 			</div>
 		}
 
+		<div class="panel">
+			<div class="panel-title">Used by</div>
+			if len(users) == 0 {
+				<p class="muted-text">No app in this project's { sv.Environment } environment yet. Apps there get this service's connection URL as { urlEnvKey } the next time they deploy.</p>
+			} else {
+				<div class="rows rows-flush">
+					for _, a := range users {
+						<a class="app-row app-row-compact" href={ templ.SafeURL("/apps/" + a.Slug) }>
+							<span class={ "lamp", "lamp-" + lampState(a) } aria-hidden="true"></span>
+							<span class="row-main"><span class="row-name">{ a.Name }</span><span class="row-sub">{ statusText(a) }</span></span>
+							<span class="muted-text">gets { urlEnvKey }</span>
+						</a>
+					}
+				</div>
+			}
+		</div>
+
 		if sv.Type == "postgres" {
 			@backupPanel(vc, sv, bk)
 		}
+
+		<div class="panel panel-warn">
+			<div class="panel-title">Delete this service</div>
+			<p class="muted-text">Removes the container and this entry. The data volume is kept, so the data survives, but apps lose their connection URL.</p>
+			<form method="post" action={ "/services/" + sv.Slug + "/delete" } onsubmit="return confirm('Delete this service? Its data volume will be kept.')" class="danger-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-danger" type="submit">Delete service</button>
+			</form>
+		</div>
 	}
 }
 

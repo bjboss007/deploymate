@@ -363,3 +363,21 @@ document.addEventListener("click", (e) => {
   hit.classList.add("log-hit");
   panel.scrollTop = Math.max(0, hit.offsetTop - panel.offsetTop - 40);
 });
+
+
+// --- history filters ------------------------------------------------------
+document.addEventListener("click", (e) => {
+  const chip = e.target.closest("[data-hf]");
+  if (!chip) return;
+  const list = document.querySelector("[data-history]");
+  if (!list) return;
+  const want = chip.dataset.hf;
+  chip.parentElement.querySelectorAll("[data-hf]").forEach((c) => c.classList.toggle("is-on", c === chip));
+  list.querySelectorAll(".timeline-row").forEach((r) => { r.hidden = !!want && r.dataset.cat !== want; });
+  // hide a day heading when none of its rows is visible
+  list.querySelectorAll(".day-head").forEach((h) => {
+    let n = h.nextElementSibling, any = false;
+    while (n && !n.classList.contains("day-head")) { if (!n.hidden) any = true; n = n.nextElementSibling; }
+    h.hidden = !any;
+  });
+});

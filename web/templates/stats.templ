@@ -46,31 +46,31 @@ templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats,
 		<div class="page-head">
 			<div>
 				<h1>Build statistics</h1>
-				<p class="muted">All apps, last 30 days.</p>
+				<p class="muted-text">Every app, last 30 days.</p>
 			</div>
 		</div>
 
 		<div class="stat-strip">
 			<div class="stat-card">
 				<div class="stat-value">{ stats.Total }</div>
-				<div class="stat-label">deploys (30d)</div>
+				<div class="stat-label">Deploys in 30 days</div>
 			</div>
 			<div class="stat-card">
 				<div class="stat-value">{ fmtPct(stats.SuccessRate) }</div>
-				<div class="stat-label">success rate</div>
+				<div class="stat-label">Succeeded</div>
 			</div>
 			<div class="stat-card">
 				<div class="stat-value">{ fmtSec(stats.AvgBuildSec) }</div>
-				<div class="stat-label">avg build time</div>
+				<div class="stat-label">Average build</div>
 			</div>
 		</div>
 
 		<div class="panel">
 			<div class="panel-title">Deploys per day</div>
 			<div id="fleet-deploys-data" hidden>{ jsonForDayCounts(perDay) }</div>
-			<div class="chart-grid">
+			<div class="chart-grid chart-grid-one">
 				<div>
-					<canvas id="fleet-deploys-chart" height="90"></canvas>
+					<canvas id="fleet-deploys-chart" height="70"></canvas>
 				</div>
 			</div>
 		</div>
@@ -78,15 +78,15 @@ templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats,
 		<div class="panel">
 			<div class="panel-title">Per app</div>
 			if len(perApp) == 0 {
-				<p class="muted">No deployments in the last 30 days — deploy something and the table fills in.</p>
+				<p class="muted-text">No deployments in the last 30 days. Deploy something and this table fills in.</p>
 			} else {
 				<table class="deploy-table">
 					<thead>
 						<tr>
 							<th>App</th>
 							<th>Deploys</th>
-							<th>Success rate</th>
-							<th>Avg build time</th>
+							<th>Succeeded</th>
+							<th>Average build</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -94,7 +94,9 @@ templ StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats,
 							<tr>
 								<td>
 									<a class="deploy-link" href={ "/apps/" + a.Slug }>{ a.Name }</a>
-									<span class="muted mono"> · { a.Slug }</span>
+									if a.Slug != a.Name {
+										<span class="muted-text mono"> · { a.Slug }</span>
+									}
 								</td>
 								<td class="mono">{ a.Total }</td>
 								<td class="mono">{ fmtPct(pctOf(a.Succeeded, a.Total)) }</td>

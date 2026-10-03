@@ -128,7 +128,7 @@ func TestDeployPreviewShowsRange(t *testing.T) {
 		t.Fatalf("status = %d, want 200 (body: %s)", rec.Code, rec.Body.String())
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Review deploy", ">2<", ">3<", "commits", "files changed", "third commit", "second commit", "T", head[:8]} {
+	for _, want := range []string{"Review before deploying", ">2<", ">3<", "Commits", "Files changed", "third commit", "second commit", "T", head[:8]} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q", want)
 		}
@@ -156,7 +156,7 @@ func TestDeployPreviewFirstDeploy(t *testing.T) {
 	s.Handler().ServeHTTP(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "First deploy") {
+	if !strings.Contains(body, "first deploy") {
 		t.Fatalf("first-deploy page missing banner: %s", body)
 	}
 }

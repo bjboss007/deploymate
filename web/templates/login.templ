@@ -18,7 +18,7 @@ templ LoginPage(err ...string) {
 					<span class="led"></span>
 					<span>deploymate</span>
 				</div>
-				<p class="login-sub">Sign in to your server.</p>
+				<p class="login-sub">Sign in to manage your apps.</p>
 				if len(err) > 0 && err[0] != "" {
 					<div class="flash flash-error">{ err[0] }</div>
 				}
@@ -31,6 +31,34 @@ templ LoginPage(err ...string) {
 					</label>
 					<button class="btn btn-primary" type="submit">Sign in</button>
 				</form>
+			</div>
+		</body>
+	</html>
+}
+
+// NotFoundPage is the standalone "no such page" screen. It carries no app
+// chrome and no data, so it is safe to show to anyone, signed in or not.
+templ NotFoundPage() {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Page not found · DeployMate</title>
+			<script>
+				try { var t = localStorage.getItem("dm-theme"); if (t === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
+			</script>
+			<link rel="stylesheet" href="/static/app.css"/>
+		</head>
+		<body class="login-body">
+			<div class="login-card">
+				<div class="login-brand">
+					<span class="led"></span>
+					<span>deploymate</span>
+				</div>
+				<h1 class="nf-title">Page not found</h1>
+				<p class="login-sub">That address doesn't exist, or the app or project it pointed to has been deleted.</p>
+				<a class="btn btn-primary nf-btn" href="/projects">Go to your fleet</a>
 			</div>
 		</body>
 	</html>

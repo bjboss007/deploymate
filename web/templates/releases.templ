@@ -27,7 +27,7 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 		<div class="page-head">
 			<div>
 				<h1>{ app.Name } — releases</h1>
-				<p class="muted">Every deployment this app has seen, newest first.</p>
+				<p class="muted-text">Every deployment this app has seen, newest first.</p>
 			</div>
 			<div class="head-actions">
 				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
@@ -35,18 +35,18 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 		</div>
 
 		<div class="filter-row">
-			<a class={ "btn btn-sm " + filterClass(filter, "all") } href={ "/apps/" + app.Slug + "/releases" }>All</a>
-			<a class={ "btn btn-sm " + filterClass(filter, "successful") } href={ "/apps/" + app.Slug + "/releases?status=successful" }>Successful</a>
-			<a class={ "btn btn-sm " + filterClass(filter, "failed") } href={ "/apps/" + app.Slug + "/releases?status=failed" }>Failed</a>
+			<a class={ "chip chip-link", templ.KV("is-on", filter == "all") } href={ "/apps/" + app.Slug + "/releases" }>All</a>
+			<a class={ "chip chip-link", templ.KV("is-on", filter == "successful") } href={ "/apps/" + app.Slug + "/releases?status=successful" }>Successful</a>
+			<a class={ "chip chip-link", templ.KV("is-on", filter == "failed") } href={ "/apps/" + app.Slug + "/releases?status=failed" }>Failed</a>
 		</div>
 
 		<div class="panel">
 			if len(rows) == 0 {
-				<p class="muted">
+				<p class="muted-text">
 					if filter == "all" {
-						Nothing deployed yet — deploy the app and releases start accumulating.
+						Nothing deployed yet. Deploy the app and its releases appear here.
 					} else {
-						No { filter } releases in the list.
+						No { filter } releases.
 					}
 				</p>
 			} else {
@@ -55,8 +55,7 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 					<thead>
 						<tr>
 							<th>Status</th>
-							<th>Commit / image</th>
-							<th>Kind</th>
+							<th>Version</th>
 							<th>Trigger</th>
 							<th>Duration</th>
 							<th>When</th>
@@ -82,21 +81,26 @@ templ ReleasesPage(vc ViewCtx, project store.Project, app store.App, rows []Rele
 											{r.CommitSHA}
 										}
 										if r.CommitMessage != "" {
-											<span class="muted commit-msg" title={ r.CommitMessage }> — { r.CommitMessage }</span>
+											<span class="muted-text commit-msg" title={ r.CommitMessage }> — { r.CommitMessage }</span>
 										}
 									} else {
-										<span class="muted">—</span>
+										<span class="muted-text">—</span>
 									}
 								</td>
-								<td>{ r.Kind }</td>
-								<td class="mono muted">{ r.Trigger }</td>
-								<td class="mono muted">{ r.Duration }</td>
-								<td class="mono muted">{ shortTime(r.CreatedAt) }</td>
+								<td>
+									if r.Trigger != "" {
+										{ r.Trigger }
+									} else {
+										{ r.Kind }
+									}
+								</td>
+								<td class="muted-text">{ r.Duration }</td>
+								<td class="muted-text" title={ shortTime(r.CreatedAt) }>{ ago(r.CreatedAt) }</td>
 								<td class="env-actions">
 									if r.Rollbackable {
 										<form method="post" action={ "/deployments/" + r.ID + "/rollback" }>
 											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-											<button class="btn btn-ghost btn-sm" type="submit">Rollback</button>
+											<button class="btn btn-ghost btn-sm" type="submit">Roll back</button>
 										</form>
 									}
 								</td>

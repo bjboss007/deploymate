@@ -23,46 +23,58 @@ templ DeployPreviewPage(vc ViewCtx, project store.Project, app store.App, p Depl
 	}) {
 		<div class="page-head">
 			<div>
-				<h1>Review deploy — { app.Name }</h1>
-				<p class="muted">
+				<h1>Review before deploying</h1>
+				<p class="muted-text">
+					{ app.Name } ·
 					if p.FirstDeploy {
-						First deploy — nothing has shipped yet.
+						first deploy — nothing has shipped yet.
 					} else {
-						Deployed commit: <span class="mono">{ shortSHA8(p.DeployedSHA) }</span>
+						running <span class="mono">{ shortSHA8(p.DeployedSHA) }</span> now.
 					}
 				</p>
 			</div>
-			<div class="head-actions">
-				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Cancel</a>
+			<div class="app-actions">
+				<a class="btn btn-ghost" href={ templ.SafeURL("/apps/" + app.Slug) }>Cancel</a>
+				if !p.NothingToDo {
+					<form method="post" action={ "/apps/" + app.Slug + "/git/deploy" }>
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<input type="hidden" name="sha" value={ p.Range.Head }/>
+						if p.Prebuilt {
+							<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
+						} else {
+							<button class="btn btn-primary" type="submit">Deploy { shortSHA8(p.Range.Head) }</button>
+						}
+					</form>
+				}
 			</div>
 		</div>
 
 		if p.NothingToDo {
-			<div class="flash">The branch head is the same commit that is already deployed — nothing to do.</div>
+			<div class="empty"><p>Nothing new to deploy.</p><p>The branch head is the commit that is already running.</p></div>
 		} else {
 			<div class="stat-strip">
 				<div class="stat-card">
 					<div class="stat-value">{ len(p.Range.Commits) }</div>
-					<div class="stat-label">commits</div>
+					<div class="stat-label">Commits</div>
 				</div>
 				<div class="stat-card">
 					<div class="stat-value">{ p.Range.Files }</div>
-					<div class="stat-label">files changed</div>
+					<div class="stat-label">Files changed</div>
 				</div>
 				<div class="stat-card">
 					<div class="stat-value">+{ p.Range.Added }</div>
-					<div class="stat-label">lines added</div>
+					<div class="stat-label">Lines added</div>
 				</div>
 				<div class="stat-card">
 					<div class="stat-value">−{ p.Range.Deleted }</div>
-					<div class="stat-label">lines removed</div>
+					<div class="stat-label">Lines removed</div>
 				</div>
 			</div>
 
 			<div class="panel">
-				<div class="panel-title">Commits to ship</div>
+				<div class="panel-title">What will ship</div>
 				if len(p.Range.Commits) == 0 {
-					<p class="muted">No commits found.</p>
+					<p class="muted-text">No commits found.</p>
 				} else {
 					<table class="deploy-table">
 						<thead>
@@ -84,8 +96,8 @@ templ DeployPreviewPage(vc ViewCtx, project store.Project, app store.App, p Depl
 										}
 									</td>
 									<td>{ c.Subject }</td>
-									<td class="muted">{ c.Author }</td>
-									<td class="mono muted">{ c.Date }</td>
+									<td class="muted-text">{ c.Author }</td>
+									<td class="muted-text">{ c.Date }</td>
 								</tr>
 							}
 						</tbody>
@@ -93,21 +105,7 @@ templ DeployPreviewPage(vc ViewCtx, project store.Project, app store.App, p Depl
 				}
 			</div>
 
-			<div class="panel">
-				<form method="post" action={ "/apps/" + app.Slug + "/git/deploy" }>
-					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-					<input type="hidden" name="sha" value={ p.Range.Head }/>
-					<p class="muted panel-hint">
-						Deploying pins commit <span class="mono">{ shortSHA8(p.Range.Head) }</span> — exactly what you reviewed here.
-					</p>
-					if p.Prebuilt {
-						<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
-					} else {
-						<button class="btn btn-primary" type="submit">Deploy { shortSHA8(p.Range.Head) }</button>
-					}
-					<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Cancel</a>
-				</form>
-			</div>
+			<p class="muted-text panel-hint">Deploying pins commit <span class="mono">{ shortSHA8(p.Range.Head) }</span>, exactly what is listed above.</p>
 		}
 	}
 }
@@ -120,10 +118,11 @@ templ DeployPreviewError(vc ViewCtx, project store.Project, app store.App, messa
 	}) {
 		<div class="page-head">
 			<div>
-				<h1>Review deploy — { app.Name }</h1>
+				<h1>Review before deploying</h1>
+				<p class="muted-text">{ app.Name }</p>
 			</div>
-			<div class="head-actions">
-				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
+			<div class="app-actions">
+				<a class="btn btn-ghost" href={ templ.SafeURL("/apps/" + app.Slug) }>Back to app</a>
 			</div>
 		</div>
 		<div class="flash flash-error">{ message }</div>

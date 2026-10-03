@@ -918,7 +918,7 @@ func (s *Server) projectFromRequest(w http.ResponseWriter, r *http.Request) (sto
 	user, _ := auth.UserFromContext(r.Context())
 	project, err := s.store.GetProjectBySlug(user.ID, chi.URLParam(r, "slug"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return project, false
 	}
 	if err != nil {
@@ -932,7 +932,7 @@ func (s *Server) projectFromRequest(w http.ResponseWriter, r *http.Request) (sto
 func (s *Server) appFromRequest(w http.ResponseWriter, r *http.Request) (store.App, bool) {
 	app, err := s.store.GetAppBySlug(chi.URLParam(r, "slug"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return app, false
 	}
 	if err != nil {

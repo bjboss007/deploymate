@@ -58,6 +58,7 @@ func (s *Server) Handler() http.Handler {
 	am := &auth.Middleware{Store: s.store}
 
 	r := chi.NewRouter()
+	r.NotFound(notFoundPage)
 	r.Use(middleware.Recoverer)
 	r.Use(requestLog)
 	// Public app subdomains: {slug}.{previewHost} routes straight to the

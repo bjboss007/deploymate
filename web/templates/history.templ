@@ -20,9 +20,20 @@ type HistoryItem struct {
 	Label string
 	Data  string
 	Tone  string // good | bad | neutral
+	// Category drives the page's filters: deploy | health | lifecycle | config.
+	Category string
+	Href     string // deployments link to their page
+	Ref      string // short deployment id
+	Clock    string // local "15:04", set when grouped by day
 }
 
-templ HistoryPage(vc ViewCtx, project store.Project, app store.App, stats HistoryStats, items []HistoryItem) {
+// HistoryDay is one calendar day of the timeline.
+type HistoryDay struct {
+	Label string
+	Items []HistoryItem
+}
+
+templ HistoryPage(vc ViewCtx, project store.Project, app store.App, stats HistoryStats, days []HistoryDay) {
 	@Layout(vc, "History · "+app.Name, "", []Crumb{
 		{Label: project.Name, Href: "/projects/" + project.Slug},
 		{Label: app.Name, Href: "/apps/" + app.Slug},
@@ -31,7 +42,7 @@ templ HistoryPage(vc ViewCtx, project store.Project, app store.App, stats Histor
 		<div class="page-head">
 			<div>
 				<h1>{ app.Name } — history</h1>
-				<p class="muted">Everything the platform has recorded for this app, last 30 days.</p>
+				<p class="muted-text">Everything DeployMate has recorded for this app in the last 30 days.</p>
 			</div>
 			<div class="head-actions">
 				<a class="btn btn-ghost" href={ "/apps/" + app.Slug }>Back to app</a>
@@ -41,51 +52,81 @@ templ HistoryPage(vc ViewCtx, project store.Project, app store.App, stats Histor
 		<div class="stat-strip">
 			<div class="stat-card">
 				<div class="stat-value">{ stats.Deploys }</div>
-				<div class="stat-label">deploys (30d)</div>
+				<div class="stat-label">Deploys in 30 days</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-value">{ fmtPct(stats.SuccessRate) }</div>
-				<div class="stat-label">success rate</div>
+				if stats.Deploys > 0 {
+					<div class="stat-value">{ fmtPct(stats.SuccessRate) }</div>
+				} else {
+					<div class="stat-value muted-text">—</div>
+				}
+				<div class="stat-label">Succeeded</div>
 			</div>
 			<div class="stat-card">
 				<div class="stat-value">{ fmtSec(stats.AvgBuildSec) }</div>
-				<div class="stat-label">avg build time</div>
+				<div class="stat-label">Average build</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-value">{ fmtPct(stats.UptimePct) }</div>
+				if stats.UptimeSamples > 0 {
+					<div class="stat-value">{ fmtPct(stats.UptimePct) }</div>
+				} else {
+					<div class="stat-value muted-text">—</div>
+				}
 				<div class="stat-label">
 					if stats.UptimeSamples > 0 {
-						uptime · { stats.UptimeSamples } probes
+						Uptime · { stats.UptimeSamples } checks
 					} else {
-						uptime · no domain yet
+						Uptime · add a domain to measure it
 					}
 				</div>
 			</div>
 			<div class="stat-card">
-				<div class="stat-value">{ fmtMin(stats.MTTRMin) }</div>
-				<div class="stat-label">MTTR · { stats.Incidents } incidents</div>
+				if stats.Incidents > 0 {
+					<div class="stat-value">{ fmtMin(stats.MTTRMin) }</div>
+				} else {
+					<div class="stat-value muted-text">—</div>
+				}
+				<div class="stat-label">Time to recover · { stats.Incidents } incidents</div>
 			</div>
 		</div>
 
 		<div class="panel">
-			<div class="panel-title">Timeline</div>
-			if len(items) == 0 {
-				<p class="muted">Nothing recorded yet — deploy the app and the history starts accumulating.</p>
+			<div class="panel-title">Timeline
+				<span class="log-tools" data-history-filters>
+					<button class="chip is-on" type="button" data-hf="">All</button>
+					<button class="chip" type="button" data-hf="deploy">Deploys</button>
+					<button class="chip" type="button" data-hf="health">Health</button>
+					<button class="chip" type="button" data-hf="lifecycle">Start &amp; stop</button>
+					<button class="chip" type="button" data-hf="config">Changes</button>
+				</span>
+			</div>
+			if len(days) == 0 {
+				<p class="muted-text">Nothing recorded yet. Deploy the app and its history starts here.</p>
 			} else {
-				<div class="timeline">
-					for _, it := range items {
-						<div class="timeline-row">
-							<span class="timeline-dot tone-{ it.Tone }" aria-hidden="true"></span>
-							<div class="timeline-body">
-								<div class="timeline-head">
-									<span class="mono timeline-kind">{ it.Label }</span>
-									<span class="mono muted timeline-ts">{ shortTime(it.TS) }</span>
+				<div class="timeline" data-history>
+					for _, day := range days {
+						<div class="day-head">{ day.Label }</div>
+						for _, it := range day.Items {
+							<div class="timeline-row" data-cat={ it.Category }>
+								<span class={ "timeline-dot", "tone-" + it.Tone } aria-hidden="true"></span>
+								<div class="timeline-body">
+									<div class="timeline-head">
+										<span class="timeline-kind">
+											if it.Href != "" {
+												<a class="deploy-link" href={ templ.SafeURL(it.Href) }>{ it.Label }</a>
+												<span class="mono muted-text">{ it.Ref }</span>
+											} else {
+												{ it.Label }
+											}
+										</span>
+										<span class="mono muted-text timeline-ts" title={ shortTime(it.TS) }>{ it.Clock }</span>
+									</div>
+									if it.Data != "" {
+										<div class="timeline-data">{ clip(it.Data, 300) }</div>
+									}
 								</div>
-								if it.Data != "" {
-									<div class="timeline-data">{ it.Data }</div>
-								}
 							</div>
-						</div>
+						}
 					}
 				</div>
 			}

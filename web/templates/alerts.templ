@@ -5,51 +5,41 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
+// alertEventLabel shows an alert event as its catalog label ("Deploy failed"),
+// falling back to the raw name for events the catalog no longer lists.
+func alertEventLabel(catalog []alerts.CatalogEvent, event string) string {
+	for _, c := range catalog {
+		if c.Event == event {
+			return c.Label
+		}
+	}
+	return event
+}
+
 templ AlertsPage(vc ViewCtx, list []store.Alert, history map[string][]store.AlertEvent, catalog []alerts.CatalogEvent) {
 	@Layout(vc, "Alerts", "", []Crumb{{Label: "Alerts"}}) {
 		<div class="page-head">
 			<div>
 				<h1>Alerts</h1>
-				<p class="muted">Get notified when deploys fail, apps go unhealthy, uptime drops, or the disk fills.</p>
+				<p class="muted-text">Get notified when a deploy fails, an app goes unhealthy, uptime drops or the disk fills.</p>
 			</div>
-		</div>
-
-		<div class="panel">
-			<div class="panel-title">New webhook target</div>
-			<form method="post" action="/alerts" class="alert-form">
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<label>Name
-					<input type="text" name="name" placeholder="Slack #deploys" maxlength="64" required/>
-				</label>
-				<label>Webhook URL
-					<input class="alert-url" type="text" name="url" placeholder="https://hooks.slack.com/services/..." required/>
-				</label>
-				<fieldset class="alert-events">
-					<legend>Notify on</legend>
-					for _, e := range catalog {
-						<label class="checkbox"><input type="checkbox" name={ "event_" + e.Event }/> { e.Label }</label>
-					}
-				</fieldset>
-				<button class="btn btn-primary" type="submit">Add target</button>
-			</form>
-			<p class="muted panel-hint">Slack-compatible JSON — works with Slack, Teams-compatible, and Discord webhooks as-is. URLs are encrypted at rest.</p>
 		</div>
 
 		if len(list) == 0 {
 			<div class="empty">
 				<p>No alert targets yet.</p>
-				<p>Add a webhook above — deploy failures and health incidents will notify it.</p>
+				<p>Add a webhook below and deploy failures and health incidents will notify it.</p>
 			</div>
 		} else {
 			for _, a := range list {
 				<div class="panel">
 					<div class="panel-title">
 						<span>{ a.Name }</span>
-						<span class="muted"> · { a.Channel }</span>
+						<span class="muted-text"> · { a.Channel }</span>
 					</div>
 					<div class="alert-chips">
 						for _, ev := range a.Events {
-							<span class="badge mono">{ ev }</span>
+							<span class="badge">{ alertEventLabel(catalog, ev) }</span>
 						}
 					</div>
 					<table class="deploy-table">
@@ -63,13 +53,13 @@ templ AlertsPage(vc ViewCtx, list []store.Alert, history map[string][]store.Aler
 						<tbody>
 							if len(history[a.ID]) == 0 {
 								<tr>
-									<td colspan="3" class="muted">No deliveries yet.</td>
+									<td colspan="3" class="muted-text">No deliveries yet.</td>
 								</tr>
 							}
 							for _, ev := range history[a.ID] {
 								<tr>
-									<td class="mono">{ ev.Event }</td>
-									<td class="mono muted">{ shortTime(ev.TS) }</td>
+									<td>{ alertEventLabel(catalog, ev.Event) }</td>
+									<td class="muted-text" title={ shortTime(ev.TS) }>{ ago(ev.TS) }</td>
 									if ev.Delivered {
 										<td><span class="badge badge-running">delivered · { ev.ResponseCode }</span></td>
 									} else {
@@ -86,5 +76,26 @@ templ AlertsPage(vc ViewCtx, list []store.Alert, history map[string][]store.Aler
 				</div>
 			}
 		}
+		<details class="panel disclose-panel" open?={ len(list) == 0 }>
+			<summary class="panel-title">Add an alert target</summary>
+			<form method="post" action="/alerts" class="alert-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<label>Name
+					<input type="text" name="name" placeholder="Slack #deploys" maxlength="64" required/>
+				</label>
+				<label>Webhook URL
+					<input class="alert-url" type="text" name="url" placeholder="https://hooks.slack.com/services/..." required/>
+				</label>
+				<fieldset class="alert-events">
+					<legend>Notify on</legend>
+					for _, e := range catalog {
+						<label class="checkbox"><input type="checkbox" name={ "event_" + e.Event }/> { e.Label }</label>
+					}
+				</fieldset>
+				<button class="btn btn-primary" type="submit">Add target</button>
+			</form>
+			<p class="muted panel-hint">Slack-compatible JSON, so Slack, Teams and Discord webhooks work as they are. URLs are encrypted at rest.</p>
+		</details>
+
 	}
 }

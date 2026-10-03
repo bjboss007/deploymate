@@ -132,3 +132,19 @@ func TestDeploymentPageExplainsFailure(t *testing.T) {
 		}
 	}
 }
+
+// Unknown addresses (and apps that no longer exist) get the designed
+// not-found screen with a way back, not the bare "404 page not found" text.
+func TestNotFoundPage(t *testing.T) {
+	st, _ := replicaTestEnv(t, store.App{Name: "Web", Slug: "web", Port: 8080})
+	s := &Server{store: st}
+	for _, path := range []string{"/definitely-not-a-page", "/apps/ghost"} {
+		req := httptest.NewRequest(http.MethodGet, path, nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusNotFound || !strings.Contains(rec.Body.String(), "Page not found") || !strings.Contains(rec.Body.String(), `href="/projects"`) {
+			t.Errorf("%s: status %d, body lacks the not-found screen", path, rec.Code)
+		}
+	}
+}

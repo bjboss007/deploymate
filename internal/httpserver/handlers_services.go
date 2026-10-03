@@ -88,7 +88,17 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 			connURL = tpl.ConnURL(creds, services.ContainerName(svc.Slug))
 		}
 	}
-	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc)))
+	// Apps that receive this service's connection URL: the same project and
+	// environment (the injection rule).
+	var users []store.App
+	if apps, err := s.store.ListApps(project.ID); err == nil {
+		for _, a := range apps {
+			if a.Environment == svc.Environment {
+				users = append(users, a)
+			}
+		}
+	}
+	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc), users))
 }
 
 // handleServiceStart provisions (first run) or resumes a service via the
@@ -173,7 +183,7 @@ func (s *Server) handleServiceDelete(w http.ResponseWriter, r *http.Request) {
 func (s *Server) serviceFromRequest(w http.ResponseWriter, r *http.Request) (store.Service, bool) {
 	svc, err := s.store.GetServiceBySlug(chi.URLParam(r, "slug"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return svc, false
 	}
 	if err != nil {

@@ -6,7 +6,6 @@ import (
 	"sort"
 	"time"
 
-	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
 
@@ -62,19 +61,17 @@ func (s *Server) handleAppHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, d := range deployments {
-		item := templates.HistoryItem{TS: d.CreatedAt, Kind: d.Kind, Label: "deploy " + shortDeployIDLocal(d.ID)}
+		title, tone := describeDeployment(d)
+		item := templates.HistoryItem{TS: d.CreatedAt, Kind: d.Kind, Label: title, Tone: tone, Category: "deploy",
+			Href: "/deployments/" + d.ID, Ref: shortDeployIDLocal(d.ID)}
 		switch d.Status {
 		case "running":
-			item.Tone = "good"
-			if d.CommitMessage != "" {
-				item.Data = d.CommitMessage
-			} else {
-				item.Data = "deployed"
+			item.Data = d.CommitMessage
+			if item.Data == "" {
+				item.Data = d.ImageTag
 			}
 		case "failed":
-			item.Tone, item.Data = "bad", d.Error
-		default:
-			item.Tone, item.Data = "neutral", d.Status
+			item.Data = d.Error
 		}
 		items = append(items, item)
 	}
@@ -85,17 +82,8 @@ func (s *Server) handleAppHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, e := range events {
-		item := templates.HistoryItem{TS: e.TS, Kind: e.Kind, Label: e.Kind, Data: e.Data}
-		switch e.Kind {
-		case store.EventHealthUnhealthy:
-			item.Tone = "bad"
-		case store.EventHealthRecovered:
-			item.Tone = "good"
-		case store.EventResourceResized:
-			item.Tone = "good"
-		default:
-			item.Tone = "neutral"
-		}
+		title, cat, tone := describeEvent(e.Kind)
+		item := templates.HistoryItem{TS: e.TS, Kind: e.Kind, Label: title, Category: cat, Tone: tone, Data: e.Data}
 		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool { return items[i].TS > items[j].TS })
@@ -104,15 +92,15 @@ func (s *Server) handleAppHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	viewStats := templates.HistoryStats{
-		Deploys:      stats.Total,
-		SuccessRate:  pct(stats.Succeeded, stats.Total),
-		AvgBuildSec:  stats.AvgBuildSec,
-		UptimePct:    uptimePct,
+		Deploys:       stats.Total,
+		SuccessRate:   pct(stats.Succeeded, stats.Total),
+		AvgBuildSec:   stats.AvgBuildSec,
+		UptimePct:     uptimePct,
 		UptimeSamples: uptimeSamples,
-		MTTRMin:      mttr / 60,
-		Incidents:    incidents,
+		MTTRMin:       mttr / 60,
+		Incidents:     incidents,
 	}
-	render(w, r, http.StatusOK, templates.HistoryPage(s.viewCtx(r), project, app, viewStats, items))
+	render(w, r, http.StatusOK, templates.HistoryPage(s.viewCtx(r), project, app, viewStats, groupHistoryByDay(items, time.Now())))
 }
 
 func pct(part, total int) float64 {

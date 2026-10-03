@@ -7,6 +7,32 @@
 
 ## Where we stopped
 
+**2026-10-03 (UI redesign, step 5: the remaining pages)** — **Live server
+restarted first on the deployment-page build** (pid 61910, snapshot
+`pre-dep-*.db`). Then, in the new type/token system: **History**
+(`/apps/{slug}/history`): plain-language event titles instead of raw kinds
+(`history_text.go`: "Became unhealthy", "Environment variables changed", …;
+unknown kinds still render), grouped by day (Today/Yesterday/date), coloured
+tone dots (a template bug had left `tone-{ it.Tone }` uninterpolated, so they
+never rendered), filter chips (All / Deploys / Health / Start & stop /
+Changes), deploys link to their page, empty stats show "—" not 0.0%.
+**Stats**: full-width chart, no duplicate name·slug, sentence labels.
+**Releases**: filter chips, "Roll back" (was "Rollback" — the app page and
+this page now agree), relative times. **Alerts**: existing targets first, the
+add form is a disclosure (open when there are none), events shown by their
+catalog label. **Services**: header holds only Stop/Restart/Start; **Delete
+moved to a "Delete this service" panel at the bottom**; new **Used by** panel
+lists the project+environment apps that receive its connection URL.
+**Deploy review**: the deploy action is now in the page header (no scrolling
+to find it), "Nothing new to deploy" empty state. **404**: a designed
+standalone not-found page (`NotFoundPage`) for unknown routes and for
+`http.NotFound` calls in handlers (all 11 now use `notFoundPage`). Login copy
+and brand tidied. Tests updated for the new copy; new: `history_text_test.go`,
+`TestNotFoundPage`. Checked in the browser pane. **Not on the live server
+yet.** Open polish ideas (not done): service list rows could show the apps
+using each service; "Needs attention" could offer one-click retry; sticky
+mobile bottom bar for the app page actions.
+
 **2026-10-03 (UI redesign, step 4: deployment page + failure evidence)** —
 **Failures now explain themselves.** (1) *Evidence*: when a new container
 fails its readiness probe, DeployMate now records why BEFORE removing it —
@@ -28,7 +54,7 @@ version still serving / failed — nothing serving, Triggered by, Took), "What
 went wrong" (raw error + explanation + links), the log with **Jump to first
 error** and **Copy log** (error lines tinted; copy keeps line breaks), and
 **Roll back to this** when eligible. Checked in the browser pane on a seeded
-failed deploy. **Not on the live server yet.** **Next:** services pages,
+failed deploy. **Live server restarted on this build** (pid 61910, snapshot `pre-dep-*.db`). **Next:** services pages,
 login/empty/error states, remaining mono-heavy pages (stats, alerts, releases,
 history, deploy review).
 

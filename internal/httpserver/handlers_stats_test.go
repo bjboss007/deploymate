@@ -58,7 +58,7 @@ func TestStatsPageRendersFleetData(t *testing.T) {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"Build statistics", "success rate", "deploys (30d)", "Web"} {
+	for _, want := range []string{"Build statistics", "Succeeded", "Deploys in 30 days", "Web"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("body missing %q", want)
 		}

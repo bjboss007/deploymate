@@ -201,7 +201,7 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	sourceID := chi.URLParam(r, "id")
 	gs, err := s.store.GetGitSource(sourceID)
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {
@@ -321,7 +321,7 @@ func randomHex(n int) string {
 func (s *Server) handleDeploymentPage(w http.ResponseWriter, r *http.Request) {
 	d, err := s.store.GetDeployment(chi.URLParam(r, "id"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {
@@ -356,7 +356,7 @@ func (s *Server) handleDeploymentPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleDeploymentStream(w http.ResponseWriter, r *http.Request) {
 	d, err := s.store.GetDeployment(chi.URLParam(r, "id"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {
@@ -404,7 +404,7 @@ func (s *Server) handleDeploymentStream(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 	d, err := s.store.GetDeployment(chi.URLParam(r, "id"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {

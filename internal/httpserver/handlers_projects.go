@@ -94,7 +94,7 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 	user, _ := auth.UserFromContext(r.Context())
 	project, err := s.store.GetProjectBySlug(user.ID, chi.URLParam(r, "slug"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {
@@ -121,7 +121,7 @@ func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {
 	user, _ := auth.UserFromContext(r.Context())
 	project, err := s.store.GetProjectBySlug(user.ID, chi.URLParam(r, "slug"))
 	if errors.Is(err, store.ErrNotFound) {
-		http.NotFound(w, r)
+		notFoundPage(w, r)
 		return
 	}
 	if err != nil {
