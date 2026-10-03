@@ -14,8 +14,7 @@ the new **Run workflow now** button (Deployments tab; `githubci.DispatchWorkflow
 `handleRunWorkflow`; 403/404 → explains read+write Actions permission and the
 `workflow_dispatch` trigger, 422 → trigger missing). Tests:
 `TestDeployLatestSkipsExpiredRuns`, `TestRunWorkflowNow`. **Also:** fleet-board rows now show the app's logo tile in its identity colour
-(`AppRow.Identity`, `.row-ident`; checked in the browser pane). **Not yet
-restarted live.** Next: framework-detection correction, memory preflight (P3).
+(`AppRow.Identity`, `.row-ident`; checked in the browser pane). **Live server restarted on this build** (pid 94173, snapshot `pre-restart-b-*.db`, no migration). Next: framework-detection correction, memory preflight (P3).
 
 **Open items (2026-10-04)** — Nothing in flight; live server is on the latest
 build. Needs the owner: rotate the R2 backup keys (exposed in a terminal),
