@@ -7,6 +7,21 @@
 
 ## Where we stopped
 
+**2026-10-03 (erp first prebuilt deploy: expired artifact)** — The owner's
+first **Deploy latest run** picked run 37016133185 (yesterday's) and failed:
+"uploaded no artifact named … (it has: none)". Cause: the generated workflow
+uses `retention-days: 1`, so GitHub had already deleted that run's artifact.
+Fix for the operator: started a fresh run (`gh workflow run deploymate.yml`,
+run #3 = 37150528054, success) — **the owner clicks Deploy latest run again**.
+Fix in code: `pickArtifact` now says "workflow run N has no artifacts any more
+— they expire after the workflow's retention-days (1 day …) … Re-run the
+workflow and deploy the new run" when the list is empty (the "named X but has
+Y" message stays for a real name mismatch); `Explain` recognises it; test
+added. Design note: "Deploy latest run" lists *successful runs*, not runs that
+still have artifacts, so after retention it can offer a dead run — a future
+improvement is to skip runs whose artifact list is empty/expired, or to offer
+"Run workflow now". **Fix not on the live server yet.**
+
 **2026-10-03 (ERP switched to prebuilt)** — Owner asked to switch the live
 `erp` app (Acme Starter, repo `bjboss007/tradestack-dm-test`, branch
 `development`) to **prebuilt mode**. Done at the data layer with a one-off

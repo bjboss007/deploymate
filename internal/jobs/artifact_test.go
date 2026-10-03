@@ -263,6 +263,10 @@ func TestArtifactDeployFailures(t *testing.T) {
 			s.gh.runs[200] = []ghArtifact{{ID: 1, Name: "something-else"}}
 			return 200
 		}, `uploaded no artifact named "deploymate-app" (it has: something-else)`},
+		{"run with no artifacts left (retention ended)", func(s *artifactSetup, t *testing.T) int64 {
+			s.gh.runs[210] = []ghArtifact{}
+			return 210
+		}, "has no artifacts any more"},
 		{"expired artifact", func(s *artifactSetup, t *testing.T) int64 {
 			s.gh.zips[2] = good
 			s.gh.runs[201] = []ghArtifact{{ID: 2, Name: "deploymate-app", Expired: true}}

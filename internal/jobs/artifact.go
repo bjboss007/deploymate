@@ -144,11 +144,12 @@ func pickArtifact(arts []githubci.Artifact, name string, runID int64) (githubci.
 		}
 		return a, nil
 	}
-	have := "none"
-	if len(names) > 0 {
-		have = strings.Join(names, ", ")
+	if len(names) == 0 {
+		// GitHub deletes a run's artifacts when their retention ends (1 day
+		// in the generated workflow), after which the run lists none.
+		return githubci.Artifact{}, fmt.Errorf("workflow run %d has no artifacts any more — they expire after the workflow's retention-days (1 day in the generated workflow), or the run never uploaded one. Re-run the workflow on GitHub and deploy the new run", runID)
 	}
-	return githubci.Artifact{}, fmt.Errorf("workflow run %d succeeded but uploaded no artifact named %q (it has: %s) — check the upload-artifact step's name", runID, name, have)
+	return githubci.Artifact{}, fmt.Errorf("workflow run %d succeeded but uploaded no artifact named %q (it has: %s) — check the upload-artifact step's name", runID, name, strings.Join(names, ", "))
 }
 
 // describeGitHubError turns a GitHub API failure into the message the

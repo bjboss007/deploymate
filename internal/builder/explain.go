@@ -78,7 +78,7 @@ func Explain(errText string) *Explanation {
 				{"Create a new fine-grained token limited to this repository with Actions: read-only, and save it.", "settings"},
 			},
 		}
-	case has("could not find the artifact", "uploaded no artifact named", "exactly one .jar", "no .jar found", "has expired", "not a valid zip", "integrity check"):
+	case has("could not find the artifact", "has no artifacts any more", "uploaded no artifact named", "exactly one .jar", "no .jar found", "has expired", "not a valid zip", "integrity check"):
 		return &Explanation{
 			Title: "The CI build output isn't what DeployMate expects",
 			Hints: []Hint{
