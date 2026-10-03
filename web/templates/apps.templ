@@ -632,6 +632,10 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 									<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 									<button class="btn btn-primary" type="submit">Deploy latest successful run</button>
 								</form>
+								<form method="post" action={ "/apps/" + app.Slug + "/git/run-workflow" } class="inline-form">
+									<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+									<button class="btn btn-ghost" type="submit">Run workflow now</button>
+								</form>
 								<form method="post" action={ "/apps/" + app.Slug + "/git/test" } class="inline-form">
 									<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 									<button class="btn btn-ghost" type="submit">Test connection</button>

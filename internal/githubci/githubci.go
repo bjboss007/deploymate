@@ -8,6 +8,7 @@
 package githubci
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -106,7 +107,11 @@ func (c *Client) httpClient() *http.Client {
 }
 
 func (c *Client) newRequest(ctx context.Context, op, rawURL string) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	return c.newRequestMethod(ctx, http.MethodGet, op, rawURL, nil)
+}
+
+func (c *Client) newRequestMethod(ctx context.Context, method, op, rawURL string, body io.Reader) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, rawURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("github: %s: %w", op, err)
 	}
@@ -250,6 +255,32 @@ func (c *Client) ListSuccessfulRuns(ctx context.Context, repo, workflowFile, bra
 		out = append(out, r)
 	}
 	return out, nil
+}
+
+// DispatchWorkflow starts a run of workflowFile on ref (workflow_dispatch;
+// the workflow must declare that trigger). It needs the token's Actions
+// permission to be read AND write; GitHub answers 204 with no run id.
+func (c *Client) DispatchWorkflow(ctx context.Context, repo, workflowFile, ref string) error {
+	const op = "dispatch workflow"
+	if err := checkRepo(repo); err != nil {
+		return err
+	}
+	b, _ := json.Marshal(map[string]string{"ref": ref})
+	p := "/repos/" + repo + "/actions/workflows/" + url.PathEscape(path.Base(workflowFile)) + "/dispatches"
+	req, err := c.newRequestMethod(ctx, http.MethodPost, op, c.BaseURL+p, bytes.NewReader(b))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient().Do(req)
+	if err != nil {
+		return fmt.Errorf("github: %s: %w", op, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		return apiError(op, resp)
+	}
+	return nil
 }
 
 // Artifact is one uploaded artifact of a run.

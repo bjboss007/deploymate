@@ -266,6 +266,15 @@ func (s *Server) deployLatestRun(ctx context.Context, app store.App) (id, msg st
 			}
 			continue
 		}
+		// A run whose artifact has expired (retention-days) can never deploy:
+		// skip it rather than queue a deployment that is bound to fail. A
+		// failed lookup is not proof, so only a clear "gone" skips.
+		if arts, err := gh.ListRunArtifacts(ctx, repo, run.ID); err == nil && !hasLiveArtifact(arts, app.ArtifactName) {
+			if reason == "" {
+				reason = fmt.Sprintf("The latest successful run (#%d) has no downloadable %q artifact any more — GitHub deletes them after the workflow's retention-days. Use Run workflow now to build a fresh one.", run.RunNumber, app.ArtifactName)
+			}
+			continue
+		}
 		msg := run.HeadCommit.Message
 		if len(msg) > maxCommitMessage {
 			msg = msg[:maxCommitMessage]
@@ -281,6 +290,59 @@ func (s *Server) deployLatestRun(ctx context.Context, app store.App) (id, msg st
 		return d.ID, ""
 	}
 	return "", reason
+}
+
+func hasLiveArtifact(arts []githubci.Artifact, name string) bool {
+	for _, a := range arts {
+		if a.Name == name && !a.Expired {
+			return true
+		}
+	}
+	return false
+}
+
+// handleRunWorkflow starts a fresh CI run (workflow_dispatch). The run's
+// completion arrives as the usual workflow_run webhook and deploys through the
+// same gates, so nothing is queued here.
+func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+	}
+	if app.DeployMode != store.DeployModeArtifact {
+		back("This app builds on the server — switch it to prebuilt mode first.")
+		return
+	}
+	gs, repo, ok := s.prebuiltSource(w, r, app)
+	if !ok {
+		return
+	}
+	gh, ok := s.githubClient(gs)
+	if !ok {
+		back("Save a GitHub token first.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	if err := gh.DispatchWorkflow(ctx, repo, app.WorkflowPath, gs.DefaultBranch); err != nil {
+		var ae *githubci.APIError
+		if errors.As(err, &ae) {
+			switch ae.Status {
+			case http.StatusForbidden, http.StatusNotFound:
+				back("GitHub would not start the workflow. Starting runs needs the token's Actions permission set to read and write (it is read-only for deploys), and " + app.WorkflowPath + " must have the workflow_dispatch trigger on " + gs.DefaultBranch + ". You can also press Run workflow on GitHub's Actions tab.")
+				return
+			case http.StatusUnprocessableEntity:
+				back(app.WorkflowPath + " has no workflow_dispatch trigger on " + gs.DefaultBranch + " — add it (the generated workflow has it) or run it from GitHub.")
+				return
+			}
+		}
+		back(ghFlash(err, repo))
+		return
+	}
+	back("Started " + app.WorkflowPath + " on " + gs.DefaultBranch + ". DeployMate deploys it when it finishes (needs the Workflow runs webhook); or press Deploy latest run in a minute or two.")
 }
 
 // handleDeployLatest is the "Deploy latest successful run" button.

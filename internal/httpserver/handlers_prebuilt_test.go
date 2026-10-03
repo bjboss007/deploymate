@@ -22,14 +22,16 @@ const testToken = "github_pat_TESTTOKEN0123456789"
 // prebuiltEnv is a Server with one session, one GitHub-linked app on
 // acme/repo (branch main), and a fake GitHub API it points at.
 type prebuiltEnv struct {
-	s    *Server
-	st   *store.Store
-	app  store.App
-	gs   store.GitSource
-	runs string // JSON array served as workflow_runs
-	repo []string
-	hits map[string]int
-	auth string // last Authorization header the fake saw
+	s              *Server
+	st             *store.Store
+	app            store.App
+	gs             store.GitSource
+	runs           string // JSON array served as workflow_runs
+	repo           []string
+	hits           map[string]int
+	auth           string           // last Authorization header the fake saw
+	arts           map[int64]string // run id -> artifacts JSON array; absent = 404
+	dispatchStatus int              // status the fake returns for workflow dispatches (0 = 204)
 }
 
 func newPrebuiltEnv(t *testing.T) *prebuiltEnv {
@@ -75,6 +77,20 @@ func newPrebuiltEnv(t *testing.T) *prebuiltEnv {
 			fmt.Fprint(w, `{"full_name":"acme/repo","private":true}`)
 		case r.URL.Path == "/repos/acme/repo/actions/workflows/deploymate.yml/runs":
 			fmt.Fprintf(w, `{"workflow_runs":%s}`, e.runs)
+		case r.URL.Path == "/repos/acme/repo/actions/workflows/deploymate.yml/dispatches":
+			if e.dispatchStatus != 0 {
+				w.WriteHeader(e.dispatchStatus)
+				return
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case strings.HasPrefix(r.URL.Path, "/repos/acme/repo/actions/runs/") && strings.HasSuffix(r.URL.Path, "/artifacts"):
+			var id int64
+			fmt.Sscanf(r.URL.Path, "/repos/acme/repo/actions/runs/%d/artifacts", &id)
+			if a, ok := e.arts[id]; ok {
+				fmt.Fprintf(w, `{"artifacts":%s}`, a)
+				return
+			}
+			http.NotFound(w, r)
 		case r.URL.Path == "/user/repos":
 			fmt.Fprintf(w, "[%s]", strings.Join(e.repo, ","))
 		default:
@@ -399,4 +415,58 @@ func testPEM(t *testing.T) string {
 		t.Skipf("cannot generate a deploy key here: %v", err)
 	}
 	return k.PrivateKeyPEM
+}
+
+// Runs whose artifact has expired are skipped; an older run that still has its
+// artifact deploys instead; when every run has expired the owner is pointed at
+// "Run workflow now".
+func TestDeployLatestSkipsExpiredRuns(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	e.enablePrebuilt(t)
+	e.runs = "[" + run(20, 8, "push", "acme/repo") + "," + run(10, 7, "push", "acme/repo") + "]"
+	e.arts = map[int64]string{
+		20: `[{"id":1,"name":"deploymate-app","expired":true}]`,
+		10: `[{"id":2,"name":"deploymate-app","expired":false}]`,
+	}
+	code, loc := e.post(t, "/apps/api/git/deploy-latest", url.Values{})
+	if code != http.StatusSeeOther || !strings.HasPrefix(loc, "/deployments/") {
+		t.Fatalf("want deployment, got %d %q (%s)", code, loc, flashOf(t, loc))
+	}
+	if ds, _ := e.st.ListDeployments(e.app.ID, 5); len(ds) != 1 || ds[0].CIRun != 10 {
+		t.Fatalf("deployments = %+v, want run 10", ds)
+	}
+
+	e2 := newPrebuiltEnv(t)
+	e2.enablePrebuilt(t)
+	e2.runs = "[" + run(20, 8, "push", "acme/repo") + "]"
+	e2.arts = map[int64]string{20: `[]`}
+	_, loc = e2.post(t, "/apps/api/git/deploy-latest", url.Values{})
+	if f := flashOf(t, loc); !strings.Contains(f, "Run workflow now") {
+		t.Errorf("all-expired flash = %q", f)
+	}
+	if ds, _ := e2.st.ListDeployments(e2.app.ID, 5); len(ds) != 0 {
+		t.Errorf("queued %d deployments for an expired run", len(ds))
+	}
+}
+
+func TestRunWorkflowNow(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	e.enablePrebuilt(t)
+	_, loc := e.post(t, "/apps/api/git/run-workflow", url.Values{})
+	if f := flashOf(t, loc); !strings.HasPrefix(f, "Started") {
+		t.Errorf("flash = %q", f)
+	}
+	if e.hits["/repos/acme/repo/actions/workflows/deploymate.yml/dispatches"] != 1 {
+		t.Errorf("dispatch not called: %v", e.hits)
+	}
+	e.dispatchStatus = http.StatusForbidden
+	_, loc = e.post(t, "/apps/api/git/run-workflow", url.Values{})
+	if f := flashOf(t, loc); !strings.Contains(f, "read and write") {
+		t.Errorf("403 flash = %q", f)
+	}
+	e.dispatchStatus = http.StatusUnprocessableEntity
+	_, loc = e.post(t, "/apps/api/git/run-workflow", url.Values{})
+	if f := flashOf(t, loc); !strings.Contains(f, "workflow_dispatch") {
+		t.Errorf("422 flash = %q", f)
+	}
 }

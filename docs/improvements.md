@@ -12,9 +12,12 @@ change.
   technology logos and identity colour (migration 0018); "Available to this
   app" wording, live "Connected now" signal, per-app **Stop sending** of
   injected services (migration 0019).
-- [ ] **"Deploy latest run" offers runs whose artifacts expired** (found live
-  on `erp`, `retention-days: 1`): skip expired runs, or add a **Run workflow
-  now** button (`workflow_dispatch`) that starts a fresh CI run and deploys it.
+- [x] **"Deploy latest run" offered runs whose artifacts expired** — done
+  2026-10-04: expired/empty runs are skipped (an older run with a live artifact
+  deploys instead; all expired → message pointing at the new **Run workflow
+  now** button, `POST /apps/{slug}/git/run-workflow`, `workflow_dispatch`).
+  Starting runs needs the token's Actions permission read **and write** — the
+  button explains this on a 403; deploys themselves stay read-only.
 - [ ] **Fleet board rows don't show the app's identity colour/logo** — only the
   project page and app header do.
 - [ ] **Framework detection is a best guess** — surface "detected: X" with a

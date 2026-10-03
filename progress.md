@@ -7,6 +7,15 @@
 
 ## Where we stopped
 
+**2026-10-04 (expired runs + Run workflow now)** — `deployLatestRun` now
+checks each candidate run's artifacts and skips ones with no live artifact of the
+configured name (lookup failures don't skip); all expired → flash pointing at
+the new **Run workflow now** button (Deployments tab; `githubci.DispatchWorkflow`,
+`handleRunWorkflow`; 403/404 → explains read+write Actions permission and the
+`workflow_dispatch` trigger, 422 → trigger missing). Tests:
+`TestDeployLatestSkipsExpiredRuns`, `TestRunWorkflowNow`. **Not yet restarted
+live.** Next: identity colour on fleet rows.
+
 **Open items (2026-10-04)** — Nothing in flight; live server is on the latest
 build. Needs the owner: rotate the R2 backup keys (exposed in a terminal),
 click **Start** on `main-mysql`, BeyondCredit token approval, delete the spike

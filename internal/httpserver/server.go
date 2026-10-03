@@ -35,13 +35,13 @@ type Server struct {
 	deliveries  *webhooks.DeliveryCache
 	leMode      string
 	previewHost string
-	dataDir     string       // repo mirrors for the deploy-review page
-	dns         dns.Manager  // nil disables auto-DNS
+	dataDir     string          // repo mirrors for the deploy-review page
+	dns         dns.Manager     // nil disables auto-DNS
 	backups     *backup.Manager // nil disables the backups UI/actions
 	githubAPI   string          // GitHub REST base URL for prebuilt-deploy actions; "" = the real API
 	usageMu     sync.Mutex
 	usageCache  map[string]usageEntry // service id -> who was connected, briefly cached
-	previewRR   sync.Map        // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
+	previewRR   sync.Map              // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
 // New builds a Server.
@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/git", am.CheckCSRF(s.handleGitConnect))
 		r.Post("/apps/{slug}/git/deploy", am.CheckCSRF(s.handleGitDeploy))
 		r.Post("/apps/{slug}/git/deploy-latest", am.CheckCSRF(s.handleDeployLatest))
+		r.Post("/apps/{slug}/git/run-workflow", am.CheckCSRF(s.handleRunWorkflow))
 		r.Post("/apps/{slug}/redeploy", am.CheckCSRF(s.handleRedeploy))
 		r.Post("/apps/{slug}/appearance", am.CheckCSRF(s.handleAppearance))
 		r.Post("/apps/{slug}/services/{id}/exclusion", am.CheckCSRF(s.handleServiceExclusion))
