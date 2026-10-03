@@ -414,6 +414,18 @@ func (d *Docker) Stats(ctx context.Context, name string) (Stats, error) {
 	}, nil
 }
 
+// TotalMemory is the memory the Docker daemon can use (docker info MemTotal).
+func (d *Docker) TotalMemory(ctx context.Context) (uint64, error) {
+	info, err := d.cli.Info(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("docker info: %w", err)
+	}
+	if info.MemTotal <= 0 {
+		return 0, errors.New("docker info: no memory total")
+	}
+	return uint64(info.MemTotal), nil
+}
+
 func (d *Docker) StorageUsed(ctx context.Context) (uint64, error) {
 	du, err := d.cli.DiskUsage(ctx, types.DiskUsageOptions{})
 	if err != nil {

@@ -126,6 +126,13 @@ type Runtime interface {
 	Close() error
 }
 
+// MemoryReporter is implemented by runtimes that can say how much memory the
+// container engine has (on Docker Desktop: the VM's budget, not the Mac's).
+// Optional — callers type-assert, so fakes need not implement it.
+type MemoryReporter interface {
+	TotalMemory(ctx context.Context) (uint64, error)
+}
+
 // DiskUsage is a point-in-time snapshot of the daemon's disk consumption
 // (docker system df) plus the detail behind the totals.
 type DiskUsage struct {

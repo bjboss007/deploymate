@@ -225,7 +225,9 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	}
 	// Remember the framework (React, Spring, …) for the app's card. A best
 	// guess from the manifests; nothing from the repo is executed.
-	w.recordStack(app, stack.DetectDir(filepath.Join(checkoutDir, filepath.Clean("/"+app.RootDirectory))))
+	appDir := filepath.Join(checkoutDir, filepath.Clean("/"+app.RootDirectory))
+	w.recordStack(app, stack.DetectDir(appDir))
+	w.memoryPreflight(ctx, d, app, appDir)
 	// Webhook deploys skip the review page — leave the same range record in
 	// the build log so every deploy shows what shipped.
 	w.logDiffRecord(ctx, app, gs, d)
@@ -298,6 +300,27 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 		return err
 	}
 	return w.finish(d, app.ID)
+}
+
+// memoryPreflight warns, in the build log, before an on-server JVM build when
+// the container engine's memory is below what such builds need. Advisory only:
+// it never fails or delays the deploy, and an engine that cannot say is silent.
+func (w *Worker) memoryPreflight(ctx context.Context, d store.Deployment, app store.App, dir string) {
+	if !stack.IsJVMDir(dir) {
+		return
+	}
+	mr, ok := w.rt.(runtime.MemoryReporter)
+	if !ok {
+		return
+	}
+	total, err := mr.TotalMemory(ctx)
+	if err != nil {
+		return
+	}
+	if note := builder.MemoryAdvice(total); note != "" {
+		w.log(d, "system", note)
+		w.publish("deploy:"+app.Slug, "log", note)
+	}
 }
 
 // logDiffRecord appends the deploy range to the build log for webhook

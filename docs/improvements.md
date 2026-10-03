@@ -441,9 +441,12 @@ change.
     specced (docs/specs/prebuilt-deploys.md "As built — P2"); e2e drives
     the UI flow. Not included: a per-run picker (the button takes the newest
     eligible run), and the Prebuilt/Build choice at app-creation time.
-  - [ ] **P3 — memory preflight advisory:** before an on-server JVM build,
-    compare the host's Docker memory budget to ~3 GB and write a note (build
-    log + app page) pointing at prebuilt mode. Advises, never blocks.
+  - [x] **P3 — memory preflight advisory** — done 2026-10-04: before an
+    on-server Maven/Gradle build the worker asks Docker for its memory
+    (`runtime.MemoryReporter`, `docker info MemTotal`) and, below **5 GiB**,
+    writes a heads-up to the build log; the app page shows the same note for
+    build-mode Java apps. Advises, never blocks. Threshold is 5 GiB, not the
+    spec's ~3 GB: a 3.8 GiB VM already OOM-killed a Spring build, 6.8 GiB was fine.
   - [ ] **Owner follow-ups:** the `BeyondCredit` org token-policy check;
     glance at Settings → Billing → Actions storage after 2026-10-03 11:32
     UTC (S3, expect ≈0); delete `bjboss007/dm-artifact-spike` (my token can

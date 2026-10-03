@@ -119,3 +119,14 @@ func DetectJar(path string) string {
 	}
 	return ""
 }
+
+// IsJVMDir reports whether dir holds a Maven or Gradle project — the builds
+// that need a JDK and a large heap, so building them on a small host is risky.
+func IsJVMDir(dir string) bool {
+	for _, f := range []string{"pom.xml", "build.gradle", "build.gradle.kts", "gradlew"} {
+		if _, err := os.Stat(filepath.Join(dir, f)); err == nil {
+			return true
+		}
+	}
+	return false
+}

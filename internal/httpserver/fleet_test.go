@@ -421,3 +421,43 @@ func TestAppearancePanelShowsDetectedLogo(t *testing.T) {
 		t.Errorf("Use detected left logo %q", app.Logo)
 	}
 }
+
+// An app that builds Java on this server gets low-memory advice on its page;
+// a prebuilt app (CI builds it) and a roomy Docker do not.
+type memRuntime struct {
+	runtime.Runtime
+	total uint64
+}
+
+func (m memRuntime) TotalMemory(context.Context) (uint64, error) { return m.total, nil }
+
+func TestJVMMemoryNoteOnAppPage(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	if err := e.st.UpdateAppStack(e.app.ID, "spring"); err != nil {
+		t.Fatal(err)
+	}
+	key, _ := crypto.Encrypt(e.s.encKey, testPEM(t)) // the page needs a real deploy key
+	if _, err := e.st.DB().Exec(`UPDATE git_sources SET private_key_enc = ? WHERE id = ?`, key, e.gs.ID); err != nil {
+		t.Fatal(err)
+	}
+	page := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	e.s.rt = memRuntime{total: 3 << 30}
+	if !strings.Contains(page(), "Heads-up: Docker has 3.0 GiB") {
+		t.Error("low memory should show the advice")
+	}
+	e.s.rt = memRuntime{total: 7 << 30}
+	if strings.Contains(page(), "Heads-up: Docker") {
+		t.Error("enough memory should show nothing")
+	}
+	e.s.rt = memRuntime{total: 3 << 30}
+	e.enablePrebuilt(t)
+	if strings.Contains(page(), "Heads-up: Docker") {
+		t.Error("a prebuilt app is not built here; no advice")
+	}
+}

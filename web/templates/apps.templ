@@ -26,6 +26,7 @@ type GitInfo struct {
 	HasToken      bool   // an API token is stored (never the token itself)
 	WorkflowGradle string // generated workflow files, ready to copy
 	WorkflowMaven  string
+	MemoryNote     string // low-memory advice for an on-server Java build; "" = none
 }
 
 // ReplicaView is one replica slot as the app page shows it.
@@ -648,6 +649,9 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					if git.GitHub && git.DeployMode == "artifact" {
 						<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes — tick <strong>Workflow runs</strong> in the repo's webhook settings (the push event can stay on; it is ignored for prebuilt apps).</p>
 					} else {
+						if git.MemoryNote != "" {
+							<p class="notice notice-warn">{ git.MemoryNote }</p>
+						}
 						<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
 					}
 					if git.GitHub {

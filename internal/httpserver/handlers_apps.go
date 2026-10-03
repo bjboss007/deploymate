@@ -369,6 +369,9 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 					wf.Tool = githubci.ToolMaven
 					git.WorkflowMaven = githubci.Workflow(wf)
 				}
+				if app.DeployMode != store.DeployModeArtifact {
+					git.MemoryNote = s.jvmMemoryNote(r.Context(), app)
+				}
 			}
 		}
 	}
@@ -1125,4 +1128,24 @@ func (s *Server) handleServiceExclusion(w http.ResponseWriter, r *http.Request) 
 	}
 	_ = s.store.RecordEvent(app.ID, store.EventEnvChanged, event)
 	http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL(msg+" Redeploy "+app.Name+" to apply."), http.StatusSeeOther)
+}
+
+// jvmMemoryNote is the "this build may run out of memory" advice for an app
+// that builds a Java project on this server; "" when it doesn't apply or
+// Docker has enough memory (or cannot say).
+func (s *Server) jvmMemoryNote(ctx context.Context, app store.App) string {
+	if app.Stack != "spring" && app.Stack != "kotlin" && builder.ParseRuntimeSpec(app.Runtime).Key != "java" {
+		return ""
+	}
+	mr, ok := s.rt.(runtime.MemoryReporter)
+	if !ok {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	total, err := mr.TotalMemory(ctx)
+	if err != nil {
+		return ""
+	}
+	return builder.MemoryAdvice(total)
 }

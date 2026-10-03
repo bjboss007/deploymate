@@ -7,6 +7,15 @@
 
 ## Where we stopped
 
+**2026-10-04 (P3 memory preflight)** — Before an on-server Java build the worker
+logs "Heads-up: Docker has X GiB … switch to Prebuilt mode" when Docker's memory
+is under 5 GiB (`builder.MemoryAdvice`, `Worker.memoryPreflight`, optional
+`runtime.MemoryReporter` implemented by `Docker.TotalMemory`; `stack.IsJVMDir`).
+Same note on the app page's Git panel for build-mode Java apps
+(`GitInfo.MemoryNote`, `.notice-warn`). Advisory only. Tests:
+`TestMemoryAdvice`, `TestMemoryPreflightAdvisesOnlyForJVMOnSmallDocker`,
+`TestJVMMemoryNoteOnAppPage`. **Not yet restarted live** (no migration).
+
 **2026-10-04 (framework detection correction)** — Settings → Appearance now
 leads with "Detected: <logo> <label>" plus its source (framework found in repo/JAR
 vs runtime/image only), says when the owner's choice overrides it, and has a
