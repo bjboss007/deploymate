@@ -6,6 +6,32 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [x] **Redeploy, bulk env editor, app cards, usage + opt-out** — done
+  2026-10-03/04 (see progress.md): Redeploy applies changed variables on the
+  current image; bulk "Add variable + Save"; project page app cards with
+  technology logos and identity colour (migration 0018); "Available to this
+  app" wording, live "Connected now" signal, per-app **Stop sending** of
+  injected services (migration 0019).
+- [ ] **"Deploy latest run" offers runs whose artifacts expired** (found live
+  on `erp`, `retention-days: 1`): skip expired runs, or add a **Run workflow
+  now** button (`workflow_dispatch`) that starts a fresh CI run and deploys it.
+- [ ] **Fleet board rows don't show the app's identity colour/logo** — only the
+  project page and app header do.
+- [ ] **Framework detection is a best guess** — surface "detected: X" with a
+  one-click correction beside the Appearance override.
+- [ ] **Usage signal can't prove "unused"** — apps that connect per request
+  look idle; consider a longer sampling window before suggesting **Stop
+  sending**.
+- [ ] **Service list rows should show which apps consume them** (reverse of the
+  app cards).
+- [ ] **One-click retry on a failed deployment; mobile sticky action bar** —
+  UI polish ideas from the redesign.
+- [ ] **Owner/ops (not code):** rotate the R2 backup keys that were printed to
+  the terminal while copying the live env (then restart once more); start
+  `dm-svc-main-mysql` from the dashboard; BeyondCredit org must approve the
+  fine-grained token; check S3 billing after 2026-10-03 11:32 UTC; delete
+  `bjboss007/dm-artifact-spike` (and `tradestack-dm-test` when finished).
+
 - [x] **Build failures hide their cause** — done 2026-09-30 (found live:
   the `testing` app's Java/Gradle deploy showed only `railpack build
   failed: exit status 1`; the real cause, `cannot allocate memory` — a

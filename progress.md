@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**Open items (2026-10-04)** — Nothing in flight; live server is on the latest
+build. Needs the owner: rotate the R2 backup keys (exposed in a terminal),
+click **Start** on `main-mysql`, BeyondCredit token approval, delete the spike
+repo. Candidate next code work (all in `docs/improvements.md`, top of
+Near-term): skip expired runs / "Run workflow now", identity colour on fleet
+rows, P3 memory preflight.
+
 **2026-10-04 (app cards: honest wording, live usage, per-app opt-out)** —
 Owner asked whether `shortlink-web` really uses the Postgres/Redis its card
 showed. Investigation: DeployMate **injects** every service of the project +
