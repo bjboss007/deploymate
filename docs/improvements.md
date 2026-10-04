@@ -6,6 +6,10 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [x] **Release workflow + installer** — done 2026-10-04: `deploy/package.sh`,
+  `deploy/install.sh` (checksum-verified), `.github/workflows/{ci,release}.yml`,
+  `deploymate version`, docs/knowledge/releasing.md. Not yet done: cut v0.1.0 and run
+  the installer on a clean Ubuntu VM end to end.
 - [ ] **Website** (design direction A, "the fleet board", chosen 2026-10-04): static
   site in `site/`, hosted on DeployMate itself; needs a seeded demo instance for real
   screenshots and a release workflow (Linux amd64/arm64 binaries + checksums) so the

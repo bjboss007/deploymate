@@ -7,6 +7,15 @@
 
 ## Where we stopped
 
+**2026-10-04 (website prerequisites, step 1: releases + installer)** — Owner chose design
+direction A (the fleet board) and Apache-2.0 (LICENSE/NOTICE added). Built: `deploymate
+version` (`-X main.version`), `deploy/package.sh` (static archive + installer files), `deploy/install.sh`
+(arch detect, SHA-256 verify, refuses mismatch/unlisted/non-root, then bootstrap), `ci.yml`
+(templ drift, vet, tests, cross-builds, script syntax) and `release.yml` (tag `v*.*.*` → 4
+archives + `checksums.txt` → GitHub release). Tested the installer in an `ubuntu:24.04` container:
+good archive, tampered, unlisted, non-root. **Not yet done:** cut `v0.1.0`; a clean-VM end-to-end
+install. Next: step 2 (seeded demo instance for screenshots), step 3 (the site in `site/`).
+
 **2026-10-04 (MCP step 3: provision tier — plan complete)** — Provisioning cores in
 `provision.go` (project/app/service/repo/domain/env), the form handlers now call them;
 `api_provision.go` + routes under `RequireScope(provision)`; MCP tools `create_project`,

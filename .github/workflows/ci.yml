@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Generated templates are up to date
+        run: |
+          go install github.com/a-h/templ/cmd/templ@v0.3.1020
+          "$(go env GOPATH)/bin/templ" generate
+          git diff --exit-code -- web/templates || { echo "run 'make gen' and commit the result"; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+      - name: Cross-builds compile
+        run: |
+          for t in linux/amd64 linux/arm64 darwin/arm64; do
+            CGO_ENABLED=0 GOOS="${t%/*}" GOARCH="${t#*/}" go build -o /dev/null ./cmd/deploymate
+          done
+      - name: Scripts parse
+        run: bash -n deploy/install.sh && bash -n deploy/bootstrap.sh && bash -n deploy/package.sh

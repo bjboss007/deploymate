@@ -130,7 +130,22 @@ DEPLOYMATE_SETUP_PASSWORD=secret ./bin/deploymate serve
 Open http://127.0.0.1:8090 and sign in. Port 8090 locally because Docker
 Desktop occupies 8080; on the server the default is 8080.
 
-## Deploy to your server (Ubuntu 24.04)
+## Install on your server (Ubuntu 24.04)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \
+  | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash
+sudo -u deploymate /usr/local/bin/deploymate setup-admin
+```
+
+The installer downloads the latest release for your CPU (amd64 or arm64), checks
+its SHA-256 against the release's `checksums.txt` and refuses to continue on a
+mismatch, then runs `deploy/bootstrap.sh` (Docker, firewall, service user,
+Traefik, systemd). Read it first if you like — it is short. Pin a version with
+`DEPLOYMATE_VERSION=v0.1.0`. Releases are built by `.github/workflows/release.yml`
+when a `v*.*.*` tag is pushed (see docs/knowledge/releasing.md).
+
+### Or build it yourself
 
 ```sh
 # on your Mac / build machine

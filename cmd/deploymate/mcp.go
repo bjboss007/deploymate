@@ -9,9 +9,6 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/mcp"
 )
 
-// version is stamped into the MCP server's identity.
-const version = "dev"
-
 // runMCP serves the Model Context Protocol on stdin/stdout. It talks to a
 // running DeployMate over its /api/v1 with a token, so it needs only two
 // settings — never the database, the key file or Docker:

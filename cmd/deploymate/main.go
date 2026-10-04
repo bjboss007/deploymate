@@ -5,6 +5,7 @@
 //	setup-admin      create the owner user interactively
 //	seed-git-source  link an app to a git source (test-seeding; see seed.go)
 //	mcp              MCP server over stdio for AI agents (see mcp.go)
+//	version          print the version
 package main
 
 import (
@@ -34,6 +35,9 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
+// version is stamped at release time: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo})))
 	if err := run(); err != nil {
@@ -51,6 +55,9 @@ func run() error {
 		return seedGitSource()
 	case "mcp":
 		return runMCP()
+	case "version":
+		fmt.Println("deploymate", version)
+		return nil
 	default:
 		return serve()
 	}

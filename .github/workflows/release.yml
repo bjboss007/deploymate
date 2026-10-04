@@ -1,0 +1,32 @@
+name: Release
+
+# Push a tag like v0.1.0 to publish a release: static binaries for Linux
+# (amd64, arm64) and macOS (arm64, amd64 — for `deploymate mcp` on a laptop),
+# each with the installer files, plus checksums.txt that deploy/install.sh
+# verifies before running anything.
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./... && go test ./...
+      - name: Build archives
+        run: |
+          for t in linux/amd64 linux/arm64 darwin/arm64 darwin/amd64; do
+            deploy/package.sh "$GITHUB_REF_NAME" "${t%/*}" "${t#*/}" dist
+          done
+          (cd dist && sha256sum ./*.tar.gz | sed 's#\./##' > checksums.txt && cat checksums.txt)
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes --verify-tag
