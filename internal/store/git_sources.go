@@ -57,6 +57,12 @@ func (s *Store) SetGitSourceAPIToken(id, tokenEnc string) error {
 	return err
 }
 
+// SetGitSourceWebhookSecret replaces the (encrypted) webhook secret.
+func (s *Store) SetGitSourceWebhookSecret(id, secretEnc string) error {
+	_, err := s.db.Exec(`UPDATE git_sources SET webhook_secret_enc = ? WHERE id = ?`, secretEnc, id)
+	return err
+}
+
 // UpdateAppGitSource links (or unlinks) an app to a git source.
 func (s *Store) UpdateAppGitSource(appID, gitSourceID string) error {
 	if gitSourceID == "" {

@@ -17,6 +17,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
+	"github.com/habibmuhammad/deploymate/internal/tlscheck"
 )
 
 const (
@@ -63,6 +64,8 @@ type Monitor struct {
 
 	mu             sync.Mutex
 	uptimeState    map[string]bool   // domainID -> last probe ok
+	lastTLS        map[string]time.Time // domainID -> last certificate check
+	tlsFn          func(ctx context.Context, host string) tlscheck.Result // tests override the handshake
 	healthFails    map[string]int    // appID -> consecutive failed probes
 	lastHeal       map[string]time.Time // healKey(appID, slot) -> last auto-heal attempt
 	restartSeen    map[string]int    // appID -> last RestartCount
@@ -83,6 +86,7 @@ func New(st *store.Store, rt runtime.Runtime, a *alerts.Dispatcher) *Monitor {
 			},
 		},
 		uptimeState:    make(map[string]bool),
+		lastTLS:        make(map[string]time.Time),
 		healthFails:    make(map[string]int),
 		lastHeal:       make(map[string]time.Time),
 		restartSeen:    make(map[string]int),
@@ -331,6 +335,50 @@ func (m *Monitor) probeAll(ctx context.Context) {
 		}
 		m.uptimeState[d.ID] = ok
 		m.mu.Unlock()
+
+		m.checkTLS(ctx, d)
+	}
+}
+
+// Certificate checks are a handshake each, so they run far less often than the
+// 30 s uptime probe: every 2 minutes while a domain has no valid certificate
+// yet (so "pending" turns "active" soon after issuance), every 30 minutes once
+// it does.
+const (
+	tlsPendingEvery = 2 * time.Minute
+	tlsSteadyEvery  = 30 * time.Minute
+)
+
+// checkTLS records the domain's real certificate state (docs: domains page).
+func (m *Monitor) checkTLS(ctx context.Context, d store.Domain) {
+	every := tlsSteadyEvery
+	if d.TLSStatus != tlscheck.Active {
+		every = tlsPendingEvery
+	}
+	m.mu.Lock()
+	if last, ok := m.lastTLS[d.ID]; ok && time.Since(last) < every {
+		m.mu.Unlock()
+		return
+	}
+	m.lastTLS[d.ID] = time.Now()
+	fn := m.tlsFn
+	m.mu.Unlock()
+
+	var res tlscheck.Result
+	if fn != nil {
+		res = fn(ctx, d.Hostname)
+	} else {
+		res = tlscheck.Check(ctx, d.Hostname, "", nil, time.Now())
+	}
+	expires := ""
+	if !res.Expires.IsZero() {
+		expires = res.Expires.UTC().Format(time.RFC3339)
+	}
+	if res.Status == d.TLSStatus && expires == d.CertExpiresAt {
+		return
+	}
+	if err := m.store.UpdateDomainTLS(d.ID, res.Status, expires); err != nil {
+		slog.Error("monitor: update domain tls", "domain", d.Hostname, "err", err)
 	}
 }
 

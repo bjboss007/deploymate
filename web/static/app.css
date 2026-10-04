@@ -885,3 +885,7 @@ select { cursor: pointer; }
   .container { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
   body:has(input:focus, textarea:focus, select:focus) .sticky-actions { display: none; }
 }
+
+.diagnosis-info { border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); border-left-color: var(--accent); background: color-mix(in srgb, var(--accent) 6%, var(--panel)); }
+.steps { margin: 8px 0 12px 20px; padding: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.steps .url-readout { margin-top: 8px; }

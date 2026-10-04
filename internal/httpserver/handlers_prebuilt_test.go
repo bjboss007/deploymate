@@ -555,3 +555,108 @@ func TestRetryButtonShowsOnlyOnNewestFailedDeployment(t *testing.T) {
 		t.Error("an older failed deployment must not offer Retry")
 	}
 }
+
+// A freshly connected build-mode repo gets the first-deploy guide until its
+// first deployment exists; a prebuilt app never shows it.
+func TestFirstDeployGuide(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	key, _ := crypto.Encrypt(e.s.encKey, testPEM(t))
+	if _, err := e.st.DB().Exec(`UPDATE git_sources SET private_key_enc = ? WHERE id = ?`, key, e.gs.ID); err != nil {
+		t.Fatal(err)
+	}
+	get := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	body := get()
+	if !strings.Contains(body, "deploy it for the first time") || !strings.Contains(body, `/apps/api/deploy-preview`) || !strings.Contains(body, "first-deploy-key") {
+		t.Error("never-deployed git app should show the first-deploy guide with the key and Review & deploy")
+	}
+	e.st.CreateDeployment(store.Deployment{AppID: e.app.ID, Kind: "deploy", Status: "running"})
+	if strings.Contains(get(), "deploy it for the first time") {
+		t.Error("the guide must go away once the app has a deployment")
+	}
+	e2 := newPrebuiltEnv(t)
+	e2.enablePrebuilt(t)
+	key2, _ := crypto.Encrypt(e2.s.encKey, testPEM(t))
+	e2.st.DB().Exec(`UPDATE git_sources SET private_key_enc = ? WHERE id = ?`, key2, e2.gs.ID)
+	req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	e2.s.Handler().ServeHTTP(rec, req)
+	if strings.Contains(rec.Body.String(), "deploy it for the first time") {
+		t.Error("a prebuilt app has its own flow; no guide")
+	}
+}
+
+// Rotating the webhook secret stores a new random one (encrypted), shows it on
+// the app page, and the old secret stops verifying.
+func TestRotateWebhookSecret(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	key, _ := crypto.Encrypt(e.s.encKey, testPEM(t))
+	if _, err := e.st.DB().Exec(`UPDATE git_sources SET private_key_enc = ? WHERE id = ?`, key, e.gs.ID); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := e.st.GetGitSource(e.gs.ID)
+	oldSecret, _ := crypto.Decrypt(e.s.encKey, before.WebhookSecretEnc)
+
+	_, loc := e.post(t, "/apps/api/git/rotate-secret", url.Values{})
+	if !strings.Contains(flashOf(t, loc), "Webhook secret rotated") {
+		t.Errorf("flash = %q", flashOf(t, loc))
+	}
+	after, _ := e.st.GetGitSource(e.gs.ID)
+	newSecret, err := crypto.Decrypt(e.s.encKey, after.WebhookSecretEnc)
+	if err != nil || newSecret == oldSecret || len(newSecret) < 32 {
+		t.Fatalf("secret not replaced: old=%q new=%q err=%v", oldSecret, newSecret, err)
+	}
+	if strings.Contains(after.WebhookSecretEnc, newSecret) {
+		t.Error("the new secret is stored in plaintext")
+	}
+	req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, req)
+	body := rec.Body.String()
+	if !strings.Contains(body, newSecret) || strings.Contains(body, oldSecret) {
+		t.Error("the page should show the new secret and not the old one")
+	}
+	if strings.Contains(body, "Variables changed since the last deploy") {
+		t.Error("rotating a secret must not raise the redeploy banner")
+	}
+	// An app with no repo refuses.
+	e2 := newPrebuiltEnv(t)
+	e2.st.UpdateAppGitSource(e2.app.ID, "")
+	_, loc = e2.post(t, "/apps/api/git/rotate-secret", url.Values{})
+	if !strings.Contains(flashOf(t, loc), "Connect a repo") {
+		t.Errorf("no-repo flash = %q", flashOf(t, loc))
+	}
+}
+
+// The domains table shows the certificate's real state, in words.
+func TestDomainsShowCertificateState(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	key, _ := crypto.Encrypt(e.s.encKey, testPEM(t))
+	e.st.DB().Exec(`UPDATE git_sources SET private_key_enc = ? WHERE id = ?`, key, e.gs.ID)
+	d, _ := e.st.CreateDomain(store.Domain{AppID: e.app.ID, Hostname: "shop.example.com", TLSStatus: "pending"})
+	get := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/apps/api", nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	if !strings.Contains(get(), "Waiting for certificate") {
+		t.Error("a pending domain should say it is waiting for a certificate")
+	}
+	e.st.UpdateDomainTLS(d.ID, "active", "2027-03-05T00:00:00Z")
+	if body := get(); !strings.Contains(body, "Secure · until 5 Mar 2027") {
+		t.Errorf("an active domain should show its expiry")
+	}
+	e.st.UpdateDomainTLS(d.ID, "untrusted", "2027-03-05T00:00:00Z")
+	if !strings.Contains(get(), "Issuer not trusted") {
+		t.Error("an untrusted certificate should say so")
+	}
+}

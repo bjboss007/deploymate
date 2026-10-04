@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
+	"github.com/habibmuhammad/deploymate/internal/tlscheck"
 )
 
 // stubRuntime satisfies runtime.Runtime; the auto-heal path needs nothing
@@ -157,5 +159,47 @@ func TestAutoHealFailureIsLoggedAndRateLimited(t *testing.T) {
 	m.probeAppHealth(context.Background(), app)
 	if calls != 1 {
 		t.Errorf("failed heal retried %d times within cooldown, want 1", calls)
+	}
+}
+
+// The monitor records a domain's real certificate state, re-checks a
+// not-yet-active domain quickly but an active one rarely, and writes nothing
+// when nothing changed.
+func TestCheckTLSRecordsAndThrottles(t *testing.T) {
+	m, st, app := newTestMonitor(t)
+	d, err := st.CreateDomain(store.Domain{AppID: app.ID, Hostname: "app.example.com", TLSStatus: "pending"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	expiry := time.Now().Add(60 * 24 * time.Hour).UTC().Truncate(time.Second)
+	m.tlsFn = func(context.Context, string) tlscheck.Result {
+		calls++
+		return tlscheck.Result{Status: tlscheck.Active, Expires: expiry, Detail: "ok"}
+	}
+	get := func() store.Domain {
+		ds, _ := st.ListDomains(app.ID)
+		return ds[0]
+	}
+
+	m.checkTLS(context.Background(), d)
+	got := get()
+	if got.TLSStatus != "active" || got.CertExpiresAt != expiry.Format(time.RFC3339) {
+		t.Fatalf("domain = %q / %q, want active with the expiry", got.TLSStatus, got.CertExpiresAt)
+	}
+	// Immediately again: throttled (active domains are re-checked every 30 min).
+	m.checkTLS(context.Background(), got)
+	if calls != 1 {
+		t.Errorf("handshakes = %d, want 1 (throttled)", calls)
+	}
+	// A pending domain is re-checked after the short interval.
+	m.mu.Lock()
+	m.lastTLS[d.ID] = time.Now().Add(-3 * time.Minute)
+	m.mu.Unlock()
+	pending := got
+	pending.TLSStatus = "pending"
+	m.checkTLS(context.Background(), pending)
+	if calls != 2 {
+		t.Errorf("a pending domain should be re-checked after 2 minutes (calls=%d)", calls)
 	}
 }

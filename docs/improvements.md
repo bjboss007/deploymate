@@ -226,10 +226,16 @@ change.
   `prune()` pass alongside metrics/uptime (`buildLogsRetain` in
   `internal/monitor/monitor.go`). Deployment rows stay; only their verbose
   line-by-line output is pruned. Unit-tested (Aug 2026).
-- [ ] **TLS status sync** — `domains.tls_status` stays `pending` forever;
-  parse Traefik's acme.json (or enable Traefik's API on localhost) to
-  show `active`/`failed` + expiry. Uptime probes already reveal the real
-  state indirectly.
+- [x] **TLS status sync** — done 2026-10-04, by handshake rather than by parsing
+  acme.json: `internal/tlscheck` dials the hostname like a browser and classifies
+  what the edge serves — `active` (until date), `expiring` (<14 days), `untrusted`
+  (e.g. Let's Encrypt staging), `failed` (expired/invalid), `pending` (default
+  cert / wrong name / unreachable). The monitor records it into `domains.tls_status`
+  + `cert_expires_at` (every 2 min while not active, 30 min once active); the
+  domains table shows it in words. No alert yet for `expiring`/`failed`
+  (new backlog item below).
+- [ ] **Alert on a certificate that is expiring or failed** — the status is
+  recorded now; add `cert_expiring` / `cert_failed` to the alert catalog.
 - [x] **Unhealthy badge mislabels running apps** — done: the app page
   now distinguishes crash loops (restarts > 0) from "container is
   running but failing health probes on its preview port" (0 restarts);
@@ -563,12 +569,16 @@ change.
   Sub-items: per-env domains, per-env preview hostnames
   (`{slug}-staging.{previewHost}` — the preview middleware already
   routes hyphenated subdomains), per-env env-var sets.
-- [ ] **Manual service environment selector** — hand-created services
-  are production-only by design (the manifest is the staging path); if
-  that bites, add an environment dropdown to the service create form
-  (small: the column and filtering already exist).
-- [ ] **Automatic deploy on git connect** — after linking a repo, offer
-  "deploy now" in the same flow (today it's two clicks).
+- [x] **Manual service environment selector** — done 2026-10-04: the "New
+  database or cache" form has an environment dropdown (dev default, matching new
+  apps); a client that sends none still gets production.
+
+- [x] **Deploy right after connecting a repo** — done 2026-10-04. Not literally
+  automatic: a private repo can't be cloned until its deploy key is added, so an
+  automatic deploy would just fail. Instead the app's Overview shows a
+  "Repository connected — deploy it for the first time" card (key to copy +
+  **Review & deploy**) until the first deployment exists; prebuilt apps keep their
+  own panel.
 - [x] **Zero-downtime deploys** — done (blue/green-lite). A deploy starts
   the new container BESIDE the old (`dm-{slug}-{deployID}`, temp loopback
   host port, own Traefik router + UnixNano priority), probes it like the
@@ -585,9 +595,10 @@ change.
 - [x] **Notifications** — done via the alerts system: webhook channel
   with per-event subscriptions (Slack-compatible). Email/Telegram remain
   as additive channels (the `channel` column is the seam, Aug 2026).
-- [ ] **Webhook secret rotation UI** — regenerating a webhook secret
-  required a DB hack this session (the newline bug made it worse). A
-  "rotate secret" button on the Git panel is the proper fix.
+- [x] **Webhook secret rotation UI** — done 2026-10-04: **Rotate secret** on the
+  Git panel (`POST /apps/{slug}/git/rotate-secret`) stores a fresh random secret
+  (encrypted); the old one stops verifying at once, so the flash says to paste the
+  new one into the provider's webhook.
 - [ ] **Prometheus `/metrics` endpoint** — additive to the SQLite
   sampling; enables Grafana if it's ever wanted.
 - [ ] **Key rotation** — `v1:` envelope versioning exists precisely for

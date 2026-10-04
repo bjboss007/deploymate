@@ -337,6 +337,11 @@ templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resourc
 							<option value="mysql">MySQL</option>
 							<option value="redis">Redis</option>
 						</select>
+						<select name="environment" aria-label="Environment" title="Only apps in the same environment get this service's connection URL">
+							<option value="dev">dev</option>
+							<option value="staging">staging</option>
+							<option value="production">production</option>
+						</select>
 						<button class="btn btn-primary" type="submit">Create</button>
 					</form>
 				</details>

@@ -86,7 +86,9 @@ func (s *Server) handleGitConnect(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
+	// The deploy key must be on the repo before a private clone can work, so
+	// the first deploy is a guided click on the app page, not an automatic one.
+	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Repository connected. Add the deploy key if it is private, then deploy."), http.StatusSeeOther)
 }
 
 // handleGitDeploy queues a deployment of the branch HEAD. The optional sha
@@ -438,6 +440,33 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.Redirect(w, r, "/deployments/"+rb.ID, http.StatusSeeOther)
+}
+
+// handleRotateWebhookSecret replaces the repo's webhook secret with a fresh
+// random one. The old secret stops verifying at once, so the flash tells the
+// owner to paste the new one into the provider's webhook settings — until they
+// do, pushes are rejected (not silently ignored).
+func (s *Server) handleRotateWebhookSecret(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	if app.GitSourceID == "" {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Connect a repo first."), http.StatusSeeOther)
+		return
+	}
+	enc, err := crypto.Encrypt(s.encKey, randomHex(24))
+	if err != nil {
+		slog.Error("git: encrypt webhook secret", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := s.store.SetGitSourceWebhookSecret(app.GitSourceID, enc); err != nil {
+		slog.Error("git: rotate webhook secret", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Webhook secret rotated. Paste the new secret into the webhook's settings on your git provider — pushes are rejected until you do.")+"#settings", http.StatusSeeOther)
 }
 
 // handleRetry queues a copy of a failed deployment — same commit, same CI run,

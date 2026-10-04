@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/logos"
@@ -337,6 +338,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 		<section class="tab-panel" id="tab-overview" data-tab="overview" aria-label="Overview">
 			@pendingEnvBanner(vc, app, envPending)
 			@appDiagnosis(vc, app, deployments, healthReason)
+			@firstDeployGuide(app, git, deployments)
 			<div class="facts">
 				<div class="fact">
 					<div class="fact-label">Health</div>
@@ -627,7 +629,13 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 								</tr>
 								<tr>
 									<td>Webhook secret</td>
-									<td class="mono">{ git.WebhookSecret }</td>
+									<td class="mono">
+										{ git.WebhookSecret }
+										<form method="post" action={ "/apps/" + app.Slug + "/git/rotate-secret" } class="inline-form" onsubmit="return confirm('Generate a new webhook secret? Pushes are rejected until you paste it into the webhook on your git provider.')">
+											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+											<button class="btn btn-ghost btn-sm" type="submit">Rotate secret</button>
+										</form>
+									</td>
 								</tr>
 							</tbody>
 						</table>
@@ -766,7 +774,7 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 							for _, dm := range domains {
 								<tr>
 									<td class="mono">https://{ dm.Hostname }</td>
-									<td>{ dm.TLSStatus }</td>
+									<td><span class={ "badge", tlsBadge(dm.TLSStatus) } title={ tlsHint(dm) }>{ tlsLabel(dm) }</span></td>
 									<td class="env-actions">
 										<form method="post" action={ "/apps/" + app.Slug + "/domains/" + dm.ID + "/delete" }>
 											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
@@ -959,4 +967,80 @@ templ detectedLogo(vc ViewCtx, app store.App) {
 			</form>
 		}
 	</div>
+}
+
+// firstDeployGuide walks a freshly connected repository to its first deploy:
+// the deploy key to add, then one button. It shows only while the app has
+// never been deployed and builds on this server (a prebuilt app has its own
+// panel and "Deploy latest run").
+templ firstDeployGuide(app store.App, git *GitInfo, deployments []store.Deployment) {
+	if git != nil && len(deployments) == 0 && !(git.GitHub && git.DeployMode == "artifact") {
+		<div class="diagnosis diagnosis-info" role="status">
+			<div class="diagnosis-title">Repository connected — deploy it for the first time</div>
+			<ol class="steps">
+				<li>
+					If the repository is private, add this deploy key to it (read-only):
+					<div class="url-readout">
+						<div class="url-readout-head">
+							<span class="svc-key">Deploy key</span>
+							<button class="btn btn-ghost btn-sm readout-copy js-copy" type="button" data-copy="first-deploy-key">Copy</button>
+						</div>
+						<code class="url-readout-value" id="first-deploy-key">{ git.PublicKey }</code>
+					</div>
+				</li>
+				<li>Review what will ship and deploy <strong>{ git.DefaultBranch }</strong>. Add the webhook from Settings → Git later so pushes deploy by themselves.</li>
+			</ol>
+			<div class="diagnosis-actions">
+				<a class="btn btn-primary btn-sm" href={ templ.SafeURL("/apps/" + app.Slug + "/deploy-preview") }>Review &amp; deploy</a>
+			</div>
+		</div>
+	}
+}
+
+// tlsLabel is the plain-words certificate state shown beside a domain.
+func tlsLabel(dm store.Domain) string {
+	exp := ""
+	if t, err := time.Parse(time.RFC3339, dm.CertExpiresAt); err == nil {
+		exp = t.Format("2 Jan 2006")
+	}
+	switch dm.TLSStatus {
+	case "active":
+		if exp != "" {
+			return "Secure · until " + exp
+		}
+		return "Secure"
+	case "expiring":
+		return "Expires " + exp
+	case "untrusted":
+		return "Issuer not trusted"
+	case "failed":
+		return "Certificate problem"
+	}
+	return "Waiting for certificate"
+}
+
+func tlsBadge(status string) string {
+	switch status {
+	case "active":
+		return "badge-running"
+	case "failed":
+		return "badge-failed"
+	case "expiring", "untrusted":
+		return "badge-accent"
+	}
+	return ""
+}
+
+func tlsHint(dm store.Domain) string {
+	switch dm.TLSStatus {
+	case "active":
+		return "A valid, trusted certificate is being served. Checked from this server every 30 minutes."
+	case "expiring":
+		return "The certificate renews automatically about 30 days before it expires. If this stays, check that the domain still points here and port 443 is reachable."
+	case "untrusted":
+		return "A certificate is served for this name but its issuer isn't trusted — normal with Let's Encrypt staging, a problem in production."
+	case "failed":
+		return "The served certificate is expired or invalid. Check the domain's DNS and the proxy's logs."
+	}
+	return "No certificate has been issued for this name yet. It appears after DNS points here and the proxy has requested one; checked every 2 minutes."
 }

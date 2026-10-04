@@ -6,7 +6,7 @@ type Domain struct {
 	AppID         string
 	Hostname      string
 	IsPrimary     bool
-	TLSStatus     string // pending | active | failed
+	TLSStatus     string // pending | active | expiring | untrusted | failed (see internal/tlscheck)
 	CertExpiresAt string
 	CreatedAt     string
 }
@@ -21,6 +21,13 @@ func (s *Store) CreateDomain(d Domain) (Domain, error) {
 		d.ID, d.AppID, d.Hostname, d.IsPrimary, d.TLSStatus, d.CertExpiresAt, d.CreatedAt,
 	)
 	return d, err
+}
+
+// UpdateDomainTLS records what the last certificate check saw: the status and
+// the certificate's expiry ("" when there was no usable certificate).
+func (s *Store) UpdateDomainTLS(id, status, expiresAt string) error {
+	_, err := s.db.Exec(`UPDATE domains SET tls_status = ?, cert_expires_at = ? WHERE id = ?`, status, expiresAt, id)
+	return err
 }
 
 // ListDomains returns an app's domains, oldest first.

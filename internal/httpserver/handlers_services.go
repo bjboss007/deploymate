@@ -52,8 +52,16 @@ func (s *Server) handleServiceCreate(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("Service name has no usable characters."), http.StatusSeeOther)
 		return
 	}
+	env := r.FormValue("environment")
+	if env == "" {
+		env = store.EnvProduction // forms and clients that don't send one keep the old behaviour
+	}
+	if env != store.EnvDev && env != store.EnvStaging && env != store.EnvProduction {
+		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("Unknown environment."), http.StatusSeeOther)
+		return
+	}
 	svc, err := s.store.CreateService(store.Service{
-		ProjectID: project.ID, Type: svcType, Name: name, Slug: slug,
+		ProjectID: project.ID, Type: svcType, Name: name, Slug: slug, Environment: env,
 		Image: tpl.Image, Status: "stopped", VolumeName: services.VolumeName(slug), Port: tpl.Port,
 	})
 	if errors.Is(err, store.ErrSlugTaken) {

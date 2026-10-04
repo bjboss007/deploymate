@@ -140,6 +140,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/git", am.CheckCSRF(s.handleGitConnect))
 		r.Post("/apps/{slug}/git/deploy", am.CheckCSRF(s.handleGitDeploy))
 		r.Post("/apps/{slug}/git/deploy-latest", am.CheckCSRF(s.handleDeployLatest))
+		r.Post("/apps/{slug}/git/rotate-secret", am.CheckCSRF(s.handleRotateWebhookSecret))
 		r.Post("/apps/{slug}/git/run-workflow", am.CheckCSRF(s.handleRunWorkflow))
 		r.Post("/apps/{slug}/redeploy", am.CheckCSRF(s.handleRedeploy))
 		r.Post("/apps/{slug}/appearance", am.CheckCSRF(s.handleAppearance))

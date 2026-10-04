@@ -7,6 +7,19 @@
 
 ## Where we stopped
 
+**2026-10-04 (four small backlog items)** — (1) **First-deploy guide**: a
+git-connected build-mode app with no deployments shows a card on Overview (deploy
+key to copy + Review & deploy); connecting redirects with a flash. Not an automatic
+deploy on purpose (a private repo can't be cloned before its key is added).
+(2) **Rotate webhook secret**: `POST /apps/{slug}/git/rotate-secret`
+(`handleRotateWebhookSecret`, `SetGitSourceWebhookSecret`); no redeploy banner.
+(3) **TLS status**: new `internal/tlscheck` (handshake + verify → pending / active /
+expiring / untrusted / failed + expiry), `Monitor.checkTLS` (2 min while not active,
+30 min once active; `tlsFn` seam for tests), `store.UpdateDomainTLS`, domains table
+shows "Secure · until …" etc. (4) **Service environment selector** on the create
+form (dev default; none sent = production). Tests for each. **Not yet restarted
+live** (no migration). New backlog item: alert on expiring/failed certificates.
+
 **2026-10-04 (prebuilt mode reads `deploymate.yml`)** — The generated workflow now
 copies `deploymate.yml` / `deploymate.*.yml` into `out/` and uploads `out/`
 (the zip holds `app.jar` + manifests). `builder.ExtractManifests` takes exact

@@ -524,3 +524,31 @@ func TestServicePageListsConsumersWithUsageAndOptOut(t *testing.T) {
 		}
 	}
 }
+
+// Hand-created services pick their environment; an unspecified one stays
+// production (the old behaviour) and an unknown one is refused.
+func TestServiceCreateEnvironment(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	for _, tc := range []struct{ name, env, want string }{
+		{"Dev Cache", "dev", "dev"},
+		{"Stage DB", "staging", "staging"},
+		{"Old Client", "", "production"},
+	} {
+		form := url.Values{"name": {tc.name}, "type": {"redis"}}
+		if tc.env != "" {
+			form.Set("environment", tc.env)
+		}
+		_, loc := e.post(t, "/projects/test/services", form)
+		if !strings.HasPrefix(loc, "/services/") {
+			t.Fatalf("%s: redirect %q (%s)", tc.name, loc, flashOf(t, loc))
+		}
+		sv, err := e.st.GetServiceBySlug(strings.TrimPrefix(loc, "/services/"))
+		if err != nil || sv.Environment != tc.want {
+			t.Errorf("%s: environment = %q (%v), want %q", tc.name, sv.Environment, err, tc.want)
+		}
+	}
+	_, loc := e.post(t, "/projects/test/services", url.Values{"name": {"Bad"}, "type": {"redis"}, "environment": {"qa"}})
+	if !strings.Contains(flashOf(t, loc), "Unknown environment") {
+		t.Errorf("unknown env flash = %q", flashOf(t, loc))
+	}
+}
