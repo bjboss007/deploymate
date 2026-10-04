@@ -498,80 +498,80 @@ func (s *Server) handleAppDeploy(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
 }
 
+// lifecycle runs a start / stop / restart of every replica and records it.
+// where says who asked ("the dashboard", or the API token), for the event log.
+// A refusal sentence (not an error) means the app's state does not allow it.
+func (s *Server) lifecycle(ctx context.Context, app store.App, action, where string) (refusal string, err error) {
+	switch action {
+	case "stop":
+		if err := s.stopApp(ctx, app, 10); err != nil {
+			return "", fmt.Errorf("Stop failed: %w", err)
+		}
+		_ = s.store.UpdateAppStatus(app.ID, "stopped")
+		// Health is meaningless while stopped; clear it so a stale
+		// "unhealthy" badge can't sit next to the stopped status.
+		_ = s.store.UpdateAppHealth(app.ID, "")
+		_ = s.store.RecordEvent(app.ID, store.EventAppStopped, "app stopped from "+where)
+	case "start", "restart":
+		if action == "restart" {
+			_ = s.stopApp(ctx, app, 10)
+		}
+		if err := s.startApp(ctx, app); err != nil {
+			if errors.Is(err, runtime.ErrContainerNotFound) {
+				return "Container is gone — deploy it again.", nil
+			}
+			return "", fmt.Errorf("%s failed: %w", strings.ToUpper(action[:1])+action[1:], err)
+		}
+		_ = s.store.UpdateAppStatus(app.ID, "running")
+		// The container is up and (re)bound — declare it healthy now rather
+		// than leaving a stale "unhealthy" badge until the monitor's first
+		// two OK probes land (~60s). The monitor corrects within 90s if the
+		// app actually fails to serve.
+		_ = s.store.UpdateAppHealth(app.ID, "healthy")
+		kind := store.EventAppStarted
+		if action == "restart" {
+			kind = store.EventAppRestarted
+		}
+		_ = s.store.RecordEvent(app.ID, kind, "app "+action+"ed from "+where)
+	}
+	return "", nil
+}
+
 func (s *Server) handleAppStop(w http.ResponseWriter, r *http.Request) {
-	app, ok := s.appFromRequest(w, r)
-	if !ok {
-		return
-	}
-	if err := s.stopApp(r.Context(), app, 10); err != nil {
-		slog.Error("apps: stop", "err", err)
-		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Stop failed: "+err.Error()))
-		return
-	}
-	_ = s.store.UpdateAppStatus(app.ID, "stopped")
-	// Health is meaningless while stopped; clear it so a stale
-	// "unhealthy" badge can't sit next to the stopped status.
-	_ = s.store.UpdateAppHealth(app.ID, "")
-	_ = s.store.RecordEvent(app.ID, store.EventAppStopped, "app stopped from the dashboard")
-	if r.Header.Get("HX-Request") == "true" {
-		app.Status = "stopped"
-		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
-		return
-	}
-	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
+	s.lifecycleHandler(w, r, "stop")
 }
 
 func (s *Server) handleAppStart(w http.ResponseWriter, r *http.Request) {
-	app, ok := s.appFromRequest(w, r)
-	if !ok {
-		return
-	}
-	if err := s.startApp(r.Context(), app); err != nil {
-		if errors.Is(err, runtime.ErrContainerNotFound) {
-			redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."))
-			return
-		}
-		slog.Error("apps: start", "err", err)
-		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Start failed: "+err.Error()))
-		return
-	}
-	_ = s.store.UpdateAppStatus(app.ID, "running")
-	// The container is up and (re)bound — declare it healthy now rather
-	// than leaving a stale "unhealthy" badge until the monitor's first
-	// two OK probes land (~60s). The monitor corrects within 90s if the
-	// app actually fails to serve.
-	_ = s.store.UpdateAppHealth(app.ID, "healthy")
-	_ = s.store.RecordEvent(app.ID, store.EventAppStarted, "app started from the dashboard")
-	if r.Header.Get("HX-Request") == "true" {
-		app.Status = "running"
-		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
-		return
-	}
-	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
+	s.lifecycleHandler(w, r, "start")
 }
 
 // handleAppRestart restarts an app's container in one click.
 func (s *Server) handleAppRestart(w http.ResponseWriter, r *http.Request) {
+	s.lifecycleHandler(w, r, "restart")
+}
+
+// lifecycleHandler serves the header buttons: HTMX swaps just #head-actions,
+// a plain post gets a redirect.
+func (s *Server) lifecycleHandler(w http.ResponseWriter, r *http.Request, action string) {
 	app, ok := s.appFromRequest(w, r)
 	if !ok {
 		return
 	}
-	ctx := r.Context()
-	_ = s.stopApp(ctx, app, 10)
-	if err := s.startApp(ctx, app); err != nil {
-		if errors.Is(err, runtime.ErrContainerNotFound) {
-			redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Container is gone — deploy it again."))
-			return
+	refusal, err := s.lifecycle(r.Context(), app, action, "the dashboard")
+	if refusal != "" || err != nil {
+		msg := refusal
+		if err != nil {
+			slog.Error("apps: "+action, "err", err)
+			msg = err.Error()
 		}
-		slog.Error("apps: restart", "err", err)
-		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Restart failed: "+err.Error()))
+		redirectOrHX(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg))
 		return
 	}
-	_ = s.store.UpdateAppStatus(app.ID, "running")
-	_ = s.store.UpdateAppHealth(app.ID, "healthy")
-	_ = s.store.RecordEvent(app.ID, store.EventAppRestarted, "app restarted from the dashboard")
 	if r.Header.Get("HX-Request") == "true" {
 		app.Status = "running"
+		if action == "stop" {
+			app.Status = "stopped"
+		}
 		render(w, r, http.StatusOK, templates.AppHeadActions(s.viewCtx(r), app))
 		return
 	}

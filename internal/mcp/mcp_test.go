@@ -10,19 +10,21 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 // fakeAPI is a stand-in dashboard that records what the MCP server asked of it.
 type fakeAPI struct {
-	srv   *httptest.Server
-	mu    sync.Mutex
-	calls []string // "METHOD path?query body"
-	scope string
+	srv       *httptest.Server
+	mu        sync.Mutex
+	calls     []string // "METHOD path?query body"
+	scope     string
+	depStatus string // what GET /deployments/{id} reports
 }
 
 func newFakeAPI(t *testing.T, scope string) *fakeAPI {
 	t.Helper()
-	f := &fakeAPI{scope: scope}
+	f := &fakeAPI{scope: scope, depStatus: "running"}
 	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer dm_test" {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -37,6 +39,11 @@ func newFakeAPI(t *testing.T, scope string) *fakeAPI {
 		switch {
 		case r.URL.Path == "/api/v1/whoami":
 			io.WriteString(w, `{"user":"o@x","scope":"`+f.scope+`"}`)
+		case strings.HasPrefix(r.URL.Path, "/api/v1/deployments/") && r.Method == http.MethodGet:
+			f.mu.Lock()
+			st := f.depStatus
+			f.mu.Unlock()
+			io.WriteString(w, `{"deployment":{"id":"d1","status":"`+st+`"}}`)
 		case strings.HasSuffix(r.URL.Path, "/nope"):
 			w.WriteHeader(http.StatusNotFound)
 			io.WriteString(w, `{"error":"no such app"}`)
@@ -178,5 +185,89 @@ func TestLongResultsAreTruncated(t *testing.T) {
 	text := res["content"].([]map[string]string)[0]["text"]
 	if len(text) > maxResultBytes+30 || !strings.HasSuffix(text, "(truncated)") {
 		t.Errorf("result length %d, tail %q", len(text), text[len(text)-20:])
+	}
+}
+
+func TestDeployToolsNeedADeployToken(t *testing.T) {
+	read := newFakeAPI(t, "read")
+	rep := rpc(t, read, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	names := toolNames(rep[0])
+	for _, n := range []string{"deploy_app", "retry_deployment", "stop_app", "set_variables"} {
+		if names[n] {
+			t.Errorf("a read token must not even see %q", n)
+		}
+	}
+	if !names["wait_for_deployment"] {
+		t.Error("waiting is a read; a read token should see it")
+	}
+	// A hand-made call is refused too, without reaching the API.
+	rep = rpc(t, read, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"deploy_app","arguments":{"app":"erp"}}}`)
+	res := rep[0]["result"].(map[string]any)
+	if res["isError"] != true || strings.Contains(read.last(), "/deploy") {
+		t.Errorf("deploy_app with a read token: %v (last call %q)", res, read.last())
+	}
+
+	dep := newFakeAPI(t, "deploy")
+	rep = rpc(t, dep, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	names = toolNames(rep[0])
+	for _, n := range []string{"deploy_app", "redeploy_app", "retry_deployment", "rollback_deployment", "restart_app", "start_app", "stop_app", "run_workflow"} {
+		if !names[n] {
+			t.Errorf("a deploy token should see %q", n)
+		}
+	}
+	if names["create_app"] {
+		t.Error("a deploy token must not see provisioning tools")
+	}
+	for _, tl := range rep[0]["result"].(map[string]any)["tools"].([]any) {
+		m := tl.(map[string]any)
+		ann := m["annotations"].(map[string]any)
+		switch m["name"] {
+		case "stop_app", "rollback_deployment":
+			if ann["destructiveHint"] != true {
+				t.Errorf("%v should be flagged destructive", m["name"])
+			}
+		case "deploy_app", "retry_deployment":
+			if ann["destructiveHint"] == true || ann["readOnlyHint"] == true {
+				t.Errorf("%v annotations = %v", m["name"], ann)
+			}
+		}
+	}
+	rep = rpc(t, dep, "dm_test",
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"retry_deployment","arguments":{"deployment_id":"abc"}}}`)
+	if dep.last() != "POST /api/v1/deployments/abc/retry " {
+		t.Errorf("retry_deployment sent %q", dep.last())
+	}
+	rpc(t, dep, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"stop_app","arguments":{"app":"erp"}}}`)
+	if dep.last() != "POST /api/v1/apps/erp/stop " {
+		t.Errorf("stop_app sent %q", dep.last())
+	}
+}
+
+func TestWaitForDeployment(t *testing.T) {
+	pollEvery = 10 * time.Millisecond
+	defer func() { pollEvery = 3 * time.Second }()
+	f := newFakeAPI(t, "read")
+	call := func() map[string]any {
+		rep := rpc(t, f, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait_for_deployment","arguments":{"deployment_id":"d1","timeout_seconds":5}}}`)
+		return rep[0]["result"].(map[string]any)
+	}
+	if res := call(); res["isError"] == true || !strings.Contains(res["content"].([]any)[0].(map[string]any)["text"].(string), `"running"`) {
+		t.Errorf("a running deployment = %v", res)
+	}
+	f.mu.Lock()
+	f.depStatus = "failed"
+	f.mu.Unlock()
+	if res := call(); res["isError"] != true {
+		t.Errorf("a failed deployment must come back as an error: %v", res)
+	}
+	// Still building when the clock runs out: says so, and is not an error.
+	f.mu.Lock()
+	f.depStatus = "building"
+	f.mu.Unlock()
+	start := time.Now()
+	rep := rpc(t, f, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"wait_for_deployment","arguments":{"deployment_id":"d1","timeout_seconds":5}}}`)
+	text := rep[0]["result"].(map[string]any)["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "Still building") || time.Since(start) < 4*time.Second {
+		t.Errorf("timeout text %q after %v", text, time.Since(start))
 	}
 }

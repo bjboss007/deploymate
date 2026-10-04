@@ -31,8 +31,12 @@ func (s *Server) renderTokens(w http.ResponseWriter, r *http.Request, created st
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	audit, err := s.store.ListAudit(25)
+	if err != nil {
+		slog.Error("tokens: list audit", "err", err)
+	}
 	w.Header().Set("Cache-Control", "no-store") // a fresh token must not sit in a cache
-	render(w, r, http.StatusOK, templates.TokensPage(s.viewCtx(r), list, created, time.Now()))
+	render(w, r, http.StatusOK, templates.TokensPage(s.viewCtx(r), list, audit, created, time.Now()))
 }
 
 func (s *Server) handleTokenCreate(w http.ResponseWriter, r *http.Request) {

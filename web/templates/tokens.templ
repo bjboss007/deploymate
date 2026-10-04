@@ -39,7 +39,7 @@ func tokenLastUsed(t store.APIToken) string {
 
 // TokensPage lists the owner's API tokens and makes new ones. created is the
 // plaintext of a token made by this very request, shown once.
-templ TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Time) {
+templ TokensPage(vc ViewCtx, tokens []store.APIToken, audit []store.AuditEntry, created string, now time.Time) {
 	@Layout(vc, "API tokens", "", []Crumb{{Label: "API tokens"}}) {
 		<div class="page-head">
 			<div>
@@ -111,6 +111,34 @@ templ TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.T
 						</div>
 					}
 				</div>
+			}
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">What tokens did <span class="panel-note">latest 25 changes, accepted or refused</span></div>
+			if len(audit) == 0 {
+				<p class="muted-text">Nothing yet. Every deploy, restart, creation or change made through a token is listed here, and in the affected app's history.</p>
+			} else {
+				<table class="deploy-table">
+					<thead><tr><th>When</th><th>Token</th><th>Did</th><th>On</th><th></th></tr></thead>
+					<tbody>
+						for _, a := range audit {
+							<tr>
+								<td class="muted-text">{ ago(a.TS) }</td>
+								<td>{ a.TokenName }</td>
+								<td>{ a.Action }</td>
+								<td class="mono">{ a.Target }</td>
+								<td>
+									if a.Result == "ok" {
+										<span class="badge badge-running">done</span>
+									} else {
+										<span class="badge" title={ a.Detail }>refused</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
 			}
 		</div>
 	}

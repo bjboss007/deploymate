@@ -2,10 +2,10 @@ package httpserver
 
 import (
 	"context"
-	"fmt"
 	cryptoRand "crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
@@ -421,25 +421,37 @@ func (s *Server) handleRollback(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if d.ImageTag == "" {
-		http.Redirect(w, r, "/deployments/"+d.ID+"?flash="+flashURL("That deployment has no image to roll back to."), http.StatusSeeOther)
-		return
-	}
 	app, err := s.store.GetAppByID(d.AppID)
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
+	}
+	id, refusal, err := s.rollbackCore(d, app)
+	if err != nil {
+		slog.Error("deployments: queue rollback", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if refusal != "" {
+		http.Redirect(w, r, "/deployments/"+d.ID+"?flash="+flashURL(refusal), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/deployments/"+id, http.StatusSeeOther)
+}
+
+// rollbackCore queues a rollback to deployment d's saved image.
+func (s *Server) rollbackCore(d store.Deployment, app store.App) (id, refusal string, err error) {
+	if d.ImageTag == "" {
+		return "", "That deployment has no image to roll back to.", nil
 	}
 	rb, err := s.store.CreateDeployment(store.Deployment{
 		AppID: app.ID, Kind: "rollback", Status: "queued", Trigger: "rollback",
 		ImageTag: d.ImageTag, CommitSHA: d.CommitSHA, CommitMessage: d.CommitMessage,
 	})
 	if err != nil {
-		slog.Error("deployments: queue rollback", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return "", "", err
 	}
-	http.Redirect(w, r, "/deployments/"+rb.ID, http.StatusSeeOther)
+	return rb.ID, "", nil
 }
 
 // handleRotateWebhookSecret replaces the repo's webhook secret with a fresh
@@ -469,6 +481,33 @@ func (s *Server) handleRotateWebhookSecret(w http.ResponseWriter, r *http.Reques
 	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Webhook secret rotated. Paste the new secret into the webhook's settings on your git provider — pushes are rejected until you do.")+"#settings", http.StatusSeeOther)
 }
 
+// deployCore starts a deploy of whatever the app is set up to deploy: the
+// latest successful CI run (prebuilt), a build of its repository, or its image.
+// It returns the queued deployment's id, or a refusal sentence.
+func (s *Server) deployCore(ctx context.Context, app store.App) (id, refusal string, err error) {
+	switch {
+	case app.GitSourceID != "" && app.DeployMode == store.DeployModeArtifact:
+		id, msg := s.deployLatestRun(ctx, app)
+		if id == "" {
+			return "", msg, nil
+		}
+		return id, "", nil
+	case app.GitSourceID != "":
+		d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "dashboard"})
+		if err != nil {
+			return "", "", err
+		}
+		return d.ID, "", nil
+	case app.Image != "":
+		d, err := s.store.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "manual", Status: "queued", Trigger: "manual", ImageTag: app.Image})
+		if err != nil {
+			return "", "", err
+		}
+		return d.ID, "", nil
+	}
+	return "", "Nothing to deploy yet — connect a git repository or set an image first.", nil
+}
+
 // handleRetry queues a copy of a failed deployment — same commit, same CI run,
 // same image — so a transient failure (a flaky build, a registry blip, a
 // service that was down) is one click, not a re-entry of what was deployed.
@@ -490,39 +529,49 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	back := func(msg string) {
-		http.Redirect(w, r, "/deployments/"+d.ID+"?flash="+flashURL(msg), http.StatusSeeOther)
-	}
-	if d.Status != "failed" {
-		back("Only a failed deployment can be retried.")
-		return
-	}
-	recent, err := s.store.ListDeployments(app.ID, 5)
-	if err != nil || len(recent) == 0 {
+	id, _, refusal, err := s.retryCore(r.Context(), d, app)
+	if err != nil {
+		slog.Error("deployments: queue retry", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	if refusal != "" {
+		http.Redirect(w, r, "/deployments/"+d.ID+"?flash="+flashURL(refusal), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/deployments/"+id, http.StatusSeeOther)
+}
+
+// retryCore queues a copy of failed deployment d. It returns the id to go to
+// (the new deployment, or the one already in flight, with a note saying so) or
+// a refusal sentence; err is only for storage failures. Shared by the dashboard
+// button and the API.
+func (s *Server) retryCore(ctx context.Context, d store.Deployment, app store.App) (id, note, refusal string, err error) {
+	if d.Status != "failed" {
+		return "", "", "Only a failed deployment can be retried.", nil
+	}
+	recent, err := s.store.ListDeployments(app.ID, 5)
+	if err != nil || len(recent) == 0 {
+		return "", "", "", errors.New("list deployments")
+	}
 	for _, o := range recent {
 		if o.Status == "queued" || o.Status == "building" {
-			http.Redirect(w, r, "/deployments/"+o.ID, http.StatusSeeOther) // already in flight
-			return
+			return o.ID, "another deployment is already in flight", "", nil
 		}
 	}
 	if recent[0].ID != d.ID {
-		back("A newer deployment exists — deploy the latest instead of retrying this one.")
-		return
+		return "", "", "A newer deployment exists — deploy the latest instead of retrying this one.", nil
 	}
 	// A prebuilt run whose artifact has expired can never succeed.
 	if d.CIRun != 0 && app.DeployMode == store.DeployModeArtifact && app.GitSourceID != "" {
-		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil {
+		if gs, gerr := s.store.GetGitSource(app.GitSourceID); gerr == nil {
 			if repo, ok := githubci.ParseRepoURL(gs.RepoURL); ok {
 				if gh, ok := s.githubClient(gs); ok {
-					ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
-					arts, err := gh.ListRunArtifacts(ctx, repo, d.CIRun)
+					cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+					arts, aerr := gh.ListRunArtifacts(cctx, repo, d.CIRun)
 					cancel()
-					if err == nil && !hasLiveArtifact(arts, app.ArtifactName) {
-						back(fmt.Sprintf("CI run #%d has no artifact any more (GitHub deletes them after the workflow's retention-days). Use Run workflow now on the app page to build a fresh one.", d.CIRunNumber))
-						return
+					if aerr == nil && !hasLiveArtifact(arts, app.ArtifactName) {
+						return "", "", fmt.Sprintf("CI run #%d has no artifact any more (GitHub deletes them after the workflow's retention-days). Use Run workflow now on the app page to build a fresh one.", d.CIRunNumber), nil
 					}
 				}
 			}
@@ -534,11 +583,9 @@ func (s *Server) handleRetry(w http.ResponseWriter, r *http.Request) {
 		CIRun: d.CIRun, CIRunNumber: d.CIRunNumber,
 	})
 	if err != nil {
-		slog.Error("deployments: queue retry", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return "", "", "", err
 	}
-	http.Redirect(w, r, "/deployments/"+nd.ID, http.StatusSeeOther)
+	return nd.ID, "", "", nil
 }
 
 // handleRedeploy restarts the app on the version it is already running, so
@@ -552,26 +599,34 @@ func (s *Server) handleRedeploy(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := func(msg string) {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+	id, refusal, err := s.redeployCore(app)
+	if err != nil {
+		slog.Error("deployments: queue redeploy", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
 	}
+	if refusal != "" {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(refusal), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, "/deployments/"+id, http.StatusSeeOther)
+}
+
+// redeployCore queues a redeploy of the app's current image (settings re-read).
+func (s *Server) redeployCore(app store.App) (id, refusal string, err error) {
 	if app.CurrentDeploymentID == "" {
-		back("Nothing is deployed yet — deploy first.")
-		return
+		return "", "Nothing is deployed yet — deploy first.", nil
 	}
-	cur, err := s.store.GetDeployment(app.CurrentDeploymentID)
-	if err != nil || cur.ImageTag == "" {
-		back("The current version has no saved image to redeploy — deploy again.")
-		return
+	cur, gerr := s.store.GetDeployment(app.CurrentDeploymentID)
+	if gerr != nil || cur.ImageTag == "" {
+		return "", "The current version has no saved image to redeploy — deploy again.", nil
 	}
 	d, err := s.store.CreateDeployment(store.Deployment{
 		AppID: app.ID, Kind: "redeploy", Status: "queued", Trigger: "dashboard",
 		ImageTag: cur.ImageTag, CommitSHA: cur.CommitSHA, CommitMessage: cur.CommitMessage,
 	})
 	if err != nil {
-		slog.Error("deployments: queue redeploy", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return "", "", err
 	}
-	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
+	return d.ID, "", nil
 }

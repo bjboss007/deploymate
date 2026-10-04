@@ -602,9 +602,10 @@ change.
   (encrypted); the old one stops verifying at once, so the flash says to paste the
   new one into the provider's webhook.
 - [ ] **MCP server** (`deploymate mcp`) — plan in docs/specs/mcp-and-api.md.
-  Step 1 done 2026-10-04: API tokens with three scopes (read / deploy /
-  provision), the read API and the read tools. Remaining: step 2 deploy tier
-  (+ audit trail, rate limits), step 3 provision tier.
+  Steps 1–2 done 2026-10-04: API tokens with three scopes, the read API and
+  tools, the deploy tier (retry/redeploy/deploy/rollback/start/stop/restart/run
+  workflow, `wait_for_deployment`), audit trail, rate limits. Remaining: step 3
+  provision tier. Later: prune old `audit_log` rows.
 - [ ] **Prometheus `/metrics` endpoint** — additive to the SQLite
   sampling; enables Grafana if it's ever wanted.
 - [ ] **Key rotation** — `v1:` envelope versioning exists precisely for

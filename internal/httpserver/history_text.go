@@ -42,6 +42,8 @@ func describeEvent(kind string) (title, category, tone string) {
 		return "Environment variable removed", "config", "neutral"
 	case store.EventRuntimeChanged:
 		return "Build method changed", "config", "neutral"
+	case store.EventAPIAction:
+		return "Changed through the API", "config", "neutral"
 	case store.EventGitConnected:
 		return "Git repository connected", "config", "neutral"
 	case store.EventEnvironmentChanged:

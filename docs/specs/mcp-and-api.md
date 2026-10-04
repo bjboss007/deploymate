@@ -1,6 +1,6 @@
 # JSON API and MCP server — specification
 
-**Status:** step 1 (read tier) implemented 2026-10-04 · ADR 0020 · Owner: solo
+**Status:** steps 1–2 (read, deploy tiers) implemented 2026-10-04 · ADR 0020 · Owner: solo
 
 ## Goal
 
@@ -49,6 +49,30 @@ keys. These stay dashboard clicks by design.
 variable, a normal variable, the GitHub token and a webhook secret and asserts
 none of them appears in any response.
 
+## Deploy tier (implemented)
+
+`POST /api/v1/apps/{slug}/{deploy|redeploy|run-workflow|start|stop|restart}` and
+`POST /api/v1/deployments/{id}/{retry|rollback}` (scope `deploy`). They share
+their logic with the dashboard buttons (`deployCore`, `redeployCore`,
+`retryCore`, `rollbackCore`, `runWorkflowCore`, `lifecycle`) — one rule, two
+front doors, so the guards (retry only the newest failed deployment, no retry of
+an expired artifact, …) apply to agents identically. Queued work answers `202`
+with `deployment_id`; a business-rule refusal answers `409` with the reason.
+MCP tools: `deploy_app`, `redeploy_app`, `run_workflow`, `retry_deployment`,
+`rollback_deployment` (destructive hint), `restart_app`, `start_app`, `stop_app`
+(destructive hint), plus the read tool `wait_for_deployment` (polls until
+running/failed or a timeout, returns the explanation when it failed).
+
+**Audit trail.** Every state-changing call — accepted or refused — is a row in
+`audit_log` (migration 0021: token id + name, action, target, detail, result) and,
+for app-scoped actions, an `api_action` event in the app's history ("Changed
+through the API: retry … via API token “agent”"). The tokens page lists the latest
+25. Lifecycle actions write the app's own started/stopped/restarted event naming
+the token.
+
+**Rate limits** (per token, in memory, `api_rate.go`): reads 300/min; writes
+20/min and 200/h. Over the limit: `429` + `Retry-After`.
+
 ## Safety
 
 - bearer only, no cookies on `/api`; opaque 401s; `no-store` on token display
@@ -59,4 +83,4 @@ none of them appears in any response.
 
 ## Next (not yet built)
 
-Step 2 — deploy tier + audit trail + rate limits. Step 3 — provision tier.
+Step 3 — provision tier.

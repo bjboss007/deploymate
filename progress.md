@@ -7,6 +7,18 @@
 
 ## Where we stopped
 
+**2026-10-04 (MCP step 2: deploy tier, audit, rate limits)** — Shared cores now
+back both the dashboard buttons and the API (`deployCore`, `redeployCore`,
+`retryCore`, `rollbackCore`, `runWorkflowCore`, `lifecycle`; the HTMX header
+handlers call `lifecycleHandler`). New `api_act.go` (deploy-scope routes, 202/409
+shapes), `api_rate.go` (per-token limiter: reads 300/min, writes 20/min + 200/h →
+429 + Retry-After), migration **0021** `audit_log` + `store/audit.go`, `api_action`
+event in app history, "What tokens did" panel on `/settings/tokens`. MCP: eight deploy
+tools + `wait_for_deployment` (`internal/mcp/tools_deploy.go`, a `Run` override for
+multi-request tools). Tests: scope/audit/refusals, lifecycle with a fake runtime,
+limiter + 429, MCP scope filtering/annotations/wait. **Not yet restarted live (migration
+21).** Next: step 3 — provision tier.
+
 **2026-10-04 (MCP step 1: scopes, read API, `deploymate mcp`)** — Owner approved
 the full plan (monitor → deploy → provision, one after another). Done: token
 scopes are now **read / deploy / provision** (`store.ScopeRank`, `auth.RequireScope`;

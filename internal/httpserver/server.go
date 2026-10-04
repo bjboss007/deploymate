@@ -41,6 +41,7 @@ type Server struct {
 	githubAPI   string          // GitHub REST base URL for prebuilt-deploy actions; "" = the real API
 	usageMu     sync.Mutex
 	usageCache  map[string]usageEntry // service id -> who was connected, briefly cached
+	apiRate     *apiLimiter // per-token request limits for /api/v1
 	previewRR   sync.Map              // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
@@ -58,6 +59,9 @@ func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events
 // Handler assembles the full route tree.
 func (s *Server) Handler() http.Handler {
 	am := &auth.Middleware{Store: s.store}
+	if s.apiRate == nil {
+		s.apiRate = newAPILimiter()
+	}
 
 	r := chi.NewRouter()
 	r.NotFound(notFoundPage)
@@ -102,6 +106,7 @@ func (s *Server) Handler() http.Handler {
 	// auth.RequireAPIToken). Read tokens may only GET.
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(am.RequireAPIToken)
+		r.Use(s.apiRate.limit)
 		r.Get("/whoami", s.handleAPIWhoami)
 		// Read tier: monitoring.
 		r.Get("/fleet", s.handleAPIFleet)
@@ -114,6 +119,19 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/deployments/{id}", s.handleAPIDeployment)
 		r.Get("/deployments/{id}/log", s.handleAPIDeploymentLog)
 		r.Get("/services/{slug}", s.handleAPIService)
+
+		// Deploy tier: act on apps that exist.
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireScope(store.ScopeDeploy))
+			r.Post("/apps/{slug}/deploy", s.handleAPIDeploy)
+			r.Post("/apps/{slug}/redeploy", s.handleAPIRedeploy)
+			r.Post("/apps/{slug}/run-workflow", s.handleAPIRunWorkflow)
+			r.Post("/apps/{slug}/start", s.handleAPILifecycle("start"))
+			r.Post("/apps/{slug}/stop", s.handleAPILifecycle("stop"))
+			r.Post("/apps/{slug}/restart", s.handleAPILifecycle("restart"))
+			r.Post("/deployments/{id}/retry", s.handleAPIRetry)
+			r.Post("/deployments/{id}/rollback", s.handleAPIRollback)
+		})
 	})
 
 	// Git provider webhooks: public, authenticated by their secret instead.

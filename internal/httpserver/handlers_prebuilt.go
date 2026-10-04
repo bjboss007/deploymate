@@ -309,40 +309,47 @@ func (s *Server) handleRunWorkflow(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	back := func(msg string) {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
-	}
+	msg, _ := s.runWorkflowCore(r.Context(), app)
+	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+}
+
+// runWorkflowCore starts the app's CI workflow (workflow_dispatch). It returns
+// the sentence to show and whether the run was started. Shared by the button
+// and the API.
+func (s *Server) runWorkflowCore(ctx context.Context, app store.App) (msg string, started bool) {
 	if app.DeployMode != store.DeployModeArtifact {
-		back("This app builds on the server — switch it to prebuilt mode first.")
-		return
+		return "This app builds on the server — switch it to prebuilt mode first.", false
 	}
-	gs, repo, ok := s.prebuiltSource(w, r, app)
-	if !ok {
-		return
+	if app.GitSourceID == "" {
+		return "Connect a repo first.", false
+	}
+	gs, err := s.store.GetGitSource(app.GitSourceID)
+	if err != nil {
+		return "Internal error.", false
+	}
+	repo, ok := githubci.ParseRepoURL(gs.RepoURL)
+	if gs.Provider != "github" || !ok {
+		return "Prebuilt deploys need a GitHub repository.", false
 	}
 	gh, ok := s.githubClient(gs)
 	if !ok {
-		back("Save a GitHub token first.")
-		return
+		return "Save a GitHub token first.", false
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if err := gh.DispatchWorkflow(ctx, repo, app.WorkflowPath, gs.DefaultBranch); err != nil {
 		var ae *githubci.APIError
 		if errors.As(err, &ae) {
 			switch ae.Status {
 			case http.StatusForbidden, http.StatusNotFound:
-				back("GitHub would not start the workflow. Starting runs needs the token's Actions permission set to read and write (it is read-only for deploys), and " + app.WorkflowPath + " must have the workflow_dispatch trigger on " + gs.DefaultBranch + ". You can also press Run workflow on GitHub's Actions tab.")
-				return
+				return "GitHub would not start the workflow. Starting runs needs the token's Actions permission set to read and write (it is read-only for deploys), and " + app.WorkflowPath + " must have the workflow_dispatch trigger on " + gs.DefaultBranch + ". You can also press Run workflow on GitHub's Actions tab.", false
 			case http.StatusUnprocessableEntity:
-				back(app.WorkflowPath + " has no workflow_dispatch trigger on " + gs.DefaultBranch + " — add it (the generated workflow has it) or run it from GitHub.")
-				return
+				return app.WorkflowPath + " has no workflow_dispatch trigger on " + gs.DefaultBranch + " — add it (the generated workflow has it) or run it from GitHub.", false
 			}
 		}
-		back(ghFlash(err, repo))
-		return
+		return ghFlash(err, repo), false
 	}
-	back("Started " + app.WorkflowPath + " on " + gs.DefaultBranch + ". DeployMate deploys it when it finishes (needs the Workflow runs webhook); or press Deploy latest run in a minute or two.")
+	return "Started " + app.WorkflowPath + " on " + gs.DefaultBranch + ". DeployMate deploys it when it finishes (needs the Workflow runs webhook); or press Deploy latest run in a minute or two.", true
 }
 
 // handleDeployLatest is the "Deploy latest successful run" button.

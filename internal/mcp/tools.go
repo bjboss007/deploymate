@@ -23,6 +23,9 @@ type tool struct {
 	Schema      map[string]any
 	// build returns the HTTP method, path and JSON body for the arguments.
 	Build func(a args) (method, path string, body any, err error)
+	// Run, when set, replaces Build for tools that are more than one request
+	// (waiting for a deployment, say). It returns the text and whether it is an error.
+	Run func(ctx context.Context, s *Server, a args) (string, bool)
 }
 
 type args map[string]any
@@ -254,6 +257,10 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) map[string]a
 	if p.Arguments == nil {
 		p.Arguments = args{}
 	}
+	if t.Run != nil {
+		text, isErr := t.Run(ctx, s, p.Arguments)
+		return toolText(text, isErr)
+	}
 	method, path, body, err := t.Build(p.Arguments)
 	if err != nil {
 		return toolText(err.Error(), true)
@@ -263,18 +270,26 @@ func (s *Server) callTool(ctx context.Context, raw json.RawMessage) map[string]a
 		return toolText("could not reach DeployMate: "+err.Error(), true)
 	}
 	if status/100 != 2 {
-		var e struct {
-			Error string `json:"error"`
-		}
-		msg := strings.TrimSpace(string(b))
-		if json.Unmarshal(b, &e) == nil && e.Error != "" {
-			msg = e.Error
-		}
-		return toolText(fmt.Sprintf("DeployMate answered %d: %s", status, msg), true)
+		return toolText(apiErrorText(status, b), true)
 	}
+	return toolText(prettyJSON(b), false)
+}
+
+func apiErrorText(status int, b []byte) string {
+	var e struct {
+		Error string `json:"error"`
+	}
+	msg := strings.TrimSpace(string(b))
+	if json.Unmarshal(b, &e) == nil && e.Error != "" {
+		msg = e.Error
+	}
+	return fmt.Sprintf("DeployMate answered %d: %s", status, msg)
+}
+
+func prettyJSON(b []byte) string {
 	var pretty bytes.Buffer
 	if json.Indent(&pretty, b, "", "  ") == nil {
-		return toolText(pretty.String(), false)
+		return pretty.String()
 	}
-	return toolText(string(b), false)
+	return string(b)
 }

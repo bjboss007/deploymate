@@ -39,4 +39,7 @@ can be revoked without changing the password.
 - A leaked token is bounded by its scope and expiry and is revocable at
   `/settings/tokens`; `dm_` makes it recognisable to secret scanners.
 - `last_used_at` is written at most once a minute per token.
+- Every state-changing API call is audited (`audit_log`, migration 0021) and shown
+  on the tokens page and in the app's history; writes are rate-limited per token
+  (20/min, 200/h) — a looping agent hits a wall, not the platform.
 - Built on top: the read API and `deploymate mcp` (docs/specs/mcp-and-api.md).
