@@ -14,7 +14,7 @@ safe-area inset, the status badge stays in the header, content gets bottom
 padding, and the bar hides while an input/textarea/select has focus (so it never
 sits on the keyboard). `.head-actions` uses `display: contents`, so the HTMX
 start/stop/restart swap still works. Checked in the browser pane at 375 px.
-**Not yet restarted live** (static asset + templates; no migration).
+**Live server restarted on this build** (pid 24011, snapshot `pre-restart-g-*.db`, no migration).
 
 **2026-10-04 (one-click retry)** — **Retry this deploy** on a failed deployment's
 page and the app's Overview failure banner: `POST /deployments/{id}/retry`
