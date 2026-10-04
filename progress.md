@@ -7,6 +7,20 @@
 
 ## Where we stopped
 
+**2026-10-04 (MCP step 1: scopes, read API, `deploymate mcp`)** — Owner approved
+the full plan (monitor → deploy → provision, one after another). Done: token
+scopes are now **read / deploy / provision** (`store.ScopeRank`, `auth.RequireScope`;
+legacy `write` = deploy); read API under `/api/v1` (`fleet`, `projects`,
+`projects/{slug}`, `apps/{slug}` [names of variables only], `…/deployments`,
+`…/activity`, `…/logs`, `deployments/{id}` [+explanation, can_retry],
+`…/log`, `services/{slug}`) in `api.go` / `api_read.go`; `internal/mcp` (stdio
+JSON-RPC: initialize, ping, tools/list filtered by the token's scope, tools/call
+→ one API request each) and `deploymate mcp` (`DEPLOYMATE_URL`, `DEPLOYMATE_TOKEN`).
+Tests: no-secrets guarantee over every read response, protocol + scope filtering +
+path escaping (internal/mcp). Smoke-tested the real binary against a scratch server.
+Spec: docs/specs/mcp-and-api.md. **Next: step 2 (deploy tier + audit + rate limits),
+then step 3 (provision).** Not yet restarted live.
+
 **2026-10-04 (MCP step 1: API tokens)** — Owner asked to start the MCP work with
 the token. Migration **0020** `api_tokens` (hash + prefix + scope + expiry +
 last_used); `store/api_tokens.go`; `auth.NewAPIToken` / `RequireAPIToken`

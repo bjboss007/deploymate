@@ -46,7 +46,7 @@ func (s *Server) handleTokenCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	scope := r.FormValue("scope")
-	if scope != store.ScopeRead && scope != store.ScopeWrite {
+	if !store.ValidScope(scope) {
 		back("Pick what the token may do.")
 		return
 	}

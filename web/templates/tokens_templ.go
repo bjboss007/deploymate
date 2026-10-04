@@ -15,8 +15,11 @@ import (
 )
 
 func tokenScopeLabel(scope string) string {
-	if scope == store.ScopeWrite {
-		return "Read & act"
+	switch scope {
+	case store.ScopeProvision:
+		return "Read, deploy & provision"
+	case store.ScopeDeploy, "write":
+		return "Read & deploy"
 	}
 	return "Read-only"
 }
@@ -89,7 +92,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 				var templ_7745c5c3_Var3 string
 				templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(created)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 57, Col: 61}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 60, Col: 61}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 				if templ_7745c5c3_Err != nil {
@@ -107,13 +110,13 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 65, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 68, Col: 58}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var4)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Name <input type=\"text\" name=\"name\" placeholder=\"e.g. Claude, deploy script\" maxlength=\"64\" required></label> <label>What it may do <select name=\"scope\"><option value=\"read\" selected>Read-only — look at apps, deployments and logs</option> <option value=\"write\">Read &amp; act — also deploy, retry, redeploy, restart</option></select></label> <label>Expires <select name=\"expires\"><option value=\"30\">in 30 days</option> <option value=\"90\" selected>in 90 days</option> <option value=\"365\">in a year</option> <option value=\"never\">never</option></select></label> <button class=\"btn btn-primary\" type=\"submit\">Create token</button></form><p class=\"muted panel-hint\">Start with read-only. A token never reaches secrets or deletes anything — those stay in the dashboard — and you can revoke it here at any time.</p></div><div class=\"panel\"><div class=\"panel-title\">Your tokens</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\"> <label>Name <input type=\"text\" name=\"name\" placeholder=\"e.g. Claude, deploy script\" maxlength=\"64\" required></label> <label>What it may do <select name=\"scope\"><option value=\"read\" selected>Read-only — look at apps, deployments and logs</option> <option value=\"deploy\">Read &amp; deploy — also deploy, retry, redeploy, restart, roll back</option> <option value=\"provision\">Read, deploy &amp; provision — also create projects, apps, databases, variables and domains</option></select></label> <label>Expires <select name=\"expires\"><option value=\"30\">in 30 days</option> <option value=\"90\" selected>in 90 days</option> <option value=\"365\">in a year</option> <option value=\"never\">never</option></select></label> <button class=\"btn btn-primary\" type=\"submit\">Create token</button></form><p class=\"muted panel-hint\">Start with read-only. No token can read a secret's value, delete anything, or manage tokens — those stay in the dashboard — and you can revoke a token here at any time.</p></div><div class=\"panel\"><div class=\"panel-title\">Your tokens</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -135,7 +138,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var5 string
 					templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(t.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 98, Col: 40}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 102, Col: 40}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 					if templ_7745c5c3_Err != nil {
@@ -148,7 +151,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var6 string
 					templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(tokenScopeLabel(t.Scope))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 99, Col: 55}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 103, Col: 55}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 					if templ_7745c5c3_Err != nil {
@@ -161,7 +164,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var7 string
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinStringErrs(t.Prefix)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 101, Col: 59}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 105, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -174,7 +177,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(tokenExpiry(t, now))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 101, Col: 96}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 105, Col: 96}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
@@ -187,7 +190,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var9 string
 					templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(tokenLastUsed(t))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 101, Col: 120}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 105, Col: 120}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 					if templ_7745c5c3_Err != nil {
@@ -200,7 +203,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var10 templ.SafeURL
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs("/settings/tokens/" + t.ID + "/revoke")
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 103, Col: 74}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 107, Col: 74}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
@@ -213,7 +216,7 @@ func TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Ti
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 104, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/tokens.templ`, Line: 108, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var11)
 					if templ_7745c5c3_Err != nil {

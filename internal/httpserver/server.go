@@ -103,6 +103,17 @@ func (s *Server) Handler() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(am.RequireAPIToken)
 		r.Get("/whoami", s.handleAPIWhoami)
+		// Read tier: monitoring.
+		r.Get("/fleet", s.handleAPIFleet)
+		r.Get("/projects", s.handleAPIProjects)
+		r.Get("/projects/{slug}", s.handleAPIProject)
+		r.Get("/apps/{slug}", s.handleAPIApp)
+		r.Get("/apps/{slug}/deployments", s.handleAPIAppDeployments)
+		r.Get("/apps/{slug}/activity", s.handleAPIAppActivity)
+		r.Get("/apps/{slug}/logs", s.handleAPIAppLogs)
+		r.Get("/deployments/{id}", s.handleAPIDeployment)
+		r.Get("/deployments/{id}/log", s.handleAPIDeploymentLog)
+		r.Get("/services/{slug}", s.handleAPIService)
 	})
 
 	// Git provider webhooks: public, authenticated by their secret instead.

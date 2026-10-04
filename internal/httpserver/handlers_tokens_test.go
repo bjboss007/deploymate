@@ -146,7 +146,7 @@ func TestAPITokenExpiry(t *testing.T) {
 func TestReadTokenCannotChangeThings(t *testing.T) {
 	e := newPrebuiltEnv(t)
 	reader := e.createToken(t, "r", "read", "90")
-	writer := e.createToken(t, "w", "write", "90")
+	writer := e.createToken(t, "w", "deploy", "90")
 	am := &auth.Middleware{Store: e.st}
 	h := am.RequireAPIToken(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 	do := func(method, tok string) int {

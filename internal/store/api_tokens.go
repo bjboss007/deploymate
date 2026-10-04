@@ -6,11 +6,32 @@ import (
 	"time"
 )
 
-// API token scopes.
+// API token scopes, each including the ones before it.
 const (
-	ScopeRead  = "read"  // GET/HEAD only
-	ScopeWrite = "write" // may also act
+	ScopeRead      = "read"      // monitor: GET/HEAD only
+	ScopeDeploy    = "deploy"    // + act on apps that exist (deploy, retry, redeploy, restart…)
+	ScopeProvision = "provision" // + create and configure (projects, apps, services, variables, domains)
 )
+
+// ScopeRank orders scopes; an unknown scope ranks 0 and so can do nothing. The
+// "write" scope of the first token page (before the three tiers) is kept as
+// deploy, never silently widened to provision.
+func ScopeRank(scope string) int {
+	switch scope {
+	case ScopeRead:
+		return 1
+	case ScopeDeploy, "write":
+		return 2
+	case ScopeProvision:
+		return 3
+	}
+	return 0
+}
+
+// ValidScope reports whether scope is one a new token may be created with.
+func ValidScope(scope string) bool {
+	return scope == ScopeRead || scope == ScopeDeploy || scope == ScopeProvision
+}
 
 // APIToken is a personal access token. The plaintext is never stored: only
 // TokenHash (see auth.HashToken) and a short Prefix to recognise it by.

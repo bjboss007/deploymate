@@ -4,6 +4,7 @@
 //	serve            run the server (default)
 //	setup-admin      create the owner user interactively
 //	seed-git-source  link an app to a git source (test-seeding; see seed.go)
+//	mcp              MCP server over stdio for AI agents (see mcp.go)
 package main
 
 import (
@@ -48,6 +49,8 @@ func run() error {
 		return setupAdmin()
 	case "seed-git-source":
 		return seedGitSource()
+	case "mcp":
+		return runMCP()
 	default:
 		return serve()
 	}

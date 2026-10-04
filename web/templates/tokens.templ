@@ -7,8 +7,11 @@ import (
 )
 
 func tokenScopeLabel(scope string) string {
-	if scope == store.ScopeWrite {
-		return "Read & act"
+	switch scope {
+	case store.ScopeProvision:
+		return "Read, deploy & provision"
+	case store.ScopeDeploy, "write":
+		return "Read & deploy"
 	}
 	return "Read-only"
 }
@@ -69,7 +72,8 @@ templ TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.T
 				<label>What it may do
 					<select name="scope">
 						<option value="read" selected>Read-only — look at apps, deployments and logs</option>
-						<option value="write">Read &amp; act — also deploy, retry, redeploy, restart</option>
+						<option value="deploy">Read &amp; deploy — also deploy, retry, redeploy, restart, roll back</option>
+						<option value="provision">Read, deploy &amp; provision — also create projects, apps, databases, variables and domains</option>
 					</select>
 				</label>
 				<label>Expires
@@ -82,7 +86,7 @@ templ TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.T
 				</label>
 				<button class="btn btn-primary" type="submit">Create token</button>
 			</form>
-			<p class="muted panel-hint">Start with read-only. A token never reaches secrets or deletes anything — those stay in the dashboard — and you can revoke it here at any time.</p>
+			<p class="muted panel-hint">Start with read-only. No token can read a secret's value, delete anything, or manage tokens — those stay in the dashboard — and you can revoke a token here at any time.</p>
 		</div>
 
 		<div class="panel">

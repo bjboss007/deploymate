@@ -42,7 +42,7 @@ func TokenFromContext(ctx context.Context) (store.APIToken, bool) {
 // Failures answer with JSON and say nothing about WHY a token failed beyond
 // "invalid or expired" — no oracle for guessing.
 //
-// A read token may only GET/HEAD; anything else needs a write token.
+// A read token may only GET/HEAD; anything else needs a deploy token or above.
 func (m *Middleware) RequireAPIToken(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := r.Header.Get("Authorization")
@@ -66,8 +66,8 @@ func (m *Middleware) RequireAPIToken(next http.Handler) http.Handler {
 			APIError(w, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
-		if tok.Scope != store.ScopeWrite && r.Method != http.MethodGet && r.Method != http.MethodHead {
-			APIError(w, http.StatusForbidden, "this token is read-only; create a read & act token to change things")
+		if store.ScopeRank(tok.Scope) < store.ScopeRank(store.ScopeDeploy) && r.Method != http.MethodGet && r.Method != http.MethodHead {
+			APIError(w, http.StatusForbidden, "this token is read-only; create a token that can deploy to change things")
 			return
 		}
 		_ = m.Store.TouchAPIToken(tok.ID)
@@ -75,6 +75,21 @@ func (m *Middleware) RequireAPIToken(next http.Handler) http.Handler {
 		ctx = context.WithValue(ctx, userKey, user)
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// RequireScope lets a request through only when the token's scope is at least
+// min. It runs after RequireAPIToken.
+func RequireScope(min string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tok, ok := TokenFromContext(r.Context())
+			if !ok || store.ScopeRank(tok.Scope) < store.ScopeRank(min) {
+				APIError(w, http.StatusForbidden, "this token's scope ("+tok.Scope+") is not enough; it needs '"+min+"'")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // APIError writes the JSON error body every /api failure uses.
