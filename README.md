@@ -225,3 +225,7 @@ The full ordered backlog lives in
 - Deploy previews per PR / per branch
 - MySQL/Redis backups (Postgres ships today)
 - Remote servers (the `Runtime` interface seam)
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE). Contributions are accepted under the same license.

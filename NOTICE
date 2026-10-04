@@ -1,0 +1,17 @@
+DeployMate
+Copyright 2026 Habib Muhammad
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Third-party material shipped in this repository:
+
+- Fonts in web/static/fonts: IBM Plex Mono (IBM) and Schibsted Grotesk
+  (Schibsted Media Group), both under the SIL Open Font License 1.1.
+- Technology logos in internal/logos: generated from Simple Icons
+  (https://simpleicons.org), CC0-1.0. The logos are trademarks of their
+  respective owners and are used only to identify the technology.
+- htmx (web/static/htmx.min.js), BSD 2-Clause; Chart.js
+  (web/static/chart.umd.min.js), MIT.
+
+Go dependencies keep their own licenses (see go.mod); all are permissive
+(Apache-2.0, MIT, BSD).

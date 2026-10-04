@@ -6,6 +6,11 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **Website** (design direction A, "the fleet board", chosen 2026-10-04): static
+  site in `site/`, hosted on DeployMate itself; needs a seeded demo instance for real
+  screenshots and a release workflow (Linux amd64/arm64 binaries + checksums) so the
+  install steps point at a real download. Licence decided: Apache-2.0 (LICENSE, NOTICE
+  added 2026-10-04).
 - [x] **Redeploy, bulk env editor, app cards, usage + opt-out** — done
   2026-10-03/04 (see progress.md): Redeploy applies changed variables on the
   current image; bulk "Add variable + Save"; project page app cards with
