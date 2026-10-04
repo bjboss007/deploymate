@@ -16,8 +16,7 @@
 (tested). Tests: scope gating, create/refuse paths, variables never echoed (response, app
 view, activity, audit), connect-repo leaks nothing, domains/config validation, no-deletes,
 MCP tool visibility/bodies. **All three MCP steps are done**; setup instructions are in
-docs/specs/mcp-and-api.md ("Using it"). **Not yet restarted live — applies migrations 20
-(done earlier) and 21; snapshot first.** Then: create a token on the live dashboard and
+docs/specs/mcp-and-api.md ("Using it"). **Live server restarted on this build** (pid 58909, snapshot `pre-0021-*.db`, migration 21 applied; `/api/v1/fleet` without a token → 401). Next: create a token on the live dashboard and
 `claude mcp add …`.
 
 **2026-10-04 (MCP step 2: deploy tier, audit, rate limits)** — Shared cores now
