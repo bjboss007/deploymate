@@ -24,6 +24,8 @@ const (
 	EventDeploySucceeded  = "deploy_succeeded"
 	EventUptimeDown       = "uptime_down"
 	EventUptimeRecovered  = "uptime_recovered"
+	EventCertExpiring     = "cert_expiring"
+	EventCertFailed       = "cert_failed"
 	EventContainerRestart = "container_restart"
 	EventDiskAlmostFull   = "disk_almost_full"
 	EventAppUnhealthy     = "app_unhealthy"
@@ -47,6 +49,8 @@ var Catalog = []CatalogEvent{
 	{EventAppRecovered, "App recovered"},
 	{EventUptimeDown, "Uptime down"},
 	{EventUptimeRecovered, "Uptime recovered"},
+	{EventCertExpiring, "Certificate expiring"},
+	{EventCertFailed, "Certificate failed"},
 	{EventContainerRestart, "Container restarting"},
 	{EventDiskAlmostFull, "Disk almost full"},
 	{EventResourceResized, "Resource resized"},
@@ -138,9 +142,9 @@ func (d *Dispatcher) record(alertID, event, subject string, delivered bool, code
 func slackPayload(event, subject, details string) []byte {
 	color := "good"
 	switch event {
-	case EventDeployFailed, EventUptimeDown, EventContainerRestart, EventDiskAlmostFull, EventAppUnhealthy, EventBackupFailed, EventRestoreFailed:
+	case EventDeployFailed, EventUptimeDown, EventCertFailed, EventContainerRestart, EventDiskAlmostFull, EventAppUnhealthy, EventBackupFailed, EventRestoreFailed:
 		color = "danger"
-	case EventUptimeRecovered, EventAppRecovered:
+	case EventUptimeRecovered, EventAppRecovered, EventCertExpiring:
 		color = "warning"
 	}
 	body, _ := json.Marshal(map[string]any{

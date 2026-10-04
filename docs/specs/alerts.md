@@ -16,6 +16,8 @@ already *produces* every event it needs; nothing notifies.
 | `deploy_succeeded` | worker, deployment → running | app, deployment id, commit |
 | `uptime_down` | monitor, probe ok→not-ok transition | domain, status code/latency |
 | `uptime_recovered` | monitor, not-ok→ok transition | domain, latency |
+| `cert_expiring` | monitor, domain certificate → expiring (<14 days left; 2026-10-04) | domain, expiry, detail |
+| `cert_failed` | monitor, domain certificate → expired/invalid (2026-10-04) | domain, detail |
 | `container_restart` | monitor, RestartCount increased | app, restart count |
 | `disk_almost_full` | monitor, ≥90% disk usage (once/24 h) | bytes used/total |
 | `resource_resized` | monitor, sustained usage >80% of applied limit (30-min cooldown) | old → new limits |

@@ -7,6 +7,15 @@
 
 ## Where we stopped
 
+**2026-10-04 (certificate alerts)** — Alert catalog gained `cert_expiring`
+(warning colour) and `cert_failed` (danger). `Monitor.checkTLS` notifies on the
+transition into `expiring` / `failed` only, after the status is stored (so a
+failed write doesn't announce, and a restart or re-check never repeats); recovery
+and pending are silent. Test: `TestCheckTLSAlertsOnTransitionsOnly` (real webhook
+receiver). **Owner action:** tick the two new events on the Alerts page for any
+target that should get them (existing targets only get what they subscribed to).
+**Not yet restarted live** (no migration).
+
 **2026-10-04 (four small backlog items)** — (1) **First-deploy guide**: a
 git-connected build-mode app with no deployments shows a card on Overview (deploy
 key to copy + Review & deploy); connecting redirects with a flash. Not an automatic

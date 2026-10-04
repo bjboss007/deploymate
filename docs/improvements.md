@@ -234,8 +234,10 @@ change.
   + `cert_expires_at` (every 2 min while not active, 30 min once active); the
   domains table shows it in words. No alert yet for `expiring`/`failed`
   (new backlog item below).
-- [ ] **Alert on a certificate that is expiring or failed** — the status is
-  recorded now; add `cert_expiring` / `cert_failed` to the alert catalog.
+- [x] **Alert on a certificate that is expiring or failed** — done 2026-10-04:
+  `cert_expiring` / `cert_failed` in the alert catalog, raised once on the
+  transition (the stored status is the memory), recovery silent. Targets must
+  tick the new events. Not done: a reminder if a cert stays `expiring` for days.
 - [x] **Unhealthy badge mislabels running apps** — done: the app page
   now distinguishes crash loops (restarts > 0) from "container is
   running but failing health probes on its preview port" (0 restarts);

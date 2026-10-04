@@ -379,6 +379,21 @@ func (m *Monitor) checkTLS(ctx context.Context, d store.Domain) {
 	}
 	if err := m.store.UpdateDomainTLS(d.ID, res.Status, expires); err != nil {
 		slog.Error("monitor: update domain tls", "domain", d.Hostname, "err", err)
+		return // not recorded, so not announced: the next check would repeat it
+	}
+	// Alert on the way INTO a bad state only — the stored status is the memory,
+	// so a restart or a re-check never repeats it.
+	if res.Status != d.TLSStatus {
+		switch res.Status {
+		case tlscheck.Expiring:
+			m.alerts.Notify(alerts.EventCertExpiring,
+				fmt.Sprintf("certificate expiring: %s", d.Hostname),
+				fmt.Sprintf("%s — it should renew by itself; if it does not, check that %s still points here and port 443 is reachable", res.Detail, d.Hostname))
+		case tlscheck.Failed:
+			m.alerts.Notify(alerts.EventCertFailed,
+				fmt.Sprintf("certificate problem: %s", d.Hostname),
+				fmt.Sprintf("%s — visitors see a browser warning until this is fixed", res.Detail))
+		}
 	}
 }
 

@@ -4,13 +4,17 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/http"
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/appspec"
+	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/tlscheck"
@@ -201,5 +205,62 @@ func TestCheckTLSRecordsAndThrottles(t *testing.T) {
 	m.checkTLS(context.Background(), pending)
 	if calls != 2 {
 		t.Errorf("a pending domain should be re-checked after 2 minutes (calls=%d)", calls)
+	}
+}
+
+// A domain's certificate going bad raises exactly one alert on the way in,
+// none while it stays bad, and a healthy or pending change raises none.
+func TestCheckTLSAlertsOnTransitionsOnly(t *testing.T) {
+	m, st, app := newTestMonitor(t)
+	var got []string
+	var mu sync.Mutex
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		b, _ := io.ReadAll(r.Body)
+		mu.Lock()
+		got = append(got, string(b))
+		mu.Unlock()
+	}))
+	defer srv.Close()
+	enc, _ := crypto.Encrypt([32]byte{7}, srv.URL)
+	if _, err := st.CreateAlert(store.Alert{
+		Name: "t", Channel: "webhook", URLEnc: enc, Enabled: true,
+		Events: []string{alerts.EventCertExpiring, alerts.EventCertFailed},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	d, _ := st.CreateDomain(store.Domain{AppID: app.ID, Hostname: "shop.example.com", TLSStatus: "active"})
+
+	next := tlscheck.Result{Status: tlscheck.Expiring, Expires: time.Now().Add(5 * 24 * time.Hour), Detail: "the certificate expires soon"}
+	m.tlsFn = func(context.Context, string) tlscheck.Result { return next }
+	step := func() store.Domain {
+		ds, _ := st.ListDomains(app.ID)
+		m.mu.Lock()
+		delete(m.lastTLS, d.ID) // skip the throttle
+		m.mu.Unlock()
+		m.checkTLS(context.Background(), ds[0])
+		ds, _ = st.ListDomains(app.ID)
+		return ds[0]
+	}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return len(got) }
+
+	step() // active -> expiring
+	if count() != 1 || !strings.Contains(got[0], "cert_expiring") || !strings.Contains(got[0], "shop.example.com") {
+		t.Fatalf("expiring: payloads = %v", got)
+	}
+	step() // still expiring: no repeat
+	if count() != 1 {
+		t.Errorf("a repeat check re-alerted (%d)", count())
+	}
+	next = tlscheck.Result{Status: tlscheck.Failed, Expires: time.Now().Add(-time.Hour), Detail: "the certificate expired"}
+	step() // expiring -> failed
+	if count() != 2 || !strings.Contains(got[1], "cert_failed") {
+		t.Fatalf("failed: payloads = %v", got)
+	}
+	next = tlscheck.Result{Status: tlscheck.Active, Expires: time.Now().Add(80 * 24 * time.Hour), Detail: "ok"}
+	step() // failed -> active: recovery is silent (no event for it)
+	next = tlscheck.Result{Status: tlscheck.Pending, Detail: "unreachable"}
+	step() // active -> pending: not an alert
+	if count() != 2 {
+		t.Errorf("recovery/pending must not alert (%d payloads)", count())
 	}
 }
