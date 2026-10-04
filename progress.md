@@ -17,7 +17,7 @@ prefix, scope, expiry, last use; revoke; 20-token cap; key icon in the top bar);
 revocation), rejection cases (no/wrong/truncated token, cookie-only), expiry,
 read-vs-write enforcement, validation + cap + cross-user revoke. Checked in the
 browser pane (create, whoami 200, POST with a read token 403, bad token 401).
-**Not yet restarted live — this one applies migration 20, so snapshot first.**
+**Live server restarted on this build** (pid 29500, snapshot `pre-0020-*.db`, migration 20 applied; `/api/v1/whoami` without a token → 401).
 Next: read endpoints under `/api/v1`, then `deploymate mcp` (stdio).
 
 **2026-10-04 (certificate alerts)** — Alert catalog gained `cert_expiring`
