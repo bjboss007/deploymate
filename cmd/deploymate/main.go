@@ -5,6 +5,7 @@
 //	setup-admin      create the owner user interactively
 //	seed-git-source  link an app to a git source (test-seeding; see seed.go)
 //	mcp              MCP server over stdio for AI agents (see mcp.go)
+//	seed-demo        fill an EMPTY data dir with a fictional fleet (website tour)
 //	version          print the version
 package main
 
@@ -55,6 +56,8 @@ func run() error {
 		return seedGitSource()
 	case "mcp":
 		return runMCP()
+	case "seed-demo":
+		return seedDemo()
 	case "version":
 		fmt.Println("deploymate", version)
 		return nil
@@ -141,7 +144,11 @@ func serve() error {
 	// Metrics, health, uptime, restart, and disk sampling.
 	mon := monitor.New(st, rt, dispatcher)
 	mon.SetHealer(server.HealApp)
-	go mon.Run(workerCtx)
+	// DEPLOYMATE_DISABLE_MONITOR=1 keeps the monitor from probing and "healing"
+	// containers: the seeded demo fleet has none, and must keep its seeded state.
+	if os.Getenv("DEPLOYMATE_DISABLE_MONITOR") != "1" {
+		go mon.Run(workerCtx)
+	}
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,

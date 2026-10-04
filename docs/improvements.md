@@ -10,6 +10,11 @@ change.
   `deploy/install.sh` (checksum-verified), `.github/workflows/{ci,release}.yml`,
   `deploymate version`, docs/knowledge/releasing.md. Not yet done: cut v0.1.0 and run
   the installer on a clean Ubuntu VM end to end.
+- [x] **Demo instance for the website** — done 2026-10-04: `deploymate seed-demo`
+  (internal/demo: a fictional 3-project fleet incl. one failing deploy, prebuilt apps, an
+  agent token with an audit trail; refuses a non-empty data dir), `DEPLOYMATE_DISABLE_MONITOR=1`,
+  and `site/tools/capture.py`, which snapshots the real dashboard's markup + CSS into
+  `site/tour/` as static, read-only pages.
 - [ ] **Website** (design direction A, "the fleet board", chosen 2026-10-04): static
   site in `site/`, hosted on DeployMate itself; needs a seeded demo instance for real
   screenshots and a release workflow (Linux amd64/arm64 binaries + checksums) so the

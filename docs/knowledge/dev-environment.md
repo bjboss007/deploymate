@@ -145,3 +145,16 @@ artifact lists with a zip `digest`, a 302 to a separate storage host that
 - Quick tunnel note (from the S1 spike): with `~/.cloudflared/config.yml`
   present a `cloudflared tunnel --url` quick tunnel answers 404 unless given
   an empty `--config`; new trycloudflare hostnames can take ~80 s to resolve.
+
+## Demo instance (website tour)
+
+```sh
+export DEPLOYMATE_DATA_DIR=/tmp/dm-demo        # must be EMPTY: seed-demo refuses otherwise
+deploymate seed-demo                           # demo@deploymate.dev / demo-demo-demo
+DEPLOYMATE_DISABLE_MONITOR=1 DEPLOYMATE_ADDR=127.0.0.1:8099 deploymate serve &
+python3 site/tools/capture.py http://127.0.0.1:8099   # rewrites site/tour/*
+```
+
+`DEPLOYMATE_DISABLE_MONITOR=1` stops the monitor probing/"healing" containers — the
+seeded apps have none, and must keep their seeded state. Everything is fictional
+(`acme-demo`, `*.example`), so the snapshots are safe to publish.

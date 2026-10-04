@@ -7,6 +7,16 @@
 
 ## Where we stopped
 
+**2026-10-04 (website prerequisites, step 2: demo instance)** — `deploymate seed-demo`
+(`internal/demo`, `cmd/deploymate/demo.go`): a fictional fleet (Storefront, Billing, Internal
+tools — 8 apps, one failing deploy with the worker's real log phrasing, prebuilt apps with CI
+run numbers, 3 domains with active certificates and uptime history, an agent token and audit
+trail), placed relative to now so heartbeats look live; it refuses a non-empty data dir.
+`DEPLOYMATE_DISABLE_MONITOR=1` added. `site/tools/capture.py` logs into the demo and writes
+the real pages as static snapshots (`site/tour/*.html` + the dashboard's own CSS/JS/fonts,
+forms inert, links cross-wired, log replayed in, "demo" banner). Checked visually. CI on
+Linux: templ drift, vet and tests pass. Next: step 3 — the site itself (`site/`).
+
 **2026-10-04 (website prerequisites, step 1: releases + installer)** — Owner chose design
 direction A (the fleet board) and Apache-2.0 (LICENSE/NOTICE added). Built: `deploymate
 version` (`-X main.version`), `deploy/package.sh` (static archive + installer files), `deploy/install.sh`
