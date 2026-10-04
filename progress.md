@@ -14,8 +14,8 @@ image; trigger `dashboard`). Guards: must be `failed`, must be the app's newest
 deployment, nothing queued/building (then redirects to the in-flight one), and a
 prebuilt run with an expired artifact is refused with a pointer to Run workflow
 now. Tests: `TestRetryFailedDeployment`,
-`TestRetryButtonShowsOnlyOnNewestFailedDeployment`. **Not yet restarted live**
-(no migration).
+`TestRetryButtonShowsOnlyOnNewestFailedDeployment`. **Live server restarted on this
+build** (pid 20415, snapshot `pre-restart-f-*.db`, no migration).
 
 **2026-10-04 (service page: who uses it)** — The service page's "Used by" list
 (previously every app in the environment, ignoring opt-outs) now shows each app's
