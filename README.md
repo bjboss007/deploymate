@@ -223,7 +223,7 @@ agent) picking the project up. Read it before anything else.
 
 Layout: `cmd/deploymate` (binary), `internal/` (auth, store, runtime,
 builder, jobs, services, proxy, monitor, sse, webhooks, crypto, config),
-`web/` (Templ templates + vendored static assets), `deploy/` (bootstrap.sh,
+`web/` (Templ templates + vendored static assets), `site/` (the website), `deploy/` (bootstrap.sh,
 systemd unit, Traefik config), `testdata/` (fixture repos + e2e scripts),
 `docs/` (ADRs, knowledge base, specs, the backlog in `improvements.md`).
 

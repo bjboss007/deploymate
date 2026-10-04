@@ -15,11 +15,13 @@ change.
   agent token with an audit trail; refuses a non-empty data dir), `DEPLOYMATE_DISABLE_MONITOR=1`,
   and `site/tools/capture.py`, which snapshots the real dashboard's markup + CSS into
   `site/tour/` as static, read-only pages.
-- [ ] **Website** (design direction A, "the fleet board", chosen 2026-10-04): static
-  site in `site/`, hosted on DeployMate itself; needs a seeded demo instance for real
-  screenshots and a release workflow (Linux amd64/arm64 binaries + checksums) so the
-  install steps point at a real download. Licence decided: Apache-2.0 (LICENSE, NOTICE
-  added 2026-10-04).
+- [x] **Website built** (design direction A, "the fleet board") — 2026-10-04, in `site/`:
+  landing page (native heartbeat board + deploy log in the worker's real phrasing, lifecycle,
+  a tour of the REAL dashboard via captured snapshots, features, agents, install, honest
+  limits), docs (quickstart, concepts, agents), OG image, Dockerfile + nginx.conf (tight CSP).
+  **Before publishing:** tag `v0.1.0` (the install command needs a release), pick the domain
+  (absolute `og:image`), host it (DeployMate itself: repo + root dir `site`). Ideas later:
+  a changelog page, a comparison page, a short screen recording, analytics-free metrics.
 - [x] **Redeploy, bulk env editor, app cards, usage + opt-out** — done
   2026-10-03/04 (see progress.md): Redeploy applies changed variables on the
   current image; bulk "Add variable + Save"; project page app cards with

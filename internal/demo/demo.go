@@ -350,10 +350,6 @@ func webDeployLog(repo, branch, sha, msg, runtime string) [][2]string {
 		{"stdout", "✓ 482 modules transformed."},
 		{"stdout", "dist/assets/index-9d2f1c.js   214.07 kB │ gzip: 68.30 kB"},
 		{"stdout", "#7 exporting to image"},
-		{"system", "starting the new container next to the old one"},
-		{"system", "new container answered its health probe (HTTP 200)"},
-		{"system", "switching traffic, then retiring the previous container"},
-		{"system", "deployed ✓"},
 	}
 }
 
@@ -364,7 +360,6 @@ func invoicerFailureLog() [][2]string {
 		{"system", "railpack build with runtime Node.js 22"},
 		{"stdout", "#5 [build] npm run build"},
 		{"stdout", "✓ built in 11.2s"},
-		{"system", "starting the new container next to the old one"},
 		{"system", "the new container failed its health probe: the container exited with code 1"},
 		{"system", "── the new container's last output ──"},
 		{"system", "Error: TAX_SERVICE_URL is not set"},

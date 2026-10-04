@@ -59,10 +59,12 @@ def pages():
 
 
 BANNER = (
-    '<div style="position:sticky;top:0;z-index:50;display:flex;gap:10px;align-items:center;justify-content:center;'
-    'padding:7px 12px;font:500 13px/1.3 var(--font-body,system-ui);background:var(--accent);color:var(--accent-ink);">'
+    '<div id="demo-banner" style="position:sticky;top:0;z-index:50;display:flex;gap:10px;align-items:center;justify-content:center;'
+    'padding:7px 12px;font:500 13px/1.3 var(--font-sans,system-ui);background:var(--accent);color:var(--accent-ink);">'
     '<span>Demo — a read-only snapshot of the real dashboard on made-up data.</span>'
     '<a href="../index.html" style="color:inherit;text-decoration:underline;">Back to the site</a></div>'
+    # inside the site's tour frame the site itself is the frame: no banner needed
+    '<script>if(window.top!==window){var b=document.getElementById("demo-banner");if(b)b.remove();}</script>'
 )
 
 

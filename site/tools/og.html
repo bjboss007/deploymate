@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="dark"><head><meta charset="utf-8">
+<link rel="stylesheet" href="../assets/site.css">
+<style>
+  html,body{margin:0;width:1200px;height:630px;overflow:hidden}
+  body{display:flex;flex-direction:column;justify-content:center;padding:0 84px;background:
+    radial-gradient(900px 420px at 85% 10%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 70%), var(--bg)}
+  .b{display:flex;align-items:center;gap:12px;font:700 28px/1 var(--sans);margin-bottom:46px}
+  .b .led{width:14px;height:14px}
+  h1{font-size:92px;line-height:1;margin:0 0 34px;max-width:980px}
+  .s{display:flex;gap:5px;align-items:flex-end;height:46px;max-width:880px}
+  .s i{flex:1;height:28px;border-radius:3px;background:var(--green)}
+  .s i.d{height:46px}.s i.r{background:var(--red)}
+  p{margin:26px 0 0;font:500 24px/1 var(--mono);color:var(--muted)}
+</style></head>
+<body>
+<div class="b"><span class="led"></span>deploymate</div>
+<h1>Your own Heroku, on a <em>server you own.</em></h1>
+<div class="s" id="s"></div>
+<p>self-hosted · one Go binary · Apache-2.0</p>
+<script>
+ var c="uuUuuuuuuuUuuuuuuuuuUuuuuuuuUuuuuuuuuuuuuuUuu".slice(0,48), el=document.getElementById("s");
+ c.split("").forEach(function(ch,i){var x=document.createElement("i"); if(ch==="U")x.className="d"; if(i===31)x.className="r"; el.appendChild(x);});
+</script>
+</body></html>
