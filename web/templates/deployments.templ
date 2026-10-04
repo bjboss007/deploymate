@@ -92,7 +92,7 @@ templ DeploymentPage(vc ViewCtx, project store.Project, app store.App, d store.D
 					}
 				</p>
 			</div>
-			<div class="app-actions">
+			<div class="app-actions sticky-actions">
 				@statusBadge(d.Status)
 				if canRetry {
 					<form method="post" action={ "/deployments/" + d.ID + "/retry" }>

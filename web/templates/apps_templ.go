@@ -1233,7 +1233,7 @@ func AppPage(vc ViewCtx, project store.Project, app store.App, deployments []sto
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, " ↗</a></div></div></div><div class=\"app-actions\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 91, " ↗</a></div></div></div><div class=\"app-actions sticky-actions\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

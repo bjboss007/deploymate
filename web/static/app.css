@@ -864,3 +864,24 @@ select { cursor: pointer; }
 
 .notice { margin: 10px 0; padding: 10px 14px; border-radius: var(--radius); font-size: 13.5px; border: 1px solid var(--border); background: var(--panel-2); }
 .notice-warn { border-color: color-mix(in srgb, var(--amber) 45%, transparent); background: color-mix(in srgb, var(--amber) 8%, var(--panel)); }
+
+/* ---- phones: the page's main actions stay in reach ---------------------
+   On a phone the header scrolls away, taking Deploy / Restart / Retry with it.
+   Pin the action row to the bottom edge; hide it while a field has focus so it
+   never sits on top of the keyboard. The status badge stays in the header. */
+@media (max-width: 640px) {
+  .sticky-actions {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; width: auto;
+    display: flex; flex-wrap: nowrap; gap: 8px; align-items: stretch;
+    padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+    background: var(--panel); border-top: 1px solid var(--border-strong);
+    box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.18);
+  }
+  .sticky-actions .head-actions { display: contents; }
+  .sticky-actions .badge { display: none; }
+  .sticky-actions form, .sticky-actions > a.btn { flex: 1 1 0; min-width: 0; }
+  .sticky-actions form .btn { width: 100%; }
+  .sticky-actions .btn { justify-content: center; text-align: center; padding-left: 8px; padding-right: 8px; white-space: nowrap; }
+  .container { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  body:has(input:focus, textarea:focus, select:focus) .sticky-actions { display: none; }
+}

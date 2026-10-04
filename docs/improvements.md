@@ -37,7 +37,9 @@ change.
   Refused when the deployment didn't fail, isn't the app's newest, another one
   is in flight (the click goes to that one), or a prebuilt run's artifact has
   expired (points at Run workflow now).
-- [ ] **Mobile sticky action bar** — UI polish idea from the redesign.
+- [x] **Mobile sticky action bar** — done 2026-10-04: at ≤640 px the app header's
+  Deploy/Restart/Stop (and a failed deployment page's Retry/Roll back) pin to the
+  bottom edge (`.sticky-actions`), hidden while a field has focus.
 - [ ] **Owner/ops (not code):** rotate the R2 backup keys that were printed to
   the terminal while copying the live env (then restart once more); start
   `dm-svc-main-mysql` from the dashboard; BeyondCredit org must approve the
