@@ -18,7 +18,7 @@ manifest fails before the build. Tests: `TestExtractManifests`,
 workflow test. **Owner action:** an app only gets this once its repo's workflow
 is updated — copy the new workflow from the app page (Settings → Git → deploy
 mode) into `.github/workflows/`; `erp` has the old one and no manifest today, so
-nothing changes for it until then. **Not yet restarted live** (no migration).
+nothing changes for it until then. **Live server restarted on this build** (pid 26090, snapshot `pre-restart-h-*.db`, no migration).
 
 **2026-10-04 (mobile sticky action bar)** — CSS-only: on screens ≤640 px the
 `.sticky-actions` row (app header: Deploy + Restart/Stop/Start; deployment page:
