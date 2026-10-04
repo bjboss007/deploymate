@@ -98,6 +98,13 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/logout", am.CheckCSRF(s.handleLogout))
 	})
 
+	// JSON API: bearer tokens only (never the session cookie — see
+	// auth.RequireAPIToken). Read tokens may only GET.
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(am.RequireAPIToken)
+		r.Get("/whoami", s.handleAPIWhoami)
+	})
+
 	// Git provider webhooks: public, authenticated by their secret instead.
 	r.Post("/hooks/{id}", s.handleWebhook)
 
@@ -110,6 +117,9 @@ func (s *Server) Handler() http.Handler {
 		})
 		r.Get("/projects", s.handleProjectsList)
 		r.Post("/projects", am.CheckCSRF(s.handleProjectCreate))
+		r.Get("/settings/tokens", s.handleTokensPage)
+		r.Post("/settings/tokens", am.CheckCSRF(s.handleTokenCreate))
+		r.Post("/settings/tokens/{id}/revoke", am.CheckCSRF(s.handleTokenRevoke))
 		r.Get("/alerts", s.handleAlertsPage)
 		r.Get("/stats", s.handleStatsPage)
 		r.Post("/alerts", am.CheckCSRF(s.handleAlertCreate))

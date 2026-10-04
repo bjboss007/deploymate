@@ -601,6 +601,14 @@ change.
   Git panel (`POST /apps/{slug}/git/rotate-secret`) stores a fresh random secret
   (encrypted); the old one stops verifying at once, so the flash says to paste the
   new one into the provider's webhook.
+- [ ] **MCP server** (`deploymate mcp`) — let an AI agent operate DeployMate.
+  Step 1 done 2026-10-04: API tokens (ADR 0020, `/settings/tokens`,
+  `GET /api/v1/whoami`). Next: read endpoints under `/api/v1` (projects, apps,
+  app status/health, deployments, build log + the plain-words explanation, the
+  "needs attention" list), then the `mcp` command (stdio, talking to the
+  dashboard with a token), then write actions (Retry, Redeploy, Restart, Run
+  workflow now, Deploy latest run) behind `write` tokens. Never: secrets,
+  deletes, token management.
 - [ ] **Prometheus `/metrics` endpoint** — additive to the SQLite
   sampling; enables Grafana if it's ever wanted.
 - [ ] **Key rotation** — `v1:` envelope versioning exists precisely for

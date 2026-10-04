@@ -7,6 +7,19 @@
 
 ## Where we stopped
 
+**2026-10-04 (MCP step 1: API tokens)** — Owner asked to start the MCP work with
+the token. Migration **0020** `api_tokens` (hash + prefix + scope + expiry +
+last_used); `store/api_tokens.go`; `auth.NewAPIToken` / `RequireAPIToken`
+(bearer-only, ignores the session cookie, read tokens GET/HEAD only, opaque 401);
+`/settings/tokens` page (create → plaintext shown once with no-store; list shows
+prefix, scope, expiry, last use; revoke; 20-token cap; key icon in the top bar);
+`GET /api/v1/whoami`. ADR **0020**. Tests: lifecycle (hashed at rest, shown once,
+revocation), rejection cases (no/wrong/truncated token, cookie-only), expiry,
+read-vs-write enforcement, validation + cap + cross-user revoke. Checked in the
+browser pane (create, whoami 200, POST with a read token 403, bad token 401).
+**Not yet restarted live — this one applies migration 20, so snapshot first.**
+Next: read endpoints under `/api/v1`, then `deploymate mcp` (stdio).
+
 **2026-10-04 (certificate alerts)** — Alert catalog gained `cert_expiring`
 (warning colour) and `cert_failed` (danger). `Monitor.checkTLS` notifies on the
 transition into `expiring` / `failed` only, after the status is stored (so a

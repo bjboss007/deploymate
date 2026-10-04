@@ -1,0 +1,113 @@
+package templates
+
+import (
+	"time"
+
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+func tokenScopeLabel(scope string) string {
+	if scope == store.ScopeWrite {
+		return "Read & act"
+	}
+	return "Read-only"
+}
+
+func tokenExpiry(t store.APIToken, now time.Time) string {
+	if t.ExpiresAt == "" {
+		return "Never expires"
+	}
+	exp, err := time.Parse(time.RFC3339Nano, t.ExpiresAt)
+	if err != nil {
+		return "Unknown expiry"
+	}
+	if !now.Before(exp) {
+		return "Expired " + exp.Format("2 Jan 2006")
+	}
+	return "Expires " + exp.Format("2 Jan 2006")
+}
+
+func tokenLastUsed(t store.APIToken) string {
+	if t.LastUsedAt == "" {
+		return "Never used"
+	}
+	return "Last used " + ago(t.LastUsedAt)
+}
+
+// TokensPage lists the owner's API tokens and makes new ones. created is the
+// plaintext of a token made by this very request, shown once.
+templ TokensPage(vc ViewCtx, tokens []store.APIToken, created string, now time.Time) {
+	@Layout(vc, "API tokens", "", []Crumb{{Label: "API tokens"}}) {
+		<div class="page-head">
+			<div>
+				<h1>API tokens</h1>
+				<p class="muted-text">Let a tool, a script or an AI agent use DeployMate as you. A token can do what you can, limited by the choice you make below.</p>
+			</div>
+		</div>
+
+		if created != "" {
+			<div class="diagnosis diagnosis-info" role="status">
+				<div class="diagnosis-title">Copy your new token now</div>
+				<p class="diagnosis-body">This is the only time it is shown. DeployMate keeps just a fingerprint, so a lost token cannot be recovered — create another and revoke this one.</p>
+				<div class="url-readout">
+					<div class="url-readout-head">
+						<span class="svc-key">API token</span>
+						<button class="btn btn-ghost btn-sm readout-copy js-copy" type="button" data-copy="new-token">Copy</button>
+					</div>
+					<code class="url-readout-value" id="new-token">{ created }</code>
+				</div>
+			</div>
+		}
+
+		<div class="panel">
+			<div class="panel-title">New token</div>
+			<form method="post" action="/settings/tokens" class="git-form">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<label>Name
+					<input type="text" name="name" placeholder="e.g. Claude, deploy script" maxlength="64" required/>
+				</label>
+				<label>What it may do
+					<select name="scope">
+						<option value="read" selected>Read-only — look at apps, deployments and logs</option>
+						<option value="write">Read &amp; act — also deploy, retry, redeploy, restart</option>
+					</select>
+				</label>
+				<label>Expires
+					<select name="expires">
+						<option value="30">in 30 days</option>
+						<option value="90" selected>in 90 days</option>
+						<option value="365">in a year</option>
+						<option value="never">never</option>
+					</select>
+				</label>
+				<button class="btn btn-primary" type="submit">Create token</button>
+			</form>
+			<p class="muted panel-hint">Start with read-only. A token never reaches secrets or deletes anything — those stay in the dashboard — and you can revoke it here at any time.</p>
+		</div>
+
+		<div class="panel">
+			<div class="panel-title">Your tokens</div>
+			if len(tokens) == 0 {
+				<p class="muted-text">No tokens yet.</p>
+			} else {
+				<div class="rows rows-flush">
+					for _, t := range tokens {
+						<div class="app-row app-row-compact token-row">
+							<span class="row-main">
+								<span class="row-title">
+									<span class="row-name">{ t.Name }</span>
+									<span class="badge">{ tokenScopeLabel(t.Scope) }</span>
+								</span>
+								<span class="row-sub"><span class="mono">{ t.Prefix }…</span> · { tokenExpiry(t, now) } · { tokenLastUsed(t) }</span>
+							</span>
+							<form method="post" action={ "/settings/tokens/" + t.ID + "/revoke" } onsubmit="return confirm('Revoke this token? Anything using it stops working immediately.')">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<button class="btn btn-ghost btn-sm" type="submit">Revoke</button>
+							</form>
+						</div>
+					}
+				</div>
+			}
+		</div>
+	}
+}
