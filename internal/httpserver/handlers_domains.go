@@ -8,8 +8,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
 // hostnamePattern accepts standard DNS hostnames (labels ≤63 chars).
@@ -24,16 +22,8 @@ func (s *Server) handleDomainCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	hostname := strings.ToLower(strings.TrimSpace(r.FormValue("hostname")))
-	if hostname == "" || len(hostname) > 253 || !hostnameRe.MatchString(hostname) {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("That is not a valid hostname."), http.StatusSeeOther)
-		return
-	}
-	if _, err := s.store.CreateDomain(store.Domain{
-		AppID: app.ID, Hostname: hostname, TLSStatus: "pending",
-	}); err != nil {
-		slog.Error("domains: create", "err", err)
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Could not add domain (already in use?)."), http.StatusSeeOther)
+	if _, refusal, _ := s.addDomainCore(app, r.FormValue("hostname")); refusal != "" {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(refusal), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Domain added. Redeploy to route it (and issue its certificate)."), http.StatusSeeOther)
@@ -75,4 +65,3 @@ func (s *Server) handleAppPort(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Routing port saved. Redeploy to apply."), http.StatusSeeOther)
 }
-

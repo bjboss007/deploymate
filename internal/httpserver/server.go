@@ -132,6 +132,19 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/deployments/{id}/retry", s.handleAPIRetry)
 			r.Post("/deployments/{id}/rollback", s.handleAPIRollback)
 		})
+
+		// Provision tier: create and configure. No delete exists here, by design.
+		r.Group(func(r chi.Router) {
+			r.Use(auth.RequireScope(store.ScopeProvision))
+			r.Post("/projects", s.handleAPIProjectCreate)
+			r.Post("/projects/{slug}/apps", s.handleAPIAppCreate)
+			r.Post("/projects/{slug}/services", s.handleAPIServiceCreate)
+			r.Post("/services/{slug}/start", s.handleAPIServiceStart)
+			r.Put("/apps/{slug}/variables", s.handleAPIVariablesSet)
+			r.Post("/apps/{slug}/git", s.handleAPIConnectRepo)
+			r.Post("/apps/{slug}/domains", s.handleAPIDomainAdd)
+			r.Patch("/apps/{slug}/config", s.handleAPIAppConfig)
+		})
 	})
 
 	// Git provider webhooks: public, authenticated by their secret instead.

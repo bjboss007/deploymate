@@ -271,3 +271,51 @@ func TestWaitForDeployment(t *testing.T) {
 		t.Errorf("timeout text %q after %v", text, time.Since(start))
 	}
 }
+
+func TestProvisionToolsNeedAProvisionToken(t *testing.T) {
+	dep := newFakeAPI(t, "deploy")
+	rep := rpc(t, dep, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	for _, n := range []string{"create_project", "create_app", "create_service", "set_variables", "connect_repository", "add_domain", "configure_app", "start_service"} {
+		if toolNames(rep[0])[n] {
+			t.Errorf("a deploy token must not see %q", n)
+		}
+	}
+	prov := newFakeAPI(t, "provision")
+	rep = rpc(t, prov, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
+	names := toolNames(rep[0])
+	for _, n := range []string{"create_project", "create_app", "create_service", "start_service", "set_variables", "connect_repository", "add_domain", "configure_app", "deploy_app", "fleet_status"} {
+		if !names[n] {
+			t.Errorf("a provision token should see %q", n)
+		}
+	}
+	// No deleting tool exists, whatever the scope.
+	for n := range names {
+		if strings.Contains(n, "delete") || strings.Contains(n, "remove") || strings.Contains(n, "destroy") {
+			t.Errorf("tool %q looks like a deletion", n)
+		}
+	}
+	call := func(name, argsJSON string) {
+		rpc(t, prov, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"`+name+`","arguments":`+argsJSON+`}}`)
+	}
+	call("create_app", `{"project":"shop","name":"Web","environment":"staging"}`)
+	if got := prov.last(); got != `POST /api/v1/projects/shop/apps {"environment":"staging","name":"Web"}` {
+		t.Errorf("create_app sent %q", got)
+	}
+	call("create_service", `{"project":"shop","name":"db","type":"postgres"}`)
+	if got := prov.last(); !strings.HasPrefix(got, "POST /api/v1/projects/shop/services ") || !strings.Contains(got, `"type":"postgres"`) {
+		t.Errorf("create_service sent %q", got)
+	}
+	call("set_variables", `{"app":"web","variables":{"A":"1","B":"2"},"secret":["A"]}`)
+	if got := prov.last(); !strings.HasPrefix(got, "PUT /api/v1/apps/web/variables ") || !strings.Contains(got, `"A":"1"`) || !strings.Contains(got, `"secret":["A"]`) {
+		t.Errorf("set_variables sent %q", got)
+	}
+	call("configure_app", `{"app":"web","image":"nginx:1.27","port":80}`)
+	if got := prov.last(); got != `PATCH /api/v1/apps/web/config {"image":"nginx:1.27","port":80}` {
+		t.Errorf("configure_app sent %q", got)
+	}
+	n := len(prov.calls)
+	call("set_variables", `{"app":"web"}`) // no variables: refused locally
+	if len(prov.calls) != n+1 /* whoami only */ && strings.Contains(prov.last(), "variables") {
+		t.Errorf("set_variables with no variables reached the API: %q", prov.last())
+	}
+}

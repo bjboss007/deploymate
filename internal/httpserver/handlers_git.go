@@ -9,7 +9,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -33,57 +32,14 @@ func (s *Server) handleGitConnect(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	repoURL := strings.TrimSpace(r.FormValue("repo_url"))
-	provider := r.FormValue("provider")
-	branch := strings.TrimSpace(r.FormValue("branch"))
-	if branch == "" {
-		branch = "main"
-	}
-	if repoURL == "" ||
-		!(strings.HasPrefix(repoURL, "git@") || strings.HasPrefix(repoURL, "ssh://") || strings.HasPrefix(repoURL, "https://")) {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Repo URL must be SSH (git@github.com:you/repo.git) or HTTPS (https://github.com/you/repo.git)"), http.StatusSeeOther)
-		return
-	}
-	if provider != "github" && provider != "gitlab" && provider != "gitea" {
-		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("Unknown provider."), http.StatusSeeOther)
-		return
-	}
-
-	key, err := gitpkg.GenerateDeployKey()
+	_, _, refusal, err := s.connectRepoCore(app, r.FormValue("repo_url"), r.FormValue("provider"), r.FormValue("branch"))
 	if err != nil {
-		slog.Error("git: generate key", "err", err)
+		slog.Error("git: connect", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	privEnc, err := crypto.Encrypt(s.encKey, key.PrivateKeyPEM)
-	if err != nil {
-		slog.Error("git: encrypt key", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	secretEnc, err := crypto.Encrypt(s.encKey, randomHex(24))
-	if err != nil {
-		slog.Error("git: encrypt webhook secret", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
-	gs, err := s.store.CreateGitSource(store.GitSource{
-		Provider:         provider,
-		RepoURL:          repoURL,
-		CloneMethod:      "deploy_key",
-		PrivateKeyEnc:    privEnc,
-		WebhookSecretEnc: secretEnc,
-		DefaultBranch:    branch,
-	})
-	if err != nil {
-		slog.Error("git: create source", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	if err := s.store.UpdateAppGitSource(app.ID, gs.ID); err != nil {
-		slog.Error("git: link source", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
+	if refusal != "" {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(refusal), http.StatusSeeOther)
 		return
 	}
 	// The deploy key must be on the repo before a private clone can work, so

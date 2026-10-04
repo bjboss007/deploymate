@@ -99,8 +99,9 @@ One Go binary, one server, Docker as the compute substrate.
 - **API tokens** — personal access tokens (`/settings/tokens`) for scripts and
   AI agents: shown once, stored hashed, read-only by default, expiring, revocable;
   `/api/v1` accepts bearer tokens only (ADR 0020); `deploymate mcp` serves an
-  MCP server over stdio so an AI agent can monitor (and, with the right token
-  scope, deploy and provision) — see docs/specs/mcp-and-api.md
+  MCP server over stdio so an AI agent can monitor, deploy and provision
+  (the token's scope decides which; secrets are never readable and nothing can
+  be deleted) — see docs/specs/mcp-and-api.md
 - **Monitoring** — CPU/memory charts (5s sampling), live container logs over
   SSE (last output kept for stopped containers), and 30s uptime probes per
   domain with history

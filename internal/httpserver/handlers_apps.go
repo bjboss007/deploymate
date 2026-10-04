@@ -273,44 +273,19 @@ func (s *Server) handleAppCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name := strings.TrimSpace(r.FormValue("name"))
-	if name == "" || len(name) > 64 {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("App name must be 1-64 characters."), http.StatusSeeOther)
-		return
-	}
-	slug := slugify(name)
-	if slug == "" {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("App name has no usable characters."), http.StatusSeeOther)
-		return
-	}
-	app, err := s.store.CreateApp(store.App{
-		ProjectID: project.ID, Name: name, Slug: slug,
-		Status: "stopped", BuildType: "dockerfile", Port: 8080,
-	})
-	if errors.Is(err, store.ErrSlugTaken) {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("That name is already taken."), http.StatusSeeOther)
-		return
-	}
+	app, warning, refusal, err := s.createAppCore(r.Context(), project, r.FormValue("name"), "")
 	if err != nil {
 		slog.Error("apps: create", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	// Best-effort auto-DNS: the preview CNAME lets Cloudflare's free plan
-	// issue a per-app edge cert. Single attempt, 5s bound (unlike alerts,
-	// a retry buys little — the record can be created manually), and it
-	// never fails app creation.
-	if s.dns != nil && s.previewHost != "" {
-		host := app.Slug + "." + s.previewHost
-		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
-		err := s.dns.EnsurePreviewRecord(ctx, host)
-		cancel()
-		if err != nil {
-			slog.Warn("apps: preview dns", "app", app.Slug, "host", host, "err", err)
-			_ = s.store.RecordEvent(app.ID, store.EventDNSRecordFailed, host+": "+err.Error())
-			http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL("App created — but its preview DNS record could not be created automatically; the preview URL will not get a certificate until the record exists."), http.StatusSeeOther)
-			return
-		}
+	if refusal != "" {
+		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL(refusal), http.StatusSeeOther)
+		return
+	}
+	if warning != "" {
+		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(warning), http.StatusSeeOther)
+		return
 	}
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }

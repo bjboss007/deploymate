@@ -140,49 +140,12 @@ func (s *Server) handleEnvVarBulk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	existing, err := s.store.ListEnvVars(app.ID)
+	order, added, updated, err := s.upsertEnvItems(app, items)
 	if err != nil {
-		slog.Error("env: list", "err", err)
+		slog.Error("env: save", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	had := map[string]bool{}
-	for _, e := range existing {
-		had[e.Key] = true
-	}
-	// A key repeated in one save keeps its last value (and one write).
-	last := map[string]envItem{}
-	order := []string{}
-	for _, it := range items {
-		if _, dup := last[it.Key]; !dup {
-			order = append(order, it.Key)
-		}
-		last[it.Key] = it
-	}
-	added, updated := 0, 0
-	for _, key := range order {
-		it := last[key]
-		valueEnc, err := crypto.Encrypt(s.encKey, it.Value)
-		if err != nil {
-			slog.Error("env: encrypt", "err", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if _, err := s.store.UpsertEnvVar(store.EnvVar{
-			AppID: app.ID, Key: key, ValueEnc: valueEnc, IsSecret: it.Secret || looksSecret(key),
-		}); err != nil {
-			slog.Error("env: upsert", "err", err)
-			http.Error(w, "internal error", http.StatusInternalServerError)
-			return
-		}
-		if had[key] {
-			updated++
-		} else {
-			added++
-		}
-	}
-	// Names only — never values — go in the event log.
-	_ = s.store.RecordEvent(app.ID, store.EventEnvChanged, "env vars set: "+truncate(strings.Join(order, ", "), 300))
 	back(fmt.Sprintf("Saved %d variable(s) (%d new, %d updated). Redeploy to apply.", len(order), added, updated))
 }
 

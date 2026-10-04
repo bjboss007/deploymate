@@ -72,20 +72,9 @@ func (s *Server) handleProjectsList(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleProjectCreate(w http.ResponseWriter, r *http.Request) {
 	user, _ := auth.UserFromContext(r.Context())
-	name := strings.TrimSpace(r.FormValue("name"))
-	if name == "" || len(name) > 64 {
-		redirectHome(w, r, "Project name must be 1-64 characters.")
-		return
-	}
-	slug := slugify(name)
-	if slug == "" {
-		redirectHome(w, r, "Project name has no usable characters.")
-		return
-	}
-	project, err := s.store.CreateProject(store.Project{UserID: user.ID, Name: name, Slug: slug})
-	if err != nil {
-		slog.Error("projects: create", "err", err)
-		redirectHome(w, r, "Could not create project (slug may already exist).")
+	project, refusal, err := s.createProjectCore(user.ID, r.FormValue("name"))
+	if err != nil || refusal != "" {
+		redirectHome(w, r, refusal)
 		return
 	}
 	http.Redirect(w, r, "/projects/"+project.Slug, http.StatusSeeOther)

@@ -7,6 +7,19 @@
 
 ## Where we stopped
 
+**2026-10-04 (MCP step 3: provision tier — plan complete)** — Provisioning cores in
+`provision.go` (project/app/service/repo/domain/env), the form handlers now call them;
+`api_provision.go` + routes under `RequireScope(provision)`; MCP tools `create_project`,
+`create_app`, `create_service`, `start_service`, `set_variables` (write-only, all-or-nothing),
+`connect_repository` (public deploy key only; refuses an app that already has a repo),
+`add_domain`, `configure_app` (`tools_provision.go`). No delete exists anywhere in the API
+(tested). Tests: scope gating, create/refuse paths, variables never echoed (response, app
+view, activity, audit), connect-repo leaks nothing, domains/config validation, no-deletes,
+MCP tool visibility/bodies. **All three MCP steps are done**; setup instructions are in
+docs/specs/mcp-and-api.md ("Using it"). **Not yet restarted live — applies migrations 20
+(done earlier) and 21; snapshot first.** Then: create a token on the live dashboard and
+`claude mcp add …`.
+
 **2026-10-04 (MCP step 2: deploy tier, audit, rate limits)** — Shared cores now
 back both the dashboard buttons and the API (`deployCore`, `redeployCore`,
 `retryCore`, `rollbackCore`, `runWorkflowCore`, `lifecycle`; the HTMX header

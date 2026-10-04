@@ -1,6 +1,6 @@
 # JSON API and MCP server — specification
 
-**Status:** steps 1–2 (read, deploy tiers) implemented 2026-10-04 · ADR 0020 · Owner: solo
+**Status:** all three tiers (read, deploy, provision) implemented 2026-10-04 · ADR 0020 · Owner: solo
 
 ## Goal
 
@@ -73,6 +73,55 @@ the token.
 **Rate limits** (per token, in memory, `api_rate.go`): reads 300/min; writes
 20/min and 200/h. Over the limit: `429` + `Retry-After`.
 
+## Provision tier (implemented)
+
+Scope `provision`: `POST /projects`, `POST /projects/{slug}/apps`,
+`POST /projects/{slug}/services`, `POST /services/{slug}/start`,
+`PUT /apps/{slug}/variables`, `POST /apps/{slug}/git`,
+`POST /apps/{slug}/domains`, `PATCH /apps/{slug}/config` (image, port). MCP
+tools: `create_project`, `create_app`, `create_service`, `start_service`,
+`set_variables` (destructive hint: overwrites), `connect_repository`,
+`add_domain`, `configure_app`. They share their rules with the dashboard forms
+(`createProjectCore`, `createAppCore`, `createServiceCore`, `connectRepoCore`,
+`addDomainCore`, `upsertEnvItems` in `provision.go`).
+
+- **Variables are write-only.** Stored encrypted; names that look sensitive are
+  always masked, others when listed in `secret`; the API never returns a value,
+  and the audit log and app history carry names only. All or nothing: one bad
+  name rejects the call and writes nothing.
+- **`connect_repository`** returns only the PUBLIC deploy key; the private half,
+  the webhook secret and any GitHub token stay in the dashboard. It refuses an
+  app that already has a repository (replacing one would orphan its key and
+  webhook — a dashboard decision).
+- **Not exposed, on purpose:** prebuilt-mode setup (it needs the GitHub token, a
+  secret), deleting anything, service/app resizing.
+- **There is no delete anywhere in the API** (`TestAPIHasNoDeletes`; the MCP test
+  asserts no tool name contains delete/remove/destroy).
+
+## Using it
+
+Create a token at `/settings/tokens` (start read-only), then register the server
+with your MCP client, for Claude Code:
+
+```
+claude mcp add deploymate \
+  -e DEPLOYMATE_URL=https://your-dashboard -e DEPLOYMATE_TOKEN=dm_… \
+  -- /path/to/deploymate mcp
+```
+
+or in a `.mcp.json`:
+
+```json
+{ "mcpServers": { "deploymate": {
+    "command": "/path/to/deploymate", "args": ["mcp"],
+    "env": { "DEPLOYMATE_URL": "http://127.0.0.1:8090", "DEPLOYMATE_TOKEN": "dm_…" } } } }
+```
+
+The agent sees only the tools its token's scope allows. Good first prompts: "how
+is everything?" (`fleet_status`), "why did erp fail?" (`get_app` →
+`get_deployment_log`), then, with a deploy token, "retry it and tell me when it's
+done" (`retry_deployment` → `wait_for_deployment`).
+
 ## Safety
 
 - bearer only, no cookies on `/api`; opaque 401s; `no-store` on token display
@@ -81,6 +130,3 @@ the token.
 - tools carry MCP annotations (`readOnlyHint`, `destructiveHint`) so clients can
   ask the person before running anything that changes state
 
-## Next (not yet built)
-
-Step 3 — provision tier.

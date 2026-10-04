@@ -76,6 +76,8 @@ func intProp(desc string) map[string]any {
 
 func esc(s string) string { return url.PathEscape(s) }
 
+func errMissing(k string) error { return fmt.Errorf("missing required argument %q", k) }
+
 // readTools monitor the platform; every one is a GET.
 var readTools = []tool{
 	{

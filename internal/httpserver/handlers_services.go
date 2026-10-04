@@ -5,7 +5,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -36,41 +35,14 @@ func (s *Server) handleServiceCreate(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	name := strings.TrimSpace(r.FormValue("name"))
-	svcType := r.FormValue("type")
-	tpl, known := services.ForType(svcType)
-	if name == "" || len(name) > 64 {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("Service name must be 1-64 characters."), http.StatusSeeOther)
-		return
-	}
-	if !known {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("Unknown service type."), http.StatusSeeOther)
-		return
-	}
-	slug := slugify(name)
-	if slug == "" {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("Service name has no usable characters."), http.StatusSeeOther)
-		return
-	}
-	env := r.FormValue("environment")
-	if env == "" {
-		env = store.EnvProduction // forms and clients that don't send one keep the old behaviour
-	}
-	if env != store.EnvDev && env != store.EnvStaging && env != store.EnvProduction {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("Unknown environment."), http.StatusSeeOther)
-		return
-	}
-	svc, err := s.store.CreateService(store.Service{
-		ProjectID: project.ID, Type: svcType, Name: name, Slug: slug, Environment: env,
-		Image: tpl.Image, Status: "stopped", VolumeName: services.VolumeName(slug), Port: tpl.Port,
-	})
-	if errors.Is(err, store.ErrSlugTaken) {
-		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL("That name is already taken."), http.StatusSeeOther)
-		return
-	}
+	svc, refusal, err := s.createServiceCore(project, r.FormValue("name"), r.FormValue("type"), r.FormValue("environment"))
 	if err != nil {
 		slog.Error("services: create", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if refusal != "" {
+		http.Redirect(w, r, "/projects/"+project.Slug+"?flash="+flashURL(refusal), http.StatusSeeOther)
 		return
 	}
 	http.Redirect(w, r, "/services/"+svc.Slug, http.StatusSeeOther)

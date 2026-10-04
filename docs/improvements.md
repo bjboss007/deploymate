@@ -601,11 +601,14 @@ change.
   Git panel (`POST /apps/{slug}/git/rotate-secret`) stores a fresh random secret
   (encrypted); the old one stops verifying at once, so the flash says to paste the
   new one into the provider's webhook.
-- [ ] **MCP server** (`deploymate mcp`) — plan in docs/specs/mcp-and-api.md.
-  Steps 1–2 done 2026-10-04: API tokens with three scopes, the read API and
-  tools, the deploy tier (retry/redeploy/deploy/rollback/start/stop/restart/run
-  workflow, `wait_for_deployment`), audit trail, rate limits. Remaining: step 3
-  provision tier. Later: prune old `audit_log` rows.
+- [x] **MCP server** (`deploymate mcp`) — done 2026-10-04 (docs/specs/mcp-and-api.md,
+  ADR 0020): API tokens with three scopes (read / deploy / provision), the read
+  API + tools, the deploy tier (+ `wait_for_deployment`), the provision tier, audit
+  trail, per-token rate limits. Follow-ups: prune old `audit_log` rows; an
+  "agent view" of build logs that strips untrusted text; prebuilt-mode setup
+  needs a way to hand over the GitHub token without an agent seeing it
+  (browser handoff); app resizing/replicas tools; HTTP transport for MCP (today
+  stdio only).
 - [ ] **Prometheus `/metrics` endpoint** — additive to the SQLite
   sampling; enables Grafana if it's ever wanted.
 - [ ] **Key rotation** — `v1:` envelope versioning exists precisely for
