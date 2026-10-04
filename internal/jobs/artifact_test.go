@@ -405,3 +405,55 @@ func TestArtifactDeployDetectsSpringBoot(t *testing.T) {
 		t.Errorf("an inconclusive scan cleared the stack: %q", app.Stack)
 	}
 }
+
+// A prebuilt deploy provisions the services its artifact's deploymate.yml
+// declares, exactly as a git build would, before the container is created.
+func TestArtifactDeployAppliesManifest(t *testing.T) {
+	s := newArtifactSetup(t)
+	z := zipOf(t, map[string]string{
+		"app.jar":        "J",
+		"deploymate.yml": "services:\n  - redis\n",
+	})
+	s.gh.zips[1000] = z
+	s.gh.runs[100] = []ghArtifact{{ID: 1000, Name: "deploymate-app", Digest: sumOf(z)}}
+	d := s.queueRun(t, 100, 1)
+	got := s.result(t, d)
+	if got.Status != "running" {
+		t.Fatalf("deployment = %q (%s)", got.Status, got.Error)
+	}
+	log := func() string {
+		lines, _ := s.st.ListBuildLogs(d.ID, 0)
+		return strings.Join(lines, "\n")
+	}()
+	for _, want := range []string{"manifest files in the artifact: deploymate.yml", "manifest (dev): redis"} {
+		if !strings.Contains(log, want) {
+			t.Errorf("build log lacks %q:\n%s", want, log)
+		}
+	}
+	project, _ := s.st.GetProjectByID(s.app.ProjectID)
+	svcs, _ := s.st.ListServices(project.ID)
+	found := false
+	for _, sv := range svcs {
+		if sv.Type == "redis" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("redis was not provisioned from the artifact's manifest; services = %+v", svcs)
+	}
+}
+
+// A malformed manifest fails the deploy with its own message (as in a git build).
+func TestArtifactDeployRejectsBadManifest(t *testing.T) {
+	s := newArtifactSetup(t)
+	z := zipOf(t, map[string]string{"app.jar": "J", "deploymate.yml": "services: [unknown-thing\n"})
+	s.gh.zips[1000] = z
+	s.gh.runs[100] = []ghArtifact{{ID: 1000, Name: "deploymate-app", Digest: sumOf(z)}}
+	got := s.result(t, s.queueRun(t, 100, 1))
+	if got.Status != "failed" || !strings.Contains(got.Error, "deploymate.yml") {
+		t.Errorf("deployment = %q (%s), want a failed deploy naming deploymate.yml", got.Status, got.Error)
+	}
+	if s.buildCalls != 0 {
+		t.Error("a bad manifest must stop the deploy before the build")
+	}
+}

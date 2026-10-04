@@ -90,6 +90,20 @@ func (w *Worker) runArtifactDeploy(ctx context.Context, app store.App, d store.D
 	if err != nil {
 		return err
 	}
+	// Infra manifests the workflow uploaded next to the JAR: provision the
+	// app's services exactly as a git build would (docs/specs/prebuilt-deploys.md).
+	manifestDir := filepath.Join(workDir, "manifest")
+	if err := os.MkdirAll(manifestDir, 0o755); err != nil {
+		return err
+	}
+	if names, err := builder.ExtractManifests(zipPath, manifestDir); err != nil {
+		return err
+	} else if len(names) > 0 {
+		say("manifest files in the artifact: " + strings.Join(names, ", "))
+	}
+	if err := w.applyManifest(ctx, app, d, manifestDir, ""); err != nil {
+		return err
+	}
 	w.recordStack(app, stack.DetectJar(filepath.Join(ctxDir, "app.jar"))) // Spring Boot fat jars show the Spring logo
 	major := builder.JavaMajor(app.Runtime)
 	say(fmt.Sprintf("wrapping %s (%d KB) in eclipse-temurin:%s-jre", jarName, jarSize>>10, major))

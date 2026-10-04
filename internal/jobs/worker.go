@@ -238,20 +238,8 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	// container is assembled, so connection URLs land in the very env
 	// assembly that injects them. The app's environment selects the
 	// overlay (deploymate.{env}.yml) and the service set.
-	manifestDecls, err := services.LoadManifest(checkoutDir, app.RootDirectory, app.Environment)
-	if err != nil {
-		return fmt.Errorf("deploymate.yml: %w", err)
-	}
-	if len(manifestDecls) > 0 {
-		prefix := "manifest"
-		if app.Environment != store.EnvProduction {
-			prefix = "manifest (" + app.Environment + ")"
-		}
-		w.log(d, "system", prefix+": "+strings.Join(services.DeclTypes(manifestDecls), ", "))
-		w.publish("deploy:"+app.Slug, "log", prefix+": "+strings.Join(services.DeclTypes(manifestDecls), ", "))
-		if err := w.resolveManifest(ctx, app, d, manifestDecls); err != nil {
-			return err
-		}
+	if err := w.applyManifest(ctx, app, d, checkoutDir, app.RootDirectory); err != nil {
+		return err
 	}
 
 	imageTag := fmt.Sprintf("deploymate/apps/%s:%s", app.Slug, d.ID)
@@ -361,6 +349,29 @@ func (w *Worker) logDiffRecord(ctx context.Context, app store.App, gs store.GitS
 // resolveManifest reconciles the declared services with the app's
 // environment and reports each action in the build log and the history
 // timeline. Errors fail the deployment.
+// applyManifest reads deploymate.yml / deploymate.{env}.yml from dir (the repo
+// checkout, or the files taken from a prebuilt artifact) and reconciles the
+// services it declares, before the app container is assembled — so connection
+// URLs land in the very env assembly that injects them. No manifest = nothing
+// to do.
+func (w *Worker) applyManifest(ctx context.Context, app store.App, d store.Deployment, dir, rootDir string) error {
+	decls, err := services.LoadManifest(dir, rootDir, app.Environment)
+	if err != nil {
+		return fmt.Errorf("deploymate.yml: %w", err)
+	}
+	if len(decls) == 0 {
+		return nil
+	}
+	prefix := "manifest"
+	if app.Environment != store.EnvProduction {
+		prefix = "manifest (" + app.Environment + ")"
+	}
+	line := prefix + ": " + strings.Join(services.DeclTypes(decls), ", ")
+	w.log(d, "system", line)
+	w.publish("deploy:"+app.Slug, "log", line)
+	return w.resolveManifest(ctx, app, d, decls)
+}
+
 func (w *Worker) resolveManifest(ctx context.Context, app store.App, d store.Deployment, decls []services.ServiceDecl) error {
 	resolutions, err := w.prov.Ensure(ctx, app.ProjectID, app.Environment, decls)
 	if err != nil {

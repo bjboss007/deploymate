@@ -230,16 +230,28 @@ jobs:
         with: { distribution: temurin, java-version: "21", cache: gradle }
       - run: ./gradlew bootJar -Pproduction --no-daemon
       - run: mkdir out && cp "$(ls build/libs/*.jar | grep -v -- -plain | head -n1)" out/app.jar
+      - run: cp deploymate.yml deploymate.*.yml out/ 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         with:
           name: deploymate-app
-          path: out/app.jar
+          path: out/
           retention-days: 1          # keeps shared Actions/Packages storage near zero
           if-no-files-found: error
 ```
 The `cp … out/app.jar` step is what makes multi-module Gradle builds safe:
-the artifact always holds exactly one file, so DeployMate never has to
+the artifact always holds exactly one JAR, so DeployMate never has to
 guess which JAR is the application.
+
+**Infra manifests (added 2026-10-04).** The next step copies the repo's
+`deploymate.yml` / `deploymate.{env}.yml` into `out/`, so they travel in the
+artifact — no extra token permission (fetching them through the contents API
+would need *Contents: read*, which prebuilt mode deliberately does not ask
+for). The worker (`builder.ExtractManifests`, `Worker.applyManifest`) takes
+only exact root-level names, ≤64 KiB each, and provisions the declared
+services exactly like a git build (same `LoadManifest` overlay rules, same
+`resolveManifest` logging). A malformed manifest fails the deploy before the
+build. **Workflows copied before this change keep working but upload no
+manifest**: re-copy the workflow from the app page to opt in.
 
 ### Memory preflight (ships with A)
 

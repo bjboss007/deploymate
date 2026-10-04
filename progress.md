@@ -7,6 +7,19 @@
 
 ## Where we stopped
 
+**2026-10-04 (prebuilt mode reads `deploymate.yml`)** — The generated workflow now
+copies `deploymate.yml` / `deploymate.*.yml` into `out/` and uploads `out/`
+(the zip holds `app.jar` + manifests). `builder.ExtractManifests` takes exact
+root-level names (≤64 KiB, nothing path-derived from the archive);
+`Worker.applyManifest` (refactored out of `runGitDeploy`) runs
+`services.LoadManifest` on them and provisions services like a git build; a bad
+manifest fails before the build. Tests: `TestExtractManifests`,
+`TestArtifactDeployAppliesManifest`, `TestArtifactDeployRejectsBadManifest`,
+workflow test. **Owner action:** an app only gets this once its repo's workflow
+is updated — copy the new workflow from the app page (Settings → Git → deploy
+mode) into `.github/workflows/`; `erp` has the old one and no manifest today, so
+nothing changes for it until then. **Not yet restarted live** (no migration).
+
 **2026-10-04 (mobile sticky action bar)** — CSS-only: on screens ≤640 px the
 `.sticky-actions` row (app header: Deploy + Restart/Stop/Start; deployment page:
 Retry / Roll back / All deployments) is pinned to the bottom edge with a

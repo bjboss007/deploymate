@@ -489,14 +489,14 @@ change.
   deployment error (reuse `internal/builder/diagnose.go` patterns: "killed by the
   kernel — the host ran out of memory"). Also consider a longer or configurable
   probe window (30 x 2 s today) for Spring-sized apps on loaded hosts.
-- [ ] **Prebuilt (artifact) mode ignores `deploymate.yml`** — the manifest
-  (services to provision, ADR 0017 overlays) is read from a git checkout,
-  and prebuilt deploys clone nothing (docs/specs/prebuilt-deploys.md). An
-  app that relies on a manifest silently gets no services. Options: have the
-  workflow upload the manifest(s) next to the JAR in the artifact (no extra
-  token permission), or fetch them via the contents API (needs *Contents:
-  read*, which we deliberately don't grant). The artifact route fits.
-  (`trade-stack-backend` has no manifest today, so it isn't blocked.)
+- [x] **Prebuilt (artifact) mode ignores `deploymate.yml`** — done 2026-10-04
+  (the artifact route): the generated workflow copies `deploymate*.yml` into
+  the artifact next to `app.jar` (`path: out/`); the worker extracts exact
+  root-level manifest names (≤64 KiB) and provisions the services like a git
+  build. Existing workflows must be re-copied from the app page to start
+  uploading the manifest (`erp`'s and the TradeStack test copy's are the old
+  shape). Still open: a manifest under a `rootDirectory` isn't copied (the
+  workflow copies from the repo root only).
 - [ ] **Railpack `--cache-to/--cache-from`** — wire build cache export
   (BuildKit registry cache) so rebuilds across deploys are faster than
   cold.

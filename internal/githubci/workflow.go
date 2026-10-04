@@ -22,8 +22,9 @@ type WorkflowOpts struct {
 }
 
 // Workflow renders a workflow file that builds the app's JAR on a GitHub
-// runner and uploads exactly one file, out/app.jar, as a one-day artifact —
-// the shape DeployMate's prebuilt mode expects. The `cp` step is what makes
+// runner and uploads out/ — exactly one JAR (app.jar) plus any deploymate.yml /
+// deploymate.{env}.yml manifests — as a one-day artifact, the shape DeployMate's
+// prebuilt mode expects. The `cp` step is what makes
 // multi-module builds safe: the artifact always holds a single JAR, so
 // DeployMate never has to guess which one is the application.
 func Workflow(o WorkflowOpts) string {
@@ -57,10 +58,13 @@ func Workflow(o WorkflowOpts) string {
 	w("        with: { distribution: temurin, java-version: %s, cache: %s }", strconv.Quote(o.JavaMajor), cache)
 	w("      - run: %s", build)
 	w("      - run: mkdir out && %s", pick)
+	// The infra manifests ride along so DeployMate can provision the app's
+	// databases and caches without cloning the repo (unmatched globs are fine).
+	w("      - run: cp deploymate.yml deploymate.*.yml out/ 2>/dev/null || true")
 	w("      - uses: actions/upload-artifact@v4")
 	w("        with:")
 	w("          name: %s", strconv.Quote(o.ArtifactName))
-	w("          path: out/app.jar")
+	w("          path: out/")
 	w("          retention-days: 1")
 	w("          if-no-files-found: error")
 	return b.String()

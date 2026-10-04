@@ -15,6 +15,8 @@ func TestWorkflowGradle(t *testing.T) {
 		"./gradlew bootJar --no-daemon",
 		"cp \"$(ls build/libs/*.jar | grep -v -- -plain | head -n1)\" out/app.jar",
 		`name: "my-app"`,
+		"cp deploymate.yml deploymate.*.yml out/",
+		"path: out/",
 		"retention-days: 1",
 		"if-no-files-found: error",
 		"contents: read",

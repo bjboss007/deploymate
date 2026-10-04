@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -148,4 +149,50 @@ COPY --chown=app app.jar /app/app.jar
 USER app
 ENTRYPOINT ["sh", "-c", "exec java $JAVA_OPTS -Dserver.port=${PORT:-8080} -jar /app/app.jar"]
 `, nil
+}
+
+// maxManifestBytes caps one manifest file taken from an artifact.
+const maxManifestBytes = 64 << 10
+
+// manifestNameRe matches the only names DeployMate reads: deploymate.yml and
+// the per-environment overlays deploymate.{env}.yml (services.LoadManifest).
+var manifestNameRe = regexp.MustCompile(`^deploymate(\.[a-z0-9-]{1,32})?\.yml$`)
+
+// ExtractManifests copies the infra manifests that sit at the root of the
+// artifact into destDir and returns their names. Only exact, root-level names
+// are taken (never a path from the archive), each capped at 64 KiB; anything
+// else is left alone. No manifest is not an error — most apps have none.
+func ExtractManifests(zipPath, destDir string) ([]string, error) {
+	zr, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return nil, fmt.Errorf("the artifact is not a valid zip archive: %w", err)
+	}
+	defer zr.Close()
+	var got []string
+	for _, f := range zr.File {
+		name := strings.ReplaceAll(f.Name, "\\", "/")
+		if f.FileInfo().IsDir() || f.Mode()&os.ModeSymlink != 0 || path.Dir(name) != "." || !manifestNameRe.MatchString(name) {
+			continue
+		}
+		if f.UncompressedSize64 > maxManifestBytes {
+			return nil, fmt.Errorf("%s in the artifact is over %d KB", name, maxManifestBytes>>10)
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return nil, fmt.Errorf("open %s in the artifact: %w", name, err)
+		}
+		data, err := io.ReadAll(io.LimitReader(rc, maxManifestBytes+1))
+		rc.Close()
+		if err != nil {
+			return nil, fmt.Errorf("read %s from the artifact: %w", name, err)
+		}
+		if len(data) > maxManifestBytes {
+			return nil, fmt.Errorf("%s in the artifact is over %d KB", name, maxManifestBytes>>10)
+		}
+		if err := os.WriteFile(filepath.Join(destDir, name), data, 0o644); err != nil {
+			return nil, err
+		}
+		got = append(got, name)
+	}
+	return got, nil
 }

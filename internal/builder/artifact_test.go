@@ -182,3 +182,38 @@ func TestJavaWrapperDockerfile(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractManifests(t *testing.T) {
+	z := makeZip(t,
+		zipEntry{name: "app.jar", body: "J"},
+		zipEntry{name: "deploymate.yml", body: "services: [postgres]\n"},
+		zipEntry{name: "deploymate.staging.yml", body: "services: [redis]\n"},
+		zipEntry{name: "sub/deploymate.yml", body: "nested: ignored\n"}, // not at the root
+		zipEntry{name: "../deploymate.prod.yml", body: "escape: no\n"},  // path from the archive
+		zipEntry{name: "deploymate.yml.bak", body: "nope"},              // not an exact name
+		zipEntry{name: "notes.yml", body: "nope"},
+	)
+	dest := t.TempDir()
+	got, err := ExtractManifests(z, dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(got, ",") != "deploymate.yml,deploymate.staging.yml" {
+		t.Fatalf("extracted %v", got)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dest, "deploymate.yml")); string(b) != "services: [postgres]\n" {
+		t.Errorf("deploymate.yml = %q", b)
+	}
+	if entries, _ := os.ReadDir(dest); len(entries) != 2 {
+		t.Errorf("dest has %d files, want only the two manifests", len(entries))
+	}
+	// No manifest is not an error.
+	if got, err := ExtractManifests(makeZip(t, zipEntry{name: "app.jar", body: "J"}), t.TempDir()); err != nil || len(got) != 0 {
+		t.Errorf("no manifest: %v %v", got, err)
+	}
+	// An oversized one is refused.
+	big := makeZip(t, zipEntry{name: "deploymate.yml", body: strings.Repeat("x", 70<<10)})
+	if _, err := ExtractManifests(big, t.TempDir()); err == nil || !strings.Contains(err.Error(), "over 64 KB") {
+		t.Errorf("oversized manifest err = %v", err)
+	}
+}
