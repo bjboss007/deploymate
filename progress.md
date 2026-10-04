@@ -17,8 +17,9 @@ deploy on purpose (a private repo can't be cloned before its key is added).
 expiring / untrusted / failed + expiry), `Monitor.checkTLS` (2 min while not active,
 30 min once active; `tlsFn` seam for tests), `store.UpdateDomainTLS`, domains table
 shows "Secure · until …" etc. (4) **Service environment selector** on the create
-form (dev default; none sent = production). Tests for each. **Not yet restarted
-live** (no migration). New backlog item: alert on expiring/failed certificates.
+form (dev default; none sent = production). Tests for each. **Live server restarted
+on this build** (pid 27681, snapshot `pre-restart-i-*.db`, no migration; the one domain, example.com, went
+pending → active with its real expiry within the first minute). New backlog item: alert on expiring/failed certificates.
 
 **2026-10-04 (prebuilt mode reads `deploymate.yml`)** — The generated workflow now
 copies `deploymate.yml` / `deploymate.*.yml` into `out/` and uploads `out/`
