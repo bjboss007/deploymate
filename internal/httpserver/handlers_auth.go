@@ -3,13 +3,31 @@ package httpserver
 import (
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
+
+// isHTTPS reports whether the visitor's connection is HTTPS. DeployMate often sits
+// behind something that ends TLS for it (a Cloudflare Tunnel, Traefik), so it also
+// believes X-Forwarded-Proto — but ONLY from a loopback peer: the dashboard listens
+// on 127.0.0.1, so a header from anywhere else is a client making things up.
+func isHTTPS(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback() && strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
 
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	if _, ok := auth.UserFromContext(r.Context()); ok {
@@ -61,7 +79,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Path:     "/",
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
-		Secure:   r.TLS != nil,
+		Secure:   isHTTPS(r),
 		Expires:  time.Now().Add(auth.SessionTTL),
 	})
 	redirectHome(w, r, "")

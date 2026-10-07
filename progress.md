@@ -7,6 +7,18 @@
 
 ## Where we stopped
 
+**2026-10-07 (first install on the owner's Ubuntu server)** — The repo is **private**, so the
+public one-line installer can't work for outsiders yet; the owner's server was installed from a
+locally built archive (`deploy/package.sh`, ignored `dist/`). Reached through a **Cloudflare Tunnel**
+(`ssh dm-server` → `ssh.deploymate.link`, ProxyCommand cloudflared; user is `habib-muhammad`). The
+server is a **desktop** Ubuntu 24.04 (x86_64, 3.6 GB RAM + 3.6 GB swap, Docker already present, GNOME
+and remote desktop on :3389 — which the bootstrap's firewall blocks). Findings fixed: `setup-admin` run
+by hand needs `DEPLOYMATE_DATA_DIR=/var/lib/deploymate` (docs/installer message corrected, `df3090e`);
+the login cookie wasn't `Secure` behind a TLS-terminating proxy → `isHTTPS()` trusts
+`X-Forwarded-Proto` only from loopback (`TestIsHTTPSBehindAProxy`). Installed and answering `200`
+on 127.0.0.1:8080. **Next:** replace the server binary with the rebuilt one, add tunnel public
+hostnames (dashboard + site), host the site, Cloudflare Access on the dashboard.
+
 **2026-10-07 (domain bought: deploymate.link)** — Owner registered **deploymate.link** at
 Cloudflare Registrar (created 2026-10-07, expires **2027-10-07**; nameservers already Cloudflare:
 elsa/alexis). Repo side done: absolute `og:image`/`og:url`/canonical (home + docs, via
