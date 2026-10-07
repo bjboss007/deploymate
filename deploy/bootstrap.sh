@@ -34,6 +34,18 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 systemctl enable --now docker
 
+# Docker may have been installed before DeployMate (a desktop Ubuntu, docker.io, an older
+# script) without the buildx plugin, which every Dockerfile build uses. The block above
+# only runs when docker is missing, so check the plugin on its own.
+if ! docker buildx version >/dev/null 2>&1; then
+  echo "==> docker buildx plugin missing — installing"
+  apt-get update -y
+  apt-get install -y docker-buildx-plugin 2>/dev/null \
+    || apt-get install -y docker-buildx 2>/dev/null \
+    || { echo "could not install the docker buildx plugin; install it by hand (docker-buildx-plugin from Docker's apt repo, or docker-buildx on Ubuntu) and re-run" >&2; exit 1; }
+  docker buildx version >/dev/null 2>&1 || { echo "docker buildx still not working" >&2; exit 1; }
+fi
+
 echo "==> firewall: ssh (22), http (80), https (443) only"
 ufw allow OpenSSH
 ufw allow 80/tcp

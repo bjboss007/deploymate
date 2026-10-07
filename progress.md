@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-07 (site deploy failed: no buildx)** — The first Dockerfile build on the owner's server failed with
+`unknown flag: --progress`: Docker was pre-installed without the **buildx plugin**, and `bootstrap.sh` only
+installed Docker when `docker` was missing. Fixed: bootstrap now checks `docker buildx version` separately and
+installs `docker-buildx-plugin` / `docker-buildx`; `builder.Explain` recognises the error and says what to do.
+Also `flash` is stripped from the URL. Owner fix on the server: `sudo apt install docker-buildx-plugin` (or
+`docker-buildx`), then retry the deploy.
+
 **2026-10-07 (server ready as an always-on laptop)** — The owner ran `deploy/laptop-server.sh` on the Ubuntu
 laptop (lid-close ignored, suspend masked); lid test passed (SSH + dashboard stay up). Note for
 `package.sh`: the archive does not include `laptop-server.sh` (copy it from the repo). Still to confirm

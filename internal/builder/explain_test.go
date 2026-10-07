@@ -51,3 +51,15 @@ func TestExplainTabsExist(t *testing.T) {
 		}
 	}
 }
+
+func TestExplainMissingBuildx(t *testing.T) {
+	for _, in := range []string{
+		"unknown flag: --progress\nUsage:  docker [OPTIONS] COMMAND [ARG...]",
+		"docker: 'buildx' is not a docker command.",
+	} {
+		ex := Explain(in)
+		if ex == nil || !strings.Contains(ex.Title, "buildx") {
+			t.Errorf("Explain(%q) = %+v, want the missing-buildx explanation", in, ex)
+		}
+	}
+}

@@ -30,6 +30,15 @@ func Explain(errText string) *Explanation {
 		return false
 	}
 	switch {
+	case has("unknown flag: --progress"), has("buildx") && has("not a docker command"), has("unknown shorthand flag") && has("buildx"):
+		return &Explanation{
+			Title: "This server's Docker has no build plugin (buildx)",
+			Hints: []Hint{
+				{"Install it on the server: sudo apt install docker-buildx-plugin (Docker's own repository) or sudo apt install docker-buildx (Ubuntu's package), then deploy again.", ""},
+				{"Check it worked with: docker buildx version", ""},
+				{"Re-running the DeployMate installer script also installs it.", ""},
+			},
+		}
 	case has("readiness probe") && has("killed for lack of memory"):
 		return &Explanation{
 			Title: "The app ran out of memory while starting",
