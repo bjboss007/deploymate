@@ -60,7 +60,7 @@
         <code id="hero-cmd">curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh | sudo bash</code>
         <button class="copy" type="button" data-copy="hero-cmd">Copy</button>
       </div>
-      <p class="fine">Ubuntu 24.04, amd64 or arm64. The installer checks a SHA-256 before it runs anything.</p>
+      <p class="fine">Ubuntu Linux, amd64 or arm64. The installer checks a SHA-256 before it runs anything.</p>
     </div>
 
     <div class="board" aria-label="A fleet in miniature">
@@ -246,7 +246,7 @@
       <ol class="steps-ol">
         <li>
           <h3>Run the installer on the server</h3>
-          <p>As root, on Ubuntu 24.04.</p>
+          <p>As root, on a recent Ubuntu LTS.</p>
           <pre class="code"><span class="c"># your email is only used for Let's Encrypt</span>
 curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \
   | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash</pre>
@@ -264,7 +264,7 @@ curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/in
       <div class="reqs">
         <h3>What it needs</h3>
         <dl>
-          <dt>Server</dt><dd>Any machine you control: a VPS, a mini PC, a spare laptop. Ubuntu 24.04 LTS, amd64 or arm64, and root access.</dd>
+          <dt>Server</dt><dd>Any machine you control: a VPS, a mini PC, a spare laptop. A recent Ubuntu LTS, amd64 or arm64, and root access.</dd>
           <dt>Reachable</dt><dd>Open ports 80 and 443, or a tunnel such as Cloudflare Tunnel. A domain for HTTPS.</dd>
           <dt>Your computer</dt><dd>Nothing to install. The agent bridge (<code>deploymate mcp</code>) is a single file for macOS or Linux.</dd>
         </dl>
