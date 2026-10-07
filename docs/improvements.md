@@ -6,6 +6,11 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **"Behind a tunnel" mode: don't try to issue certificates** — 2026-10-07: on the owner's server
+  (Cloudflare Tunnel, no public :80) Traefik's ACME HTTP challenge can never succeed, so it logs
+  "Unable to obtain ACME certificate" repeatedly. Harmless (Cloudflare serves the real cert; staging
+  resolver), but noisy, and the Domains page's "Secure" comes from the edge. Offer a setting that omits
+  `certresolver`, and say so in the Domains panel.
 - [ ] **Upgrade the pinned Traefik (v3.3) to a release that supports Docker Engine 29** — found
   2026-10-07 on the owner's server: Docker 29 + Traefik 3.3 = no containers seen, every domain 404.
   Worked around in `bootstrap.sh` with `DOCKER_MIN_API_VERSION=1.24` on the daemon. Do the upgrade

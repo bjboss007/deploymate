@@ -7,6 +7,17 @@
 
 ## Where we stopped
 
+**2026-10-07 (site live behind the tunnel; two root causes found)** — The `site` app now serves through
+Traefik. Causes of the 403/404 on the owner's server: (1) the service's umask 0077 made git write 0600
+files → non-root containers (nginx) answered 403 — `gitpkg.normalizeModes` after clone + a site Dockerfile
+`chmod`; (2) **Docker 29 + Traefik 3.3** (API 1.24 < min 1.44) → Traefik saw no containers → every domain
+404 — `bootstrap.sh` now sets `DOCKER_MIN_API_VERSION=1.24` on Docker ≥ 29 (also fixed by hand on the
+server). Also: missing buildx plugin (installer installs it), Domains and App port split into two panels
+(the port field shared a `required` form with Add domain). **Owner still to do:** update the server binary
+once more to get the split panels and permission fix; confirm https://deploymate.link in a browser through the
+tunnel hostname (HTTPS, localhost:443, No TLS Verify); later: public repo + `v0.1.0`, then the short
+`deploymate.link/install` command on the page.
+
 **2026-10-07 (site deploy failed: no buildx)** — The first Dockerfile build on the owner's server failed with
 `unknown flag: --progress`: Docker was pre-installed without the **buildx plugin**, and `bootstrap.sh` only
 installed Docker when `docker` was missing. Fixed: bootstrap now checks `docker buildx version` separately and
