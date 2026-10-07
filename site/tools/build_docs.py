@@ -94,8 +94,8 @@ QUICK = """
 
 <h2 id="requirements">What you need</h2>
 <table>
-<tr><th>Server</th><td>Ubuntu 24.04 LTS, amd64 or arm64, with root access.</td></tr>
-<tr><th>Network</th><td>Ports 80 and 443 reachable, and an A record pointing at the server for each domain you attach.</td></tr>
+<tr><th>Server</th><td>Any machine you control — a VPS, a mini PC, a spare laptop. Ubuntu 24.04 LTS, amd64 or arm64, with root access.</td></tr>
+<tr><th>Reachable</th><td>Either ports 80 and 443 open to the internet with an A record pointing at the server, or a tunnel such as Cloudflare Tunnel that carries traffic to it (no open ports needed). Each domain you attach needs one or the other.</td></tr>
 <tr><th>Code</th><td>A git repository (GitHub, GitLab or Gitea), or just a container image.</td></tr>
 </table>
 

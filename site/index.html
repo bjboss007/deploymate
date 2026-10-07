@@ -264,9 +264,9 @@ curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/in
       <div class="reqs">
         <h3>What it needs</h3>
         <dl>
-          <dt>OS</dt><dd>Ubuntu 24.04 LTS (amd64 or arm64)</dd>
-          <dt>Network</dt><dd>Ports 80 and 443. A domain for HTTPS.</dd>
-          <dt>Your laptop</dt><dd>Nothing to install. The agent bridge (<code>deploymate mcp</code>) is a single file for macOS or Linux.</dd>
+          <dt>Server</dt><dd>Any machine you control: a VPS, a mini PC, a spare laptop. Ubuntu 24.04 LTS, amd64 or arm64, and root access.</dd>
+          <dt>Reachable</dt><dd>Open ports 80 and 443, or a tunnel such as Cloudflare Tunnel. A domain for HTTPS.</dd>
+          <dt>Your computer</dt><dd>Nothing to install. The agent bridge (<code>deploymate mcp</code>) is a single file for macOS or Linux.</dd>
         </dl>
         <p class="fine" style="margin-top:18px">Prefer to build it yourself? <code>make build</code> — it's Go and nothing else. <a href="docs/quickstart.html#from-source">From source →</a></p>
       </div>
