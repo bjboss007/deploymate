@@ -6,6 +6,12 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [x] **Build folder (root directory) setting** — done 2026-10-07: Settings → Build →
+  "Build folder" (and `configure_app`'s `root_directory`). The worker already built from a
+  subfolder; nothing in the UI could set it (needed to host `site/` and for monorepos). Validated
+  (relative, no `..`, no odd characters) and the build/manifest/detect paths clean it again
+  before joining it onto the checkout. Still open: the prebuilt workflow only copies
+  `deploymate.yml` from the repo root.
 - [x] **Release workflow + installer** — done 2026-10-04: `deploy/package.sh`,
   `deploy/install.sh` (checksum-verified), `.github/workflows/{ci,release}.yml`,
   `deploymate version`, docs/knowledge/releasing.md. Not yet done: cut v0.1.0 and run

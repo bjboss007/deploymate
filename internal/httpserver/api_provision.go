@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
 // The provision tier: create and configure. There is deliberately no endpoint
@@ -245,8 +246,9 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Image *string `json:"image"`
-		Port  *int    `json:"port"`
+		Image         *string `json:"image"`
+		Port          *int    `json:"port"`
+		RootDirectory *string `json:"root_directory"`
 	}
 	if !apiBody(w, r, &in) {
 		return
@@ -266,9 +268,21 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if in.Image == nil && in.Port == nil {
-		s.actionRefused(w, r, "configure_app", app.Slug, "Send an image and/or a port.", app.ID)
+	if in.Image == nil && in.Port == nil && in.RootDirectory == nil {
+		s.actionRefused(w, r, "configure_app", app.Slug, "Send an image, a port and/or a root_directory.", app.ID)
 		return
+	}
+	if in.RootDirectory != nil {
+		dir, why := cleanRootDirectory(*in.RootDirectory)
+		if why != "" {
+			s.actionRefused(w, r, "configure_app", app.Slug, why, app.ID)
+			return
+		}
+		if err := s.store.UpdateAppRootDirectory(app.ID, dir); err != nil {
+			s.actionFailed(w, "configure_app", err)
+			return
+		}
+		_ = s.store.RecordEvent(app.ID, store.EventRootDirChanged, "build folder set to "+orRoot(dir))
 	}
 	if err := s.store.UpdateAppDeployConfig(app.ID, image, port, app.Entrypoint, app.Command); err != nil {
 		s.actionFailed(w, "configure_app", err)
@@ -276,4 +290,11 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	s.audit(r, "configure_app", app.Slug, fmt.Sprintf("image %s, port %d", image, port), "ok", app.ID)
 	apiJSON(w, http.StatusOK, map[string]any{"ok": true, "image": image, "port": port, "next": "deploy_app to run it"})
+}
+
+func orRoot(dir string) string {
+	if dir == "" {
+		return "the repository root"
+	}
+	return dir
 }

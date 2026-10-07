@@ -121,7 +121,8 @@ func TestAPILifecycleActions(t *testing.T) {
 	rt := &lifeRT{}
 	e.s.rt = rt
 	tok := e.createToken(t, "agent", "deploy", "90")
-	for action, want := range map[string]string{"restart": "running", "stop": "stopped", "start": "running"} {
+	for _, step := range []struct{ action, want string }{{"restart", "running"}, {"stop", "stopped"}, {"start", "running"}} {
+		action, want := step.action, step.want
 		code, res := e.apiPost(t, "/api/v1/apps/api/"+action, tok)
 		if code != http.StatusOK || res["status"] != want {
 			t.Fatalf("%s = %d %v", action, code, res)

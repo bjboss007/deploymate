@@ -16,8 +16,7 @@ and remote desktop on :3389 — which the bootstrap's firewall blocks). Findings
 by hand needs `DEPLOYMATE_DATA_DIR=/var/lib/deploymate` (docs/installer message corrected, `df3090e`);
 the login cookie wasn't `Secure` behind a TLS-terminating proxy → `isHTTPS()` trusts
 `X-Forwarded-Proto` only from loopback (`TestIsHTTPSBehindAProxy`). Installed and answering `200`
-on 127.0.0.1:8080. **Next:** replace the server binary with the rebuilt one, add tunnel public
-hostnames (dashboard + site), host the site, Cloudflare Access on the dashboard.
+on 127.0.0.1:8080. Then: added the missing **Build folder** setting (the site lives in `site/`; UI/API/MCP, validated, paths hardened) and fixed a flaky test of mine (map iteration order). The owner updated the server binary, added the tunnel hostname `dash.deploymate.link` + Cloudflare Access. **Next:** host the site on the server (app with build folder `site`, port 80, deploy key on the private repo, domain deploymate.link, tunnel hostname → https://localhost:443 with No TLS Verify).
 
 **2026-10-07 (domain bought: deploymate.link)** — Owner registered **deploymate.link** at
 Cloudflare Registrar (created 2026-10-07, expires **2027-10-07**; nameservers already Cloudflare:

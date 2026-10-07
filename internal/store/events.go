@@ -28,6 +28,7 @@ const (
 	EventEnvChanged      = "env_changed"
 	EventEnvRemoved      = "env_removed"
 	EventRuntimeChanged  = "runtime_changed"
+	EventRootDirChanged  = "root_directory_changed"
 	EventGitConnected    = "git_connected"
 	EventAPIAction       = "api_action" // something changed through the API (agent/script); the data names the token
 	EventServiceStarted  = "service_started"

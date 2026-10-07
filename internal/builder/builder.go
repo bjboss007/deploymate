@@ -20,7 +20,7 @@ import (
 // DetectBuildType returns "dockerfile" if the checkout has a Dockerfile in
 // the app root, otherwise the empty string.
 func DetectBuildType(checkoutDir, rootDir string) string {
-	root := filepath.Join(checkoutDir, rootDir)
+	root := filepath.Join(checkoutDir, filepath.Clean("/"+rootDir))
 	if _, err := os.Stat(filepath.Join(root, "Dockerfile")); err == nil {
 		return "dockerfile"
 	}
@@ -42,7 +42,7 @@ func DetectBuildType(checkoutDir, rootDir string) string {
 // the local daemon. Every output line is passed to log — the caller fans it
 // out to the database and the dashboard.
 func Build(ctx context.Context, checkoutDir, rootDir, imageTag string, log func(line string)) error {
-	buildCtx := filepath.Join(checkoutDir, rootDir)
+	buildCtx := filepath.Join(checkoutDir, filepath.Clean("/"+rootDir)) // never leaves the checkout, whatever rootDir holds
 	// The buildx CLI streams BuildKit progress; --load makes the result
 	// available to the local daemon immediately.
 	cmd := exec.CommandContext(ctx, "docker", "buildx", "build",

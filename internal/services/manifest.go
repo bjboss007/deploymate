@@ -78,7 +78,7 @@ func ParseManifest(name string, data []byte) ([]ServiceDecl, error) {
 // semantics — present file wins). A missing base or overlay is not an
 // error; base-only is today's behavior.
 func LoadManifest(checkoutDir, rootDir, env string) ([]ServiceDecl, error) {
-	dir := filepath.Join(checkoutDir, rootDir)
+	dir := filepath.Join(checkoutDir, filepath.Clean("/"+rootDir))
 	base := filepath.Join(dir, "deploymate.yml")
 	overlay := filepath.Join(dir, "deploymate."+env+".yml")
 

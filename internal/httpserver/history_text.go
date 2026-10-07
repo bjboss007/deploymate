@@ -40,6 +40,8 @@ func describeEvent(kind string) (title, category, tone string) {
 		return "Environment variables changed", "config", "neutral"
 	case store.EventEnvRemoved:
 		return "Environment variable removed", "config", "neutral"
+	case store.EventRootDirChanged:
+		return "Build folder changed", "config", "neutral"
 	case store.EventRuntimeChanged:
 		return "Build method changed", "config", "neutral"
 	case store.EventAPIAction:

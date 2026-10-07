@@ -739,6 +739,14 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					</label>
 					<button class="btn btn-primary" type="submit">Save build method</button>
 				</form>
+				<form method="post" action={ "/apps/" + app.Slug + "/root-directory" } class="git-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<label><span>Build folder <span class="muted">(optional)</span></span>
+						<input class="branch-input" type="text" name="root_directory" placeholder="site or services/api" value={ app.RootDirectory } maxlength="128"/>
+					</label>
+					<button class="btn btn-ghost" type="submit">Save folder</button>
+				</form>
+				<p class="muted panel-hint">Where in the repository this app lives. Leave it empty when the app is at the root; set it for a monorepo or a subfolder (the Dockerfile, version files and <code>deploymate.yml</code> are read from there).</p>
 				<p class="muted panel-hint">
 					if app.Runtime == "" {
 						Builds run the repo's Dockerfile.

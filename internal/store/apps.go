@@ -183,6 +183,13 @@ func (s *Store) UpdateAppRuntime(id, runtime string) error {
 	return err
 }
 
+// UpdateAppRootDirectory sets the repository subfolder the app builds from ("" = the
+// repository root). The caller validates it (see httpserver.cleanRootDirectory).
+func (s *Store) UpdateAppRootDirectory(id, dir string) error {
+	_, err := s.db.Exec(`UPDATE apps SET root_directory = ? WHERE id = ?`, dir, id)
+	return err
+}
+
 // UpdateAppEnvironment sets the app's environment: EnvProduction or
 // EnvStaging. The next deploy uses that environment's manifest overlay
 // and services.

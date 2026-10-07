@@ -203,6 +203,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/domains/{id}/delete", am.CheckCSRF(s.handleDomainDelete))
 		r.Post("/apps/{slug}/port", am.CheckCSRF(s.handleAppPort))
 		r.Post("/apps/{slug}/runtime", am.CheckCSRF(s.handleAppRuntime))
+		r.Post("/apps/{slug}/root-directory", am.CheckCSRF(s.handleAppRootDirectory))
 		r.Post("/apps/{slug}/environment", am.CheckCSRF(s.handleAppEnvironment))
 		r.Get("/deployments/{id}", s.handleDeploymentPage)
 		r.Get("/deployments/{id}/stream", s.handleDeploymentStream)

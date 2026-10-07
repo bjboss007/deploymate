@@ -102,9 +102,10 @@ func init() {
 		},
 		{
 			Name: "configure_app", Scope: store.ScopeProvision,
-			Description: "Set the container image and/or port an image-based app runs (for apps that deploy an image rather than a repository). Then deploy_app.",
+			Description: "Set the container image and/or port an image-based app runs, and/or the repository subfolder a git app builds from (root_directory). Then deploy_app.",
 			Schema: schema(map[string]any{
 				"app": strProp("the app's slug"), "image": strProp("e.g. nginx:1.27 or ghcr.io/acme/web:1.2"), "port": intProp("the port the app listens on"),
+				"root_directory": strProp("the repository subfolder the app builds from, e.g. site (empty = repository root)"),
 			}, "app"),
 			Build: func(a args) (string, string, any, error) {
 				v, err := a.need("app")
@@ -117,6 +118,9 @@ func init() {
 				}
 				if _, ok := a["port"]; ok {
 					body["port"] = a.num("port", 0)
+				}
+				if rd, ok := a["root_directory"].(string); ok {
+					body["root_directory"] = rd
 				}
 				return http.MethodPatch, "/apps/" + esc(v[0]) + "/config", body, nil
 			},
