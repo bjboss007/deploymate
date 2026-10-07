@@ -22,7 +22,7 @@
   </div>
 </div></header>
 <main id="main"><div class="wrap doc">
-<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Optional</div><a href="cloudflare-tunnel.html" aria-current="page">No open ports? Use a tunnel</a></nav>
+<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Optional</div><a href="cloudflare-tunnel.html" aria-current="page">No open ports? Use a tunnel</a></nav>
 <article>
 
 <p class="kicker">Optional</p>
@@ -51,6 +51,7 @@
 
 <h2 id="access">3. Protect the dashboard</h2>
 <p>The dashboard can deploy to and control your server, so don't leave it behind a single password. In Zero Trust open <strong>Access → Applications → Add → Self-hosted</strong>, enter the dashboard's hostname, and add a policy that allows only your email address. You then sign in twice — Cloudflare first, then DeployMate — which is what you want. Leave the Access policy <strong>off</strong> hostnames that are meant to be public.</p>
+<p><strong>One exception.</strong> GitHub, GitLab and Gitea can't sign in to Access, so a webhook sent to the dashboard's address would be refused. Add a second Access application for the same hostname with the path <code>hooks/*</code> and a <strong>Bypass</strong> policy. Only that path is opened, and every webhook is still checked against its secret. See <a href="deploy-on-push.html#tunnel">Deploy on every push</a>.</p>
 
 <h2 id="ssh">4. Optional: SSH through the tunnel</h2>
 <p>With the SSH hostname in place, install <code>cloudflared</code> on your own computer and add this to <code>~/.ssh/config</code>:</p>

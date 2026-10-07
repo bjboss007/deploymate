@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deploy on every push — DeployMate docs</title>
+<meta name="description" content="Add a webhook so every push to your branch deploys automatically: GitHub, GitLab, Gitea, and what to do behind a login or tunnel.">
+<meta name="theme-color" content="#0d1219">
+<link rel="canonical" href="https://deploymate.link/docs/deploy-on-push.html">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script>try{var t=localStorage.getItem("dm-site-theme");if(t)document.documentElement.setAttribute("data-theme",t);else if(matchMedia("(prefers-color-scheme: light)").matches)document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><div class="wrap">
+  <a class="brand" href="../"><span class="led" aria-hidden="true"></span>deploymate</a>
+  <nav class="nav" aria-label="Main"><a href="../#how">How it works</a><a href="../#tour">Tour</a><a href="../#features">Features</a><a href="../#agents">Agents</a><a href="../#install">Install</a><a href="./" style="color:var(--text)">Docs</a></nav>
+  <div class="top-right">
+    <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch between dark and light theme"><svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg><svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    <a class="btn btn-ghost btn-sm" href="https://github.com/bjboss007/deploymate">GitHub</a>
+  </div>
+</div></header>
+<main id="main"><div class="wrap doc">
+<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="deploy-on-push.html" aria-current="page">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
+<article>
+
+<p class="kicker">Start</p>
+<h1>Deploy on every push</h1>
+<p>Connecting a repository lets DeployMate <em>download</em> your code. It does not make your git host <em>tell</em> DeployMate when you push. For that you add a <strong>webhook</strong> to the repository: one entry, pointing at your dashboard, once per repository. After that, every push to the app's branch builds and deploys by itself.</p>
+<p>Without a webhook nothing is broken — you just deploy by pressing <strong>Deploy</strong>.</p>
+
+<h2 id="values">1. Get the two values</h2>
+<p>On the app, open <strong>Settings → Source &amp; build</strong>. Under the connected repository you'll find:</p>
+<table>
+<tr><th>Webhook URL</th><td>Shown as <code>https://your-host/hooks/&lt;id&gt;</code>. Replace <code>your-host</code> with the address you use for the dashboard, for example <code>https://dash.example.com/hooks/&lt;id&gt;</code>. The dashboard must be reachable from the internet at that address.</td></tr>
+<tr><th>Webhook secret</th><td>A random string. It proves a delivery really came from your git host, so keep it private. <strong>Rotate secret</strong> makes a new one.</td></tr>
+</table>
+
+<h2 id="github">2. GitHub</h2>
+<ol>
+<li>In the repository open <strong>Settings → Webhooks → Add webhook</strong>.</li>
+<li><strong>Payload URL:</strong> the webhook URL from step 1.</li>
+<li><strong>Content type:</strong> <code>application/json</code>.</li>
+<li><strong>Secret:</strong> the webhook secret.</li>
+<li><strong>Which events:</strong> choose <em>Let me select individual events</em> and tick only <strong>Pushes</strong>. For a <a href="concepts.html#prebuilt">prebuilt</a> app tick <strong>Workflow runs</strong> instead (a push is ignored for those, because the deploy waits for the build to finish).</li>
+<li>Press <strong>Add webhook</strong>. GitHub immediately sends a test; the entry should get a green tick.</li>
+</ol>
+
+<h2 id="others">GitLab and Gitea</h2>
+<p><strong>GitLab:</strong> Settings → Webhooks. Put the URL in <em>URL</em> and the secret in <em>Secret token</em>, and tick <em>Push events</em>. <strong>Gitea:</strong> Settings → Webhooks → Add → Gitea, the same fields as GitHub with the content type JSON and push events.</p>
+
+<h2 id="what">What happens on a push</h2>
+<ul>
+<li>Only pushes to the app's <strong>tracked branch</strong> deploy; pushes to other branches are ignored.</li>
+<li>Each delivery is checked against the secret first. A wrong or missing signature is rejected before anything runs.</li>
+<li>A delivery GitHub sends twice is recognised and deployed once.</li>
+<li>The deployment appears in the app's history, triggered by <em>webhook</em>, with the usual build log.</li>
+<li>Each app has its own webhook. If several apps are built from one repository, a push deploys every one that has a webhook — DeployMate doesn't yet skip an app whose folder didn't change.</li>
+</ul>
+
+<h2 id="tunnel">Dashboard behind a login or a tunnel</h2>
+<p>Your git host has to be able to reach <code>/hooks/…</code> without signing in. If you've put the dashboard behind <strong>Cloudflare Access</strong> (a good idea), add a second Access application for the same hostname with the path <code>hooks/*</code> and a <strong>Bypass</strong> policy for everyone. Only that path is opened; the rest of the dashboard stays locked, and each webhook is still verified by its secret. The same applies to any proxy or VPN that asks visitors to authenticate.</p>
+
+<h2 id="trouble">If a push doesn't deploy</h2>
+<p>In GitHub, the webhook's <strong>Recent Deliveries</strong> tab shows what DeployMate answered for every delivery:</p>
+<table>
+<tr><th>Answer</th><td>Meaning</td></tr>
+<tr><th><code>queued</code> (200)</th><td>It worked: a deployment was queued. Look in the app's Deployments tab.</td></tr>
+<tr><th><code>pong</code></th><td>The test ping arrived. The address and secret are right.</td></tr>
+<tr><th><code>ignored: not the deploy branch</code></th><td>You pushed another branch. Check the branch on the app matches.</td></tr>
+<tr><th><code>ignored: not a push event</code></th><td>The webhook sends events DeployMate doesn't use; for a normal app, tick only <em>Pushes</em>.</td></tr>
+<tr><th><code>ignored: this app deploys from CI runs, not pushes</code></th><td>The app is in prebuilt mode: tick <em>Workflow runs</em> on the webhook.</td></tr>
+<tr><th><code>bad signature</code> (401)</th><td>The secret in GitHub doesn't match. Copy it again from the app, or rotate it and paste the new one.</td></tr>
+<tr><th>A login page, 302, 403 or a Cloudflare page</th><td>Something in front of the dashboard is blocking the request. See the section above.</td></tr>
+<tr><th>404, or no response at all</th><td>Wrong address or id, or the dashboard isn't reachable from the internet. Open the URL's host in a browser to check.</td></tr>
+</table>
+<p>You can press <strong>Redeliver</strong> on any delivery to replay it after fixing the cause.</p>
+
+<div class="pager"><a href="quickstart.html">← Quickstart</a><a href="concepts.html">How it fits together →</a></div>
+</article>
+</div></main>
+<footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad · Apache-2.0</span><span class="links"><a href="../">Home</a><a href="https://github.com/bjboss007/deploymate">GitHub</a></span></div></footer>
+<script src="../assets/site.js"></script>
+</body>
+</html>

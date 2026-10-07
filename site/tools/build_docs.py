@@ -17,7 +17,7 @@ DOCS = HERE.parent / "docs"
 WORKFLOW = (HERE / "workflow.example.yml").read_text()
 
 NAV = [
-    ("Start", [("quickstart.html", "Quickstart"), ("concepts.html", "How it fits together")]),
+    ("Start", [("quickstart.html", "Quickstart"), ("deploy-on-push.html", "Deploy on every push"), ("concepts.html", "How it fits together")]),
     ("Agents", [("agents.html", "AI agents (MCP)")]),
     ("Optional", [("cloudflare-tunnel.html", "No open ports? Use a tunnel")]),
 ]
@@ -130,7 +130,7 @@ QUICK = """
 <li>In the repository, add the <strong>deploy key</strong> (read-only). The app's Overview shows it with a Copy button.</li>
 <li>Choose how it builds: leave it for a <code>Dockerfile</code>, or pick a <strong>runtime</strong> (Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno, Elixir, .NET, static) and DeployMate builds it for you.</li>
 <li>Press <strong>Review &amp; deploy</strong>. You'll see the commits and files that would ship; confirm, and watch the build log.</li>
-<li>For deploys on every push, add a <strong>webhook</strong> in the repository: URL <code>https://your-domain/hooks/&lt;id&gt;</code> (shown on the app page), content type JSON, the secret from the app page, the <strong>push</strong> event.</li>
+<li>For deploys on every push, add a <strong>webhook</strong> to the repository — a two-minute step, covered in <a href="deploy-on-push.html">Deploy on every push</a>.</li>
 </ol>
 
 <h2 id="database">6. Add a database</h2>
@@ -156,6 +156,61 @@ QUICK_BLOCKS = {
     "admin": "sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin",
     "tunnel": "ssh -L 8080:127.0.0.1:8080 deploymate@your-server-ip",
 }
+
+
+PUSH = """
+<p class="kicker">Start</p>
+<h1>Deploy on every push</h1>
+<p>Connecting a repository lets DeployMate <em>download</em> your code. It does not make your git host <em>tell</em> DeployMate when you push. For that you add a <strong>webhook</strong> to the repository: one entry, pointing at your dashboard, once per repository. After that, every push to the app's branch builds and deploys by itself.</p>
+<p>Without a webhook nothing is broken — you just deploy by pressing <strong>Deploy</strong>.</p>
+
+<h2 id="values">1. Get the two values</h2>
+<p>On the app, open <strong>Settings → Source &amp; build</strong>. Under the connected repository you'll find:</p>
+<table>
+<tr><th>Webhook URL</th><td>Shown as <code>https://your-host/hooks/&lt;id&gt;</code>. Replace <code>your-host</code> with the address you use for the dashboard, for example <code>https://dash.example.com/hooks/&lt;id&gt;</code>. The dashboard must be reachable from the internet at that address.</td></tr>
+<tr><th>Webhook secret</th><td>A random string. It proves a delivery really came from your git host, so keep it private. <strong>Rotate secret</strong> makes a new one.</td></tr>
+</table>
+
+<h2 id="github">2. GitHub</h2>
+<ol>
+<li>In the repository open <strong>Settings → Webhooks → Add webhook</strong>.</li>
+<li><strong>Payload URL:</strong> the webhook URL from step 1.</li>
+<li><strong>Content type:</strong> <code>application/json</code>.</li>
+<li><strong>Secret:</strong> the webhook secret.</li>
+<li><strong>Which events:</strong> choose <em>Let me select individual events</em> and tick only <strong>Pushes</strong>. For a <a href="concepts.html#prebuilt">prebuilt</a> app tick <strong>Workflow runs</strong> instead (a push is ignored for those, because the deploy waits for the build to finish).</li>
+<li>Press <strong>Add webhook</strong>. GitHub immediately sends a test; the entry should get a green tick.</li>
+</ol>
+
+<h2 id="others">GitLab and Gitea</h2>
+<p><strong>GitLab:</strong> Settings → Webhooks. Put the URL in <em>URL</em> and the secret in <em>Secret token</em>, and tick <em>Push events</em>. <strong>Gitea:</strong> Settings → Webhooks → Add → Gitea, the same fields as GitHub with the content type JSON and push events.</p>
+
+<h2 id="what">What happens on a push</h2>
+<ul>
+<li>Only pushes to the app's <strong>tracked branch</strong> deploy; pushes to other branches are ignored.</li>
+<li>Each delivery is checked against the secret first. A wrong or missing signature is rejected before anything runs.</li>
+<li>A delivery GitHub sends twice is recognised and deployed once.</li>
+<li>The deployment appears in the app's history, triggered by <em>webhook</em>, with the usual build log.</li>
+<li>Each app has its own webhook. If several apps are built from one repository, a push deploys every one that has a webhook — DeployMate doesn't yet skip an app whose folder didn't change.</li>
+</ul>
+
+<h2 id="tunnel">Dashboard behind a login or a tunnel</h2>
+<p>Your git host has to be able to reach <code>/hooks/…</code> without signing in. If you've put the dashboard behind <strong>Cloudflare Access</strong> (a good idea), add a second Access application for the same hostname with the path <code>hooks/*</code> and a <strong>Bypass</strong> policy for everyone. Only that path is opened; the rest of the dashboard stays locked, and each webhook is still verified by its secret. The same applies to any proxy or VPN that asks visitors to authenticate.</p>
+
+<h2 id="trouble">If a push doesn't deploy</h2>
+<p>In GitHub, the webhook's <strong>Recent Deliveries</strong> tab shows what DeployMate answered for every delivery:</p>
+<table>
+<tr><th>Answer</th><td>Meaning</td></tr>
+<tr><th><code>queued</code> (200)</th><td>It worked: a deployment was queued. Look in the app's Deployments tab.</td></tr>
+<tr><th><code>pong</code></th><td>The test ping arrived. The address and secret are right.</td></tr>
+<tr><th><code>ignored: not the deploy branch</code></th><td>You pushed another branch. Check the branch on the app matches.</td></tr>
+<tr><th><code>ignored: not a push event</code></th><td>The webhook sends events DeployMate doesn't use; for a normal app, tick only <em>Pushes</em>.</td></tr>
+<tr><th><code>ignored: this app deploys from CI runs, not pushes</code></th><td>The app is in prebuilt mode: tick <em>Workflow runs</em> on the webhook.</td></tr>
+<tr><th><code>bad signature</code> (401)</th><td>The secret in GitHub doesn't match. Copy it again from the app, or rotate it and paste the new one.</td></tr>
+<tr><th>A login page, 302, 403 or a Cloudflare page</th><td>Something in front of the dashboard is blocking the request. See the section above.</td></tr>
+<tr><th>404, or no response at all</th><td>Wrong address or id, or the dashboard isn't reachable from the internet. Open the URL's host in a browser to check.</td></tr>
+</table>
+<p>You can press <strong>Redeliver</strong> on any delivery to replay it after fixing the cause.</p>
+"""
 
 # --------------------------------------------------------------------------- concepts
 CONCEPTS = """
@@ -297,6 +352,7 @@ TUNNEL = """
 
 <h2 id="access">3. Protect the dashboard</h2>
 <p>The dashboard can deploy to and control your server, so don't leave it behind a single password. In Zero Trust open <strong>Access → Applications → Add → Self-hosted</strong>, enter the dashboard's hostname, and add a policy that allows only your email address. You then sign in twice — Cloudflare first, then DeployMate — which is what you want. Leave the Access policy <strong>off</strong> hostnames that are meant to be public.</p>
+<p><strong>One exception.</strong> GitHub, GitLab and Gitea can't sign in to Access, so a webhook sent to the dashboard's address would be refused. Add a second Access application for the same hostname with the path <code>hooks/*</code> and a <strong>Bypass</strong> policy. Only that path is opened, and every webhook is still checked against its secret. See <a href="deploy-on-push.html#tunnel">Deploy on every push</a>.</p>
 
 <h2 id="ssh">4. Optional: SSH through the tunnel</h2>
 <p>With the SSH hostname in place, install <code>cloudflared</code> on your own computer and add this to <code>~/.ssh/config</code>:</p>
@@ -323,6 +379,7 @@ INDEX = """
 <p>Short on purpose: enough to get running and to know why it behaves as it does. The full reference lives next to the code.</p>
 <table>
 <tr><th><a href="quickstart.html">Quickstart</a></th><td>Install, first deploy, database, domain.</td></tr>
+<tr><th><a href="deploy-on-push.html">Deploy on every push</a></th><td>Add a webhook so a push to your branch deploys by itself.</td></tr>
 <tr><th><a href="concepts.html">How it fits together</a></th><td>Zero-downtime deploys, build modes, services and environments, recovery.</td></tr>
 <tr><th><a href="agents.html">AI agents (MCP)</a></th><td>Connect an agent with scoped, audited, delete-free access.</td></tr>
 <tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
@@ -340,10 +397,13 @@ def main():
     DOCS.mkdir(parents=True, exist_ok=True)
     render("quickstart.html", "Quickstart",
            "Install DeployMate on a fresh Ubuntu server, deploy an app and a database, and put it on your domain.",
-           QUICK, QUICK_BLOCKS, None, ("concepts.html", "How it fits together"))
+           QUICK, QUICK_BLOCKS, None, ("deploy-on-push.html", "Deploy on every push"))
+    render("deploy-on-push.html", "Deploy on every push",
+           "Add a webhook so every push to your branch deploys automatically: GitHub, GitLab, Gitea, and what to do behind a login or tunnel.",
+           PUSH, {}, ("quickstart.html", "Quickstart"), ("concepts.html", "How it fits together"))
     render("concepts.html", "How it fits together",
            "How DeployMate deploys, builds, wires services to apps, and recovers.",
-           CONCEPTS, CONCEPTS_BLOCKS, ("quickstart.html", "Quickstart"), ("agents.html", "AI agents (MCP)"))
+           CONCEPTS, CONCEPTS_BLOCKS, ("deploy-on-push.html", "Deploy on every push"), ("agents.html", "AI agents (MCP)"))
     render("agents.html", "AI agents (MCP)",
            "Connect Claude or another agent to DeployMate with scoped, audited, delete-free access.",
            AGENTS, AGENTS_BLOCKS, ("concepts.html", "How it fits together"), None)
