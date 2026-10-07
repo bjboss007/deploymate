@@ -86,7 +86,40 @@ func Clone(ctx context.Context, repoURL, branch, commitSHA, privateKeyPEM, destD
 			return fmt.Errorf("checkout pinned commit: %w: %s", err, out)
 		}
 	}
-	return nil
+	return normalizeModes(destDir)
+}
+
+// normalizeModes makes a checkout readable by whoever the built image runs as.
+// DeployMate's service runs with a 0077 umask, so git writes files 0600 and
+// directories 0700; a Dockerfile COPY keeps those modes, and a container running
+// as a non-root user (nginx, node, most official images) then cannot read its own
+// app — a 403 or "permission denied" that has nothing to do with the code. Git
+// itself only records "executable or not", so rebuilding the modes loses nothing:
+// directories 0755, executable files 0755, the rest 0644. .git is left alone.
+func normalizeModes(root string) error {
+	return filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == ".git" {
+			return filepath.SkipDir
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil // never chmod through a link
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+		mode := os.FileMode(0o644)
+		if d.IsDir() || info.Mode()&0o100 != 0 {
+			mode = 0o755
+		}
+		if info.Mode().Perm() == mode {
+			return nil
+		}
+		return os.Chmod(path, mode)
+	})
 }
 
 // Head returns the HEAD commit sha and message of a checkout.

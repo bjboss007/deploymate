@@ -758,6 +758,15 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 			</div>
 			<div class="settings-group" id="set-domains">
 				<div class="group-head"><h2>Domains &amp; access</h2><p>How people reach this app.</p></div>
+				<div class="panel">
+					<div class="panel-title">App port</div>
+					<form method="post" action={ "/apps/" + app.Slug + "/port" } class="env-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<input class="port-input" type="text" name="port" inputmode="numeric" aria-label="Port the app listens on" value={ fmtPort(app.Port) } placeholder="8080" required/>
+						<button class="btn btn-primary" type="submit">Save port</button>
+					</form>
+					<p class="muted panel-hint">The port your app listens on <strong>inside its container</strong>. DeployMate sends visitors and its health checks there, so a wrong port makes a deploy fail with "connection reset". nginx and static sites use <code>80</code>; Node and Python apps usually <code>3000</code>, <code>8000</code> or <code>8080</code>. Applies on the next deploy.</p>
+				</div>
 			<div class="panel">
 				<div class="panel-title">Access</div>
 				<table class="deploy-table">
@@ -796,17 +805,14 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 				}
 				<form method="post" action={ "/apps/" + app.Slug + "/domains" } class="env-form">
 					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-					<input type="text" name="hostname" placeholder="app.example.com" required/>
+					<input type="text" name="hostname" placeholder="app.example.com" aria-label="Domain name" required/>
 					<button class="btn btn-primary" type="submit">Add domain</button>
-					<span class="muted">routing port</span>
-					<input class="port-input" type="text" name="port" formaction={ "/apps/" + app.Slug + "/port" } value={ fmtPort(app.Port) } placeholder="80"/>
-					<button class="btn btn-ghost" type="submit" formaction={ "/apps/" + app.Slug + "/port" }>Save port</button>
-				</form>
+																			</form>
 				<p class="muted panel-hint">
 					if leMode == "production" {
-						Certificates come from Let's Encrypt production on the next deploy.
+						Point the domain's DNS at this server first. A new domain starts working after the app's <strong>next deploy</strong>, when its routing is created. Certificates come from Let's Encrypt production.
 					} else {
-						Certificates come from the Let's Encrypt staging resolver (safe for testing). Set DEPLOYMATE_LE_MODE=production for real certs.
+						Point the domain's DNS at this server first. A new domain starts working after the app's <strong>next deploy</strong>, when its routing is created. Certificates come from the Let's Encrypt staging resolver (safe for testing); set DEPLOYMATE_LE_MODE=production for real ones.
 					}
 				</p>
 			</div>
