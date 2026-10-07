@@ -134,3 +134,19 @@ the repo ships the old Apache `mvnw` wrapper (pre-maven-wrapper 3.2)
 which demands JAVA_HOME; Railpack exposes java via mise PATH shims only.
 DeployMate removes `mvnw`/`.mvn` from the throwaway checkout for java
 builds so the platform's managed Maven is used (`internal/builder/railpack.go`).
+
+## Every custom domain answers 404 (Docker 29 + Traefik 3.3)
+
+Symptom: the app deploys and its preview URL works, but its domain answers `404` from Traefik, and
+`docker logs traefik` repeats `client version 1.24 is too old. Minimum supported API version is
+1.44`. Cause: Docker Engine 29 raised its minimum API version; Traefik 3.3 talks 1.24, so it cannot
+list containers and has no routes. Fix (done by `bootstrap.sh` since 2026-10-07, or by hand):
+
+```sh
+sudo mkdir -p /etc/systemd/system/docker.service.d
+printf '[Service]\nEnvironment=DOCKER_MIN_API_VERSION=1.24\n' | sudo tee /etc/systemd/system/docker.service.d/deploymate-min-api.conf
+sudo systemctl daemon-reload && sudo systemctl restart docker
+```
+
+Longer term: move the pinned Traefik to a release that supports Docker 29 and re-run the label /
+replica checks (docs/improvements.md).

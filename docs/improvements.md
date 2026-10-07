@@ -6,6 +6,11 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **Upgrade the pinned Traefik (v3.3) to a release that supports Docker Engine 29** — found
+  2026-10-07 on the owner's server: Docker 29 + Traefik 3.3 = no containers seen, every domain 404.
+  Worked around in `bootstrap.sh` with `DOCKER_MIN_API_VERSION=1.24` on the daemon. Do the upgrade
+  properly: bump the tag in bootstrap.sh/dev.yml, re-run the replica label spike
+  (docs/specs/app-replicas.md) and `make e2e-replicas`, then drop the override.
 - [x] **Build folder (root directory) setting** — done 2026-10-07: Settings → Build →
   "Build folder" (and `configure_app`'s `root_directory`). The worker already built from a
   subfolder; nothing in the UI could set it (needed to host `site/` and for monorepos). Validated

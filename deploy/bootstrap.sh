@@ -34,6 +34,23 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 systemctl enable --now docker
 
+# Docker Engine 29 refuses clients older than API 1.44. The Traefik pinned below (v3.3, the
+# version the label and replica work was tested on) talks API 1.24, so on Docker 29 it sees
+# no containers and every route answers 404. Relax the daemon's minimum until Traefik is
+# upgraded and re-tested. Idempotent; restarts Docker only when the setting changes.
+DOCKER_MAJOR="$(docker version --format '{{.Server.Version}}' 2>/dev/null | cut -d. -f1)"
+if [[ "${DOCKER_MAJOR:-0}" =~ ^[0-9]+$ ]] && (( DOCKER_MAJOR >= 29 )); then
+  DROPIN=/etc/systemd/system/docker.service.d/deploymate-min-api.conf
+  WANT=$'[Service]\nEnvironment=DOCKER_MIN_API_VERSION=1.24\n'
+  if [[ "$(cat "$DROPIN" 2>/dev/null)" != "${WANT%$'\n'}" ]]; then
+    echo "==> Docker ${DOCKER_MAJOR}: allowing older API clients (Traefik 3.3 needs API 1.24)"
+    mkdir -p "$(dirname "$DROPIN")"
+    printf '%s' "$WANT" > "$DROPIN"
+    systemctl daemon-reload
+    systemctl restart docker
+  fi
+fi
+
 # Docker may have been installed before DeployMate (a desktop Ubuntu, docker.io, an older
 # script) without the buildx plugin, which every Dockerfile build uses. The block above
 # only runs when docker is missing, so check the plugin on its own.
