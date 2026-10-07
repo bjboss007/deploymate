@@ -32,6 +32,7 @@ TEMPLATE = """<!doctype html>
 <title>@@TITLE@@ — DeployMate docs</title>
 <meta name="description" content="@@DESC@@">
 <meta name="theme-color" content="#0d1219">
+<link rel="canonical" href="https://deploymate.link/docs/@@SLUG@@">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/site.css">
 <script>try{var t=localStorage.getItem("dm-site-theme");if(t)document.documentElement.setAttribute("data-theme",t);else if(matchMedia("(prefers-color-scheme: light)").matches)document.documentElement.setAttribute("data-theme","light")}catch(e){}</script>
@@ -78,7 +79,7 @@ def render(slug, title, desc, body, blocks, prev=None, nxt=None):
         left = '<a href="%s">← %s</a>' % prev if prev else "<span></span>"
         right = '<a href="%s">%s →</a>' % nxt if nxt else "<span></span>"
         pager = '<div class="pager">' + left + right + "</div>"
-    out = (TEMPLATE.replace("@@TITLE@@", html.escape(title)).replace("@@DESC@@", html.escape(desc))
+    out = (TEMPLATE.replace("@@SLUG@@", "" if slug == "index.html" else slug).replace("@@TITLE@@", html.escape(title)).replace("@@DESC@@", html.escape(desc))
            .replace("@@MOON@@", MOON).replace("@@SUN@@", SUN).replace("@@NAV@@", "".join(nav))
            .replace("@@BODY@@", body).replace("@@PAGER@@", pager))
     (DOCS / slug).write_text(out, encoding="utf-8")

@@ -7,6 +7,16 @@
 
 ## Where we stopped
 
+**2026-10-07 (domain bought: deploymate.link)** — Owner registered **deploymate.link** at
+Cloudflare Registrar (created 2026-10-07, expires **2027-10-07**; nameservers already Cloudflare:
+elsa/alexis). Repo side done: absolute `og:image`/`og:url`/canonical (home + docs, via
+`build_docs.py`), `robots.txt` (tour not indexed), `sitemap.xml`, and `nginx.conf`
+`/install` → 302 to the installer on GitHub raw (single source of truth). Tested in the image.
+**Not yet done (needs owner/Cloudflare):** the domain is not serving anything — the site is not
+hosted, no DNS records exist. The page's install command still uses the GitHub raw URL on purpose;
+switch it to `curl -fsSL https://deploymate.link/install | sudo …` only after the site is live AND
+`v0.1.0` exists. Renewal: set a reminder before 2027-10-07 (auto-renew should be on).
+
 **2026-10-04 (website, step 3: the site)** — `site/`: `index.html` (hero board with a live
 24-hour heartbeat strip + the deploy log typed out in the worker's real phrasing; the five-stage
 lifecycle; a tour that frames the REAL dashboard snapshots in `tour/`; features by job; agents

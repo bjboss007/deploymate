@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /tour/
+
+Sitemap: https://deploymate.link/sitemap.xml
