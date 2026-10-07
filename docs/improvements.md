@@ -6,6 +6,10 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **Only deploy when the app's build folder changed** — 2026-10-07: with the site in `site/` of the
+  main repo, a webhook would rebuild the site on every push, including Go-only commits. Use the push
+  payload's changed files (or `git diff` after the clone) to skip a deploy when nothing under the app's
+  build folder (or its Dockerfile/manifest) changed; show "skipped: no changes in site/" in history.
 - [ ] **"Behind a tunnel" mode: don't try to issue certificates** — 2026-10-07: on the owner's server
   (Cloudflare Tunnel, no public :80) Traefik's ACME HTTP challenge can never succeed, so it logs
   "Unable to obtain ACME certificate" repeatedly. Harmless (Cloudflare serves the real cert; staging
