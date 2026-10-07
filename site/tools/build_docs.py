@@ -19,6 +19,7 @@ WORKFLOW = (HERE / "workflow.example.yml").read_text()
 NAV = [
     ("Start", [("quickstart.html", "Quickstart"), ("concepts.html", "How it fits together")]),
     ("Agents", [("agents.html", "AI agents (MCP)")]),
+    ("Optional", [("cloudflare-tunnel.html", "No open ports? Use a tunnel")]),
 ]
 
 SUN = '<svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>'
@@ -95,7 +96,7 @@ QUICK = """
 <h2 id="requirements">What you need</h2>
 <table>
 <tr><th>Server</th><td>Any machine you control — a VPS, a mini PC, a spare laptop. A recent Ubuntu LTS, amd64 or arm64, with root access.</td></tr>
-<tr><th>Network</th><td>Ports 80 and 443 open to the internet, and an A record pointing at the server for each domain you attach.</td></tr>
+<tr><th>Network</th><td>Ports 80 and 443 open to the internet, and an A record pointing at the server for each domain you attach. (Can't open ports — a home or office connection, say? There is an <a href="cloudflare-tunnel.html">optional tunnel setup</a>.)</td></tr>
 <tr><th>Code</th><td>A git repository (GitHub, GitLab or Gitea), or just a container image.</td></tr>
 </table>
 
@@ -268,6 +269,53 @@ AGENTS_BLOCKS = {
     "mcpjson": '{\n  "mcpServers": {\n    "deploymate": {\n      "command": "/path/to/deploymate",\n      "args": ["mcp"],\n      "env": { "DEPLOYMATE_URL": "https://your-dashboard", "DEPLOYMATE_TOKEN": "dm_..." }\n    }\n  }\n}',
 }
 
+
+TUNNEL = """
+<p class="kicker">Optional</p>
+<h1>No open ports? Use a tunnel</h1>
+<p>DeployMate normally serves the internet directly: ports 80 and 443 open, a domain pointing at the server. That is the simplest setup, and the <a href="quickstart.html">quickstart</a> uses it. This page is for when you <strong>can't or don't want to</strong> do that — a machine at home or in an office, an internet provider that blocks the ports or shares one address between customers, or a router you can't configure.</p>
+<p>A tunnel flips the direction. A small program on your server connects <em>out</em> to a provider, and visitors reach your server through it. Nothing has to be opened, forwarded or made public. Cloudflare Tunnel is one such service and has a free plan; the steps below use it. It is a convenience, not part of DeployMate.</p>
+
+<div class="callout"><strong>What you need</strong>A free Cloudflare account and a domain whose DNS is on Cloudflare (you can register one there or move an existing one). The server needs only an ordinary outbound internet connection.</div>
+
+<h2 id="create">1. Create the tunnel</h2>
+<ol>
+<li>In the Cloudflare dashboard open <strong>Zero Trust</strong> (it may be named "Cloudflare One"), then <strong>Networks → Tunnels → Create a tunnel</strong>.</li>
+<li>Choose <strong>Cloudflared</strong>, give it a name, and pick the operating system (Debian/Ubuntu) and CPU of your server.</li>
+<li>Cloudflare shows an install command that contains a long <strong>token</strong>. Run it on the server. Keep the token private: it lets anyone run a tunnel into your account. After a minute the tunnel shows <strong>Healthy</strong>.</li>
+</ol>
+
+<h2 id="hostnames">2. Point names at DeployMate</h2>
+<p>In the tunnel's <strong>Public hostname</strong> tab, add one entry per name you want reachable:</p>
+<table>
+<tr><th>For</th><th>Type</th><th>URL</th><th>Notes</th></tr>
+<tr><td>An app's domain, e.g. <code>app.example.com</code></td><td>HTTPS</td><td><code>localhost:443</code></td><td>Turn on <strong>No TLS Verify</strong> (see below). Also add the same domain to the app in DeployMate and redeploy it.</td></tr>
+<tr><td>The dashboard, e.g. <code>dash.example.com</code></td><td>HTTP</td><td><code>localhost:8080</code></td><td>Protect it — see step 3.</td></tr>
+<tr><td>SSH, e.g. <code>ssh.example.com</code></td><td>SSH</td><td><code>localhost:22</code></td><td>Optional: lets you log in from anywhere. Needs <code>cloudflared</code> on your own computer.</td></tr>
+</table>
+<p>Cloudflare creates the DNS records for you. Apps go to port 443 because DeployMate's proxy (Traefik) redirects plain HTTP to HTTPS; <strong>No TLS Verify</strong> tells the tunnel not to insist on a certificate the proxy hasn't obtained, since Cloudflare serves the real certificate to your visitors.</p>
+
+<h2 id="access">3. Protect the dashboard</h2>
+<p>The dashboard can deploy to and control your server, so don't leave it behind a single password. In Zero Trust open <strong>Access → Applications → Add → Self-hosted</strong>, enter the dashboard's hostname, and add a policy that allows only your email address. You then sign in twice — Cloudflare first, then DeployMate — which is what you want. Leave the Access policy <strong>off</strong> hostnames that are meant to be public.</p>
+
+<h2 id="ssh">4. Optional: SSH through the tunnel</h2>
+<p>With the SSH hostname in place, install <code>cloudflared</code> on your own computer and add this to <code>~/.ssh/config</code>:</p>
+[[sshconfig]]
+<p>then <code>ssh dm-server</code> works from anywhere. Use key-based login, and consider an Access policy on this hostname too.</p>
+
+<h2 id="notes">Things to know</h2>
+<ul>
+<li><strong>Certificate warnings in Traefik's log are expected.</strong> Traefik tries to obtain its own Let's Encrypt certificate, which needs port 80 reachable from the internet; through a tunnel it can't, so it logs a failure and keeps going. Visitors still get a valid certificate from Cloudflare.</li>
+<li><strong>One hostname per domain.</strong> Each domain you attach to an app needs its own public hostname on the tunnel.</li>
+<li><strong>It adds a dependency.</strong> If Cloudflare or the connector is down, so is access. The server and its apps keep running, and you can still reach it on your local network.</li>
+<li><strong>It isn't the only way.</strong> A router port-forward, a VPS in front, or another tunnel product also works. DeployMate only needs requests for your domains to arrive at the server's ports 80/443.</li>
+</ul>
+"""
+
+TUNNEL_BLOCKS = {
+    "sshconfig": "Host dm-server\n  HostName ssh.example.com\n  User your-user\n  ProxyCommand cloudflared access ssh --hostname %h",
+}
+
 # --------------------------------------------------------------------------- index
 INDEX = """
 <p class="kicker">Docs</p>
@@ -277,6 +325,7 @@ INDEX = """
 <tr><th><a href="quickstart.html">Quickstart</a></th><td>Install, first deploy, database, domain.</td></tr>
 <tr><th><a href="concepts.html">How it fits together</a></th><td>Zero-downtime deploys, build modes, services and environments, recovery.</td></tr>
 <tr><th><a href="agents.html">AI agents (MCP)</a></th><td>Connect an agent with scoped, audited, delete-free access.</td></tr>
+<tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
 </table>
 <h2>In the repository</h2>
 <ul>
@@ -298,6 +347,9 @@ def main():
     render("agents.html", "AI agents (MCP)",
            "Connect Claude or another agent to DeployMate with scoped, audited, delete-free access.",
            AGENTS, AGENTS_BLOCKS, ("concepts.html", "How it fits together"), None)
+    render("cloudflare-tunnel.html", "No open ports? Use a tunnel",
+           "An optional way to run DeployMate on a machine that can't open ports 80 and 443, using a Cloudflare Tunnel.",
+           TUNNEL, TUNNEL_BLOCKS, ("agents.html", "AI agents (MCP)"), None)
     render("index.html", "Documentation", "DeployMate documentation: quickstart, concepts and AI agent access.",
            INDEX, {}, None, ("quickstart.html", "Quickstart"))
 
