@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-07 (server ready as an always-on laptop)** — The owner ran `deploy/laptop-server.sh` on the Ubuntu
+laptop (lid-close ignored, suspend masked); lid test passed (SSH + dashboard stay up). Note for
+`package.sh`: the archive does not include `laptop-server.sh` (copy it from the repo). Still to confirm
+with the owner: the `site` app deployed, `deploymate.link` tunnel hostname → https://localhost:443 (No TLS
+Verify) live, then switch the page's install command to the short URL once the repo is public and `v0.1.0`
+is tagged.
+
 **2026-10-07 (first install on the owner's Ubuntu server)** — The repo is **private**, so the
 public one-line installer can't work for outsiders yet; the owner's server was installed from a
 locally built archive (`deploy/package.sh`, ignored `dist/`). Reached through a **Cloudflare Tunnel**
