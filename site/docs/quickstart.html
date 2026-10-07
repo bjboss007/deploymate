@@ -51,8 +51,8 @@ scp deploymate-linux deploy/ root@your-server:/tmp/   # deploy/ holds the instal
 DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymate-linux</pre></div>
 
 <h2 id="login">2. Create your login</h2>
-<pre class="code">sudo -u deploymate /usr/local/bin/deploymate setup-admin</pre>
-<p>It asks for an email and a password. There is one owner account.</p>
+<pre class="code">sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin</pre>
+<p>It asks for an email and a password. There is one owner account. (The service gets its data folder from its systemd unit; a command you run by hand needs it set, as above.)</p>
 
 <h2 id="dashboard">3. Open the dashboard</h2>
 <p>The dashboard listens on <code>127.0.0.1:8080</code> on the server — not on the internet. To reach it from your laptop, tunnel in:</p>

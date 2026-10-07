@@ -135,7 +135,7 @@ Desktop occupies 8080; on the server the default is 8080.
 ```sh
 curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \
   | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash
-sudo -u deploymate /usr/local/bin/deploymate setup-admin
+sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin
 ```
 
 The installer downloads the latest release for your CPU (amd64 or arm64), checks
@@ -154,7 +154,7 @@ scp deploymate-linux root@your-server:/tmp/
 
 # on the server
 DEPLOYMATE_LE_EMAIL=you@example.com bash deploy/bootstrap.sh /tmp/deploymate-linux
-sudo -u deploymate /usr/local/bin/deploymate setup-admin
+sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin
 ```
 
 Then: point an A record at the server, attach a domain to an app, set

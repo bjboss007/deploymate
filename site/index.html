@@ -253,7 +253,7 @@ curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/in
         </li>
         <li>
           <h3>Create your login</h3>
-          <pre class="code">sudo -u deploymate /usr/local/bin/deploymate setup-admin</pre>
+          <pre class="code">sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin</pre>
         </li>
         <li>
           <h3>Point a domain at the server, open the dashboard</h3>

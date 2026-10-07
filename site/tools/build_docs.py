@@ -109,7 +109,7 @@ QUICK = """
 
 <h2 id="login">2. Create your login</h2>
 [[admin]]
-<p>It asks for an email and a password. There is one owner account.</p>
+<p>It asks for an email and a password. There is one owner account. (The service gets its data folder from its systemd unit; a command you run by hand needs it set, as above.)</p>
 
 <h2 id="dashboard">3. Open the dashboard</h2>
 <p>The dashboard listens on <code>127.0.0.1:8080</code> on the server — not on the internet. To reach it from your laptop, tunnel in:</p>
@@ -152,7 +152,7 @@ QUICK = """
 QUICK_BLOCKS = {
     "install": "curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \\\n  | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash",
     "source": "git clone https://github.com/bjboss007/deploymate && cd deploymate\nmake build                                   # bin/deploymate\nGOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o deploymate-linux ./cmd/deploymate\nscp deploymate-linux deploy/ root@your-server:/tmp/   # deploy/ holds the installer files\n# on the server:\nDEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymate-linux",
-    "admin": "sudo -u deploymate /usr/local/bin/deploymate setup-admin",
+    "admin": "sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin",
     "tunnel": "ssh -L 8080:127.0.0.1:8080 deploymate@your-server-ip",
 }
 

@@ -72,7 +72,7 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o deploymate-linux ./cmd/deploym
 scp deploymate-linux deploy/ root@<laptop-ip>:~/
 ssh root@<laptop-ip>   # then:
 DEPLOYMATE_LE_EMAIL=you@example.com bash deploy/bootstrap.sh deploymate-linux
-sudo -u deploymate /usr/local/bin/deploymate setup-admin
+sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin
 ```
 
 bootstrap.sh installs Docker CE + buildx, the railpack binary, the

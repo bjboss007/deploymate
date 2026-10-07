@@ -125,6 +125,6 @@ systemctl enable --now deploymate
 echo
 echo "done. next steps:"
 echo "  1. point an A record at this server, e.g. dm.example.com"
-echo "  2. create your login:  sudo -u $SERVICE_USER /usr/local/bin/deploymate setup-admin"
+echo "  2. create your login:  sudo -u $SERVICE_USER DEPLOYMATE_DATA_DIR=$DATA_DIR /usr/local/bin/deploymate setup-admin"
 echo "  3. open the dashboard through traefik once a domain is attached, or"
 echo "     ssh -L 8080:127.0.0.1:8080 $SERVICE_USER@$(hostname -I | awk '{print $1}')"
