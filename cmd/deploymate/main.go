@@ -56,6 +56,8 @@ func run() error {
 		return seedGitSource()
 	case "mcp":
 		return runMCP()
+	case "update":
+		return updateCmd(flag.Args()[1:])
 	case "seed-demo":
 		return seedDemo()
 	case "version":

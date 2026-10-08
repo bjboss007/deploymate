@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-08 (`deploymate update`)** — `sudo deploymate update [--check|--version|--from|--force]`:
+verified download (or local archive), stop → DB copy → binary swap (`.prev` kept) → start → `/healthz`
+poll, automatic rollback of binary/DB/unit on failure; apps and Traefik untouched. `internal/updater`
+(+tests), `cmd/deploymate/update.go`, quickstart "Updating" section, README, `docs/knowledge/releasing.md`.
+Repo is now public. **Not yet done:** tag `v0.1.0` (needs the owner's go-ahead — it publishes a release) so
+`update`/installer have something to fetch; real-server run of `update` (first run needs the new binary
+copied by hand once, since the old binary has no `update` command).
+
 **2026-10-08 (per-folder webhook deploys)** — A push now deploys an app only if it changed files under the
 app's build folder (`Push.TouchesFolder`, from the payload's commit file lists; unknown → deploy; root-folder
 apps always deploy). Skips are recorded as `deploy_skipped` events and answered `ignored: no changes in the

@@ -32,6 +32,20 @@ Archive names are **stable** (no version in the file name) so
 - CI (`ci.yml`) fails if `templ generate` would change a committed `_templ.go`
   file, runs vet + tests, and cross-compiles linux/amd64, linux/arm64, darwin/arm64.
 
+## `deploymate update` (servers)
+
+`cmd/deploymate/update.go` + `internal/updater`. Downloads `deploymate_linux_<arch>.tar.gz` and
+`checksums.txt` from the release (latest page redirect for the tag, no API token), verifies,
+extracts only `deploymate` and `deploy/deploymate.service`, smoke-tests the new binary
+(`version`), stops the service, copies `data.db` → `data.db.pre-update`, moves the old binary
+to `.prev`, installs the new one (and the unit if it changed, keeping this install's data
+dir), starts it and polls `/healthz`. Any failure after the stop restores binary, database and
+unit and starts the old version. It deliberately does **not** re-run `bootstrap.sh` (that
+recreates Traefik and resets the Let's Encrypt email), so changes to Traefik's config or to
+Docker/host setup still need a manual step — say so in the release notes when they exist.
+Unit tests cover swap, rollback, checksum and extraction; the systemd/real-restart path has
+only been exercised by hand.
+
 ## First release checklist
 
 1. `go test ./...` green on `main`; `progress.md` current.

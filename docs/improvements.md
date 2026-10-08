@@ -6,6 +6,12 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **Dashboard notice for a new release** — 2026-10-08: `deploymate update --check` exists; show
+  "v0.1.3 available" in the dashboard (checked at most daily, opt-out) instead of a silent auto-update.
+- [ ] **`update` should also refresh Traefik/host setup when a release needs it** — 2026-10-08: update only
+  swaps the binary + unit. Add a release-notes marker and an `update --bootstrap` that applies the
+  Traefik config without losing the Let's Encrypt email.
+
 - [x] **Only deploy when the app's build folder changed** — done 2026-10-08: webhook pushes read the
   payload's per-commit added/modified/removed files (`webhooks.Push.TouchesFolder`); an app with a build
   folder is skipped when none is under it, recording a `deploy_skipped` activity event ("Push skipped") and

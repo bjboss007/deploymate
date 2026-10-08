@@ -162,6 +162,11 @@ Then: point an A record at the server, attach a domain to an app, set
 certificates, and open `https://your-domain`. Webhooks live at
 `/hooks/{id}` on the same domain.
 
+**Updating:** `sudo deploymate update` downloads the latest release, verifies its
+checksum, swaps the binary, restarts the service and rolls back on its own if the new
+version doesn't come up (`--check`, `--version vX.Y.Z`, `--from archive.tar.gz`). Apps
+and Traefik are not touched.
+
 **Turning an old laptop into that server?** Full guide in
 [docs/knowledge/server-setup.md](docs/knowledge/server-setup.md) — Ubuntu
 install, lid/suspend power config (`deploy/laptop-server.sh`), home

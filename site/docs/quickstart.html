@@ -89,6 +89,12 @@ DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymat
 <li>Certificates start in Let's Encrypt <strong>staging</strong> mode so a mistake can't use up your real rate limit. When you're ready, set <code>DEPLOYMATE_LE_MODE=production</code> in the service's environment and restart it. The domain list shows the certificate's real state and expiry.</li>
 </ol>
 
+<h2 id="update">Updating DeployMate</h2>
+<p>When a new release is out, run this on the server:</p>
+<pre class="code">sudo deploymate update</pre>
+<p>It downloads the release, checks its SHA-256 against the published <code>checksums.txt</code>, and refuses on any mismatch. It then stops the dashboard service, copies the database aside, swaps the binary, starts the new version and waits for it to answer. <strong>If the new version doesn't come up, the old binary and database are put back automatically.</strong> Your apps and Traefik keep running throughout, because they are separate containers; only the dashboard is briefly unavailable.</p>
+<p><code>sudo deploymate update --check</code> only reports whether a newer release exists. <code>--version v0.1.2</code> installs a specific version, which is also how you go back. <code>--from file.tar.gz</code> installs an archive you copied over, for a server that can't reach GitHub. The previous binary stays at <code>/usr/local/bin/deploymate.prev</code> and the pre-update database at <code>data.db.pre-update</code> in the data folder.</p>
+
 <div class="callout warn"><strong>Back up before you trust it</strong>Backups are opt-in. Configure a storage destination (S3, R2, MinIO) with the <code>DEPLOYMATE_BACKUP_DEST_*</code> variables, then enable them on each PostgreSQL service's page. MySQL and Redis are not backed up yet.</div>
 
 <div class="pager"><span></span><a href="deploy-on-push.html">Deploy on every push →</a></div>
