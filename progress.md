@@ -7,6 +7,11 @@
 
 ## Where we stopped
 
+**2026-10-08 (v0.1.0 released)** — Tag `v0.1.0` published (4 archives + checksums.txt, public). The site's
+install command is now `curl -fsSL https://deploymate.link/install | sudo bash` (nginx 302s to
+`deploy/install.sh` on GitHub); README keeps the raw GitHub URL so it works without the site. Takes effect on
+the site once the `site` app is redeployed. Server still needs the new binary copied by hand once.
+
 **2026-10-08 (`deploymate update`)** — `sudo deploymate update [--check|--version|--from|--force]`:
 verified download (or local archive), stop → DB copy → binary swap (`.prev` kept) → start → `/healthz`
 poll, automatic rollback of binary/DB/unit on failure; apps and Traefik untouched. `internal/updater`

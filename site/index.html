@@ -57,7 +57,7 @@
       </div>
       <div class="install-line" role="group" aria-label="Install command">
         <span class="prompt" aria-hidden="true">$</span>
-        <code id="hero-cmd">curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh | sudo bash</code>
+        <code id="hero-cmd">curl -fsSL https://deploymate.link/install | sudo bash</code>
         <button class="copy" type="button" data-copy="hero-cmd">Copy</button>
       </div>
       <p class="fine">Ubuntu Linux, amd64 or arm64. The installer checks a SHA-256 before it runs anything.</p>
@@ -248,7 +248,7 @@
           <h3>Run the installer on the server</h3>
           <p>As root, on a recent Ubuntu LTS.</p>
           <pre class="code"><span class="c"># your email is only used for Let's Encrypt</span>
-curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \
+curl -fsSL https://deploymate.link/install \
   | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash</pre>
         </li>
         <li>

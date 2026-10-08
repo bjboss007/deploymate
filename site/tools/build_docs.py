@@ -157,7 +157,7 @@ QUICK = """
 """
 
 QUICK_BLOCKS = {
-    "install": "curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \\\n  | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash",
+    "install": "curl -fsSL https://deploymate.link/install \\\n  | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash",
     "source": "git clone https://github.com/bjboss007/deploymate && cd deploymate\nmake build                                   # bin/deploymate\nGOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o deploymate-linux ./cmd/deploymate\nscp deploymate-linux deploy/ root@your-server:/tmp/   # deploy/ holds the installer files\n# on the server:\nDEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymate-linux",
     "update": "sudo deploymate update",
     "admin": "sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin",

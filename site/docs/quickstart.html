@@ -38,7 +38,7 @@
 
 <h2 id="install">1. Install</h2>
 <p>On the server, as root:</p>
-<pre class="code">curl -fsSL https://raw.githubusercontent.com/bjboss007/deploymate/main/deploy/install.sh \
+<pre class="code">curl -fsSL https://deploymate.link/install \
   | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash</pre>
 <p>The installer downloads the release for your CPU and <strong>verifies its SHA-256</strong> against the release's <code>checksums.txt</code> — it stops on a mismatch. Then it installs Docker, opens only SSH, 80 and 443 in the firewall, creates a <code>deploymate</code> service user, starts Traefik (the only thing listening publicly) and a systemd service. It is safe to run again.</p>
 <p>Pin a version with <code>DEPLOYMATE_VERSION=v0.1.0</code>. Your email is used only for Let's Encrypt.</p>
