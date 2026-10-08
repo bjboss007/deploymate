@@ -88,3 +88,40 @@ func TestParseGitHubWorkflowRunRejectsOtherPayloads(t *testing.T) {
 		}
 	}
 }
+
+func TestTouchesFolder(t *testing.T) {
+	known := Push{FilesKnown: true, Files: []string{"a/b.go", "site/index.html"}}
+	for _, c := range []struct {
+		p    Push
+		root string
+		want bool
+	}{
+		{known, "", true},
+		{known, "site", true},
+		{known, "./site/", true},
+		{known, "a", true},
+		{known, "sit", false},
+		{known, "docs", false},
+		{Push{FilesKnown: true}, "site", false},
+		{Push{}, "site", true}, // unknown → deploy
+	} {
+		if got := c.p.TouchesFolder(c.root); got != c.want {
+			t.Errorf("TouchesFolder(%q) = %v, want %v", c.root, got, c.want)
+		}
+	}
+}
+
+func TestPushFileLists(t *testing.T) {
+	gh, _ := ParseGitHubPush([]byte(`{"ref":"refs/heads/main","commits":[{"added":["a"],"modified":["b"],"removed":["c"]}]}`))
+	if !gh.FilesKnown || len(gh.Files) != 3 {
+		t.Errorf("github: %+v", gh)
+	}
+	gl, _ := ParseGitLabPush([]byte(`{"ref":"refs/heads/main","total_commits_count":1,"commits":[{"message":"m","modified":["x"]}]}`))
+	if !gl.FilesKnown || len(gl.Files) != 1 {
+		t.Errorf("gitlab: %+v", gl)
+	}
+	cut, _ := ParseGitLabPush([]byte(`{"ref":"refs/heads/main","total_commits_count":50,"commits":[{"message":"m","modified":["x"]}]}`))
+	if cut.FilesKnown {
+		t.Error("a truncated gitlab commit list must be treated as unknown")
+	}
+}

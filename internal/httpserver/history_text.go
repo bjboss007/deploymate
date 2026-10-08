@@ -44,6 +44,8 @@ func describeEvent(kind string) (title, category, tone string) {
 		return "Build folder changed", "config", "neutral"
 	case store.EventRuntimeChanged:
 		return "Build method changed", "config", "neutral"
+	case store.EventDeploySkipped:
+		return "Push skipped (build folder unchanged)", "lifecycle", "neutral"
 	case store.EventAPIAction:
 		return "Changed through the API", "config", "neutral"
 	case store.EventGitConnected:

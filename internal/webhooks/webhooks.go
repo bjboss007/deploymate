@@ -41,21 +41,66 @@ type Push struct {
 	Ref           string // refs/heads/main
 	CommitSHA     string
 	CommitMessage string
+	// Files are the paths the push added, modified or removed. FilesKnown is
+	// false when the payload cannot say (no commit list, or the provider's
+	// 20-commit cap cut it off); callers must then assume everything changed.
+	Files      []string
+	FilesKnown bool
+}
+
+// maxPayloadCommits is how many commits GitHub and GitLab include in a push
+// payload. A push with that many (or more) may have been truncated.
+const maxPayloadCommits = 20
+
+type commitFiles struct {
+	Added    []string `json:"added"`
+	Modified []string `json:"modified"`
+	Removed  []string `json:"removed"`
+}
+
+func collectFiles(commits []commitFiles) (files []string, known bool) {
+	if len(commits) == 0 || len(commits) >= maxPayloadCommits {
+		return nil, false
+	}
+	for _, c := range commits {
+		files = append(files, c.Added...)
+		files = append(files, c.Modified...)
+		files = append(files, c.Removed...)
+	}
+	return files, true
+}
+
+// TouchesFolder reports whether a push could change what is built from root
+// (a repository subfolder; "" is the whole repository). When the payload did
+// not say which files changed it answers true: an unknown push deploys.
+func (p Push) TouchesFolder(root string) bool {
+	root = strings.Trim(strings.TrimPrefix(root, "./"), "/")
+	if root == "" || !p.FilesKnown {
+		return true
+	}
+	for _, f := range p.Files {
+		if f == root || strings.HasPrefix(f, root+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // ParseGitHubPush extracts the push data from a GitHub push payload.
 func ParseGitHubPush(body []byte) (Push, error) {
 	var p struct {
-		Ref  string `json:"ref"`
+		Ref   string `json:"ref"`
 		After string `json:"after"`
-		Head struct {
+		Head  struct {
 			Message string `json:"message"`
 		} `json:"head_commit"`
+		Commits []commitFiles `json:"commits"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return Push{}, err
 	}
-	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: p.Head.Message}, nil
+	files, known := collectFiles(p.Commits)
+	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: p.Head.Message, Files: files, FilesKnown: known}, nil
 }
 
 // WorkflowRun is the data prebuilt deploys read from a GitHub `workflow_run`
@@ -125,7 +170,9 @@ func ParseGitLabPush(body []byte) (Push, error) {
 		After   string `json:"after"`
 		Commits []struct {
 			Message string `json:"message"`
+			commitFiles
 		} `json:"commits"`
+		Total int `json:"total_commits_count"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return Push{}, err
@@ -134,7 +181,15 @@ func ParseGitLabPush(body []byte) (Push, error) {
 	if len(p.Commits) > 0 {
 		msg = p.Commits[len(p.Commits)-1].Message
 	}
-	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: msg}, nil
+	cf := make([]commitFiles, len(p.Commits))
+	for i, c := range p.Commits {
+		cf[i] = c.commitFiles
+	}
+	files, known := collectFiles(cf)
+	if p.Total > len(p.Commits) {
+		known = false
+	}
+	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: msg, Files: files, FilesKnown: known}, nil
 }
 
 // BranchFromRef converts refs/heads/main to main.

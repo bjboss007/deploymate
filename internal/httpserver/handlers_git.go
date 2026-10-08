@@ -237,13 +237,19 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Queue a deployment for the app(s) linked to this source.
-	n, ciOnly := 0, 0
+	n, ciOnly, skipped := 0, 0, 0
 	if apps, err := s.store.ListAppsByGitSource(gs.ID); err == nil {
 		for _, app := range apps {
 			if app.DeployMode == store.DeployModeArtifact {
 				// A prebuilt app deploys when its CI run finishes, not on the
 				// push: the artifact doesn't exist yet.
 				ciOnly++
+				continue
+			}
+			if !push.TouchesFolder(app.RootDirectory) {
+				skipped++
+				_ = s.store.RecordEvent(app.ID, store.EventDeploySkipped,
+					"push "+shortSHA(push.CommitSHA)+" changed nothing in "+orRoot(app.RootDirectory))
 				continue
 			}
 			_, err := s.store.CreateDeployment(store.Deployment{
@@ -259,6 +265,10 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	if n == 0 && ciOnly > 0 {
 		_, _ = w.Write([]byte("ignored: this app deploys from CI runs, not pushes"))
+		return
+	}
+	if n == 0 && skipped > 0 {
+		_, _ = w.Write([]byte("ignored: no changes in the build folder"))
 		return
 	}
 	if n == 0 {

@@ -200,3 +200,42 @@ func TestWebhookPingStillAuthenticated(t *testing.T) {
 		t.Errorf("bad-signature ping = %d, want 401", rec.Code)
 	}
 }
+
+// A push that changed nothing under the app's build folder must not deploy it;
+// one that did, or one the payload can't describe, must.
+func TestWebhookSkipsPushesOutsideTheBuildFolder(t *testing.T) {
+	e := newWebhookEnv(t)
+	src, app := e.addApp(t, "site", "main")
+	if err := e.st.UpdateAppRootDirectory(app.ID, "site"); err != nil {
+		t.Fatal(err)
+	}
+	push := func(commits string) string {
+		return `{"ref":"refs/heads/main","after":"abc12345","head_commit":{"message":"m"},"commits":` + commits + `}`
+	}
+	goOnly := push(`[{"modified":["internal/x.go"],"added":["README.md"]}]`)
+	if code, body := e.deliver(t, src, "push", "s1", goOnly); code != 200 || body != "ignored: no changes in the build folder" {
+		t.Errorf("unrelated push: %d %q", code, body)
+	}
+	if n := e.deployments(t, app); n != 0 {
+		t.Fatalf("unrelated push queued %d deployments", n)
+	}
+	evs, _ := e.st.ListEvents(app.ID, 10)
+	found := false
+	for _, ev := range evs {
+		found = found || ev.Kind == "deploy_skipped"
+	}
+	if !found {
+		t.Error("no deploy_skipped event recorded")
+	}
+	// "site-old/x" is a different folder, not a child of "site".
+	if _, body := e.deliver(t, src, "push", "s2", push(`[{"modified":["site-old/a.html"]}]`)); body != "ignored: no changes in the build folder" {
+		t.Errorf("sibling-prefix push: %q", body)
+	}
+	if _, body := e.deliver(t, src, "push", "s3", push(`[{"modified":["internal/x.go"]},{"removed":["site/old.html"]}]`)); body != "queued" {
+		t.Errorf("push touching the folder: %q", body)
+	}
+	// No commit list → can't tell → deploy.
+	if _, body := e.deliver(t, src, "push", "s4", pushMain); body != "queued" {
+		t.Errorf("push without file info: %q", body)
+	}
+}

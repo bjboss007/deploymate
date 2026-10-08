@@ -190,7 +190,7 @@ PUSH = """
 <li>Each delivery is checked against the secret first. A wrong or missing signature is rejected before anything runs.</li>
 <li>A delivery GitHub sends twice is recognised and deployed once.</li>
 <li>The deployment appears in the app's history, triggered by <em>webhook</em>, with the usual build log.</li>
-<li>Each app has its own webhook. If several apps are built from one repository, a push deploys every one that has a webhook — DeployMate doesn't yet skip an app whose folder didn't change.</li>
+<li>Each app has its own webhook. If several apps are built from one repository, a push deploys only the apps whose build folder it changed (set under Settings → Source &amp; build). A skipped push shows in the app's activity as “Push skipped”. Apps built from the repository root deploy on every push, and so does a push whose file list GitHub or GitLab didn't send (very large pushes).</li>
 </ul>
 
 <h2 id="tunnel">Dashboard behind a login or a tunnel</h2>

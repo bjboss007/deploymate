@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-08 (per-folder webhook deploys)** — A push now deploys an app only if it changed files under the
+app's build folder (`Push.TouchesFolder`, from the payload's commit file lists; unknown → deploy; root-folder
+apps always deploy). Skips are recorded as `deploy_skipped` events and answered `ignored: no changes in the
+build folder`. Docs guide updated. Tests: `TestTouchesFolder`, `TestPushFileLists`,
+`TestWebhookSkipsPushesOutsideTheBuildFolder`. Next: owner sets the `site` app's build folder to `site` (already) and adds its webhook.
+
 **2026-10-07 (site live behind the tunnel; two root causes found)** — The `site` app now serves through
 Traefik. Causes of the 403/404 on the owner's server: (1) the service's umask 0077 made git write 0600
 files → non-root containers (nginx) answered 403 — `gitpkg.normalizeModes` after clone + a site Dockerfile
