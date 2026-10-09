@@ -113,6 +113,10 @@ type Collector struct {
 	prevTime time.Time
 }
 
+// staleAfter is how old the previous reading may be before CPU and network
+// rates are measured afresh.
+const staleAfter = 2 * time.Minute
+
 // DiskPath names a path to measure.
 type DiskPath struct{ Label, Path string }
 
@@ -151,13 +155,16 @@ func (c *Collector) Snapshot(ctx context.Context) Snapshot {
 		s.Cores = runtime.NumCPU()
 	}
 
-	if c.prevTime.IsZero() {
+	// Rates need a recent earlier reading. With none (first call) or a stale one
+	// (nobody looked for minutes: the difference would be an average over hours),
+	// take a fresh one and measure over half a second.
+	if c.prevTime.IsZero() || time.Since(c.prevTime) > staleAfter {
 		c.prevCPU, _ = c.cpu()
 		c.prevNet, _ = c.net()
 		c.prevTime = time.Now()
 		select {
 		case <-ctx.Done():
-		case <-time.After(250 * time.Millisecond):
+		case <-time.After(500 * time.Millisecond):
 		}
 		s.Time = time.Now()
 	}

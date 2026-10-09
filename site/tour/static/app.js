@@ -215,7 +215,43 @@ function loadFleetChart() {
   chart.update();
 }
 
+// --- server history charts ------------------------------------------------
+let hostCharts = null;
+
+async function loadHostHistory(range) {
+  if (!hostCharts) {
+    hostCharts = {
+      cpu: lineChart("host-cpu-chart", "CPU %", CHART_COLORS.cpu),
+      mem: lineChart("host-mem-chart", "Memory %", CHART_COLORS.mem),
+      disk: lineChart("host-disk-chart", "Disk %", CHART_COLORS.cpu),
+      load: lineChart("host-load-chart", "Load", CHART_COLORS.mem),
+    };
+  }
+  if (!hostCharts.cpu) return; // not the server page
+  let data = window.__hostHistory; // the website's tour embeds a snapshot instead of a server
+  if (!data) {
+    const resp = await fetch("/server/history?range=" + encodeURIComponent(range));
+    if (!resp.ok) return;
+    data = await resp.json();
+  }
+  const label = (ts) => (range === "7d" ? new Date(ts).toLocaleDateString(undefined, { weekday: "short" }) + " " : "") + fmtTime(ts).slice(0, 5);
+  for (const k of ["cpu", "mem", "disk", "load"]) {
+    const c = hostCharts[k];
+    c.data.labels = data[k].map((p) => label(p.t));
+    c.data.datasets[0].data = data[k].map((p) => p.v);
+    if (k !== "load") c.options.scales.y.max = 100;
+    c.update();
+  }
+  const empty = document.getElementById("host-history-empty");
+  if (empty) empty.hidden = data.cpu.length > 1;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  const range = document.getElementById("host-range");
+  if (range) {
+    loadHostHistory(range.value);
+    range.addEventListener("change", () => loadHostHistory(range.value));
+  }
   document.querySelectorAll("[data-log-src]").forEach(attachLogStream);
   // Replica filter: narrow a merged replica log stream to one slot
   // (?replica=r2) by re-attaching the panel to the filtered source.

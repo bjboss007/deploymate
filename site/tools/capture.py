@@ -148,6 +148,10 @@ def main():
     OUT.mkdir(parents=True, exist_ok=True)
     for path, name in pg.items():
         html = fill_logs(get(path).decode(), path)
+        if path == "/server":
+            # the snapshot has no server to ask for the history: embed it
+            hist = get("/server/history?range=24h").decode().replace("</", "<\\/")
+            html = html.replace("</body>", "<script>window.__hostHistory=" + hist + ";</script></body>", 1)
         (OUT / name).write_text(transform(html, mapping), encoding="utf-8")
         print("captured", path, "->", name)
 

@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/hostinfo"
+	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
 
@@ -370,3 +372,72 @@ func (s *Server) handleAPIServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func round1(v float64) float64 { return float64(int(v*10+0.5)) / 10 }
+
+// ---- history ----------------------------------------------------------------
+
+type histPoint struct {
+	T string  `json:"t"`
+	V float64 `json:"v"`
+}
+
+type serverHistoryJSON struct {
+	Range string      `json:"range"`
+	CPU   []histPoint `json:"cpu"`
+	Mem   []histPoint `json:"mem"`
+	Disk  []histPoint `json:"disk"`
+	Load  []histPoint `json:"load"`
+}
+
+var historyRanges = map[string]time.Duration{"6h": 6 * time.Hour, "24h": 24 * time.Hour, "7d": 7 * 24 * time.Hour}
+
+const maxHistoryPoints = 240
+
+// downsample averages readings into at most max buckets so a week of minutes
+// (10,000 rows) draws as a few hundred points.
+func downsample(ms []store.HostMetric, max int) []store.HostMetric {
+	if len(ms) <= max {
+		return ms
+	}
+	per := (len(ms) + max - 1) / max
+	var out []store.HostMetric
+	for i := 0; i < len(ms); i += per {
+		end := i + per
+		if end > len(ms) {
+			end = len(ms)
+		}
+		var a store.HostMetric
+		n := float64(end - i)
+		for _, m := range ms[i:end] {
+			a.CPU += m.CPU
+			a.Mem += m.Mem
+			a.Disk += m.Disk
+			a.Load1 += m.Load1
+		}
+		out = append(out, store.HostMetric{TS: ms[end-1].TS, CPU: a.CPU / n, Mem: a.Mem / n, Disk: a.Disk / n, Load1: a.Load1 / n})
+	}
+	return out
+}
+
+// handleServerHistory: GET /server/history?range=6h|24h|7d for the page's charts.
+func (s *Server) handleServerHistory(w http.ResponseWriter, r *http.Request) {
+	rng := r.URL.Query().Get("range")
+	d, ok := historyRanges[rng]
+	if !ok {
+		rng, d = "24h", historyRanges["24h"]
+	}
+	ms, err := s.store.ListHostMetrics(time.Now().Add(-d))
+	if err != nil {
+		slog.Error("server: history", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	out := serverHistoryJSON{Range: rng, CPU: []histPoint{}, Mem: []histPoint{}, Disk: []histPoint{}, Load: []histPoint{}}
+	for _, m := range downsample(ms, maxHistoryPoints) {
+		out.CPU = append(out.CPU, histPoint{m.TS, round1(m.CPU)})
+		out.Mem = append(out.Mem, histPoint{m.TS, round1(m.Mem)})
+		out.Disk = append(out.Disk, histPoint{m.TS, round1(m.Disk)})
+		out.Load = append(out.Load, histPoint{m.TS, round1(m.Load1)})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}

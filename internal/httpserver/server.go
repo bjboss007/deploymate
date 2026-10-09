@@ -171,6 +171,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/alerts", s.handleAlertsPage)
 		r.Get("/stats", s.handleStatsPage)
 		r.Get("/server", s.handleServerPage)
+		r.Get("/server/history", s.handleServerHistory)
 		r.Post("/alerts", am.CheckCSRF(s.handleAlertCreate))
 		r.Post("/alerts/{id}/delete", am.CheckCSRF(s.handleAlertDelete))
 		r.Get("/projects/{slug}", s.handleProjectDetail)

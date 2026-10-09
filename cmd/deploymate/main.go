@@ -28,6 +28,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/demo"
 	"github.com/habibmuhammad/deploymate/internal/dns"
+	"github.com/habibmuhammad/deploymate/internal/hostinfo"
 	"github.com/habibmuhammad/deploymate/internal/httpserver"
 	"github.com/habibmuhammad/deploymate/internal/jobs"
 	"github.com/habibmuhammad/deploymate/internal/monitor"
@@ -151,6 +152,7 @@ func serve() error {
 	// Metrics, health, uptime, restart, and disk sampling.
 	mon := monitor.New(st, rt, dispatcher)
 	mon.SetHealer(server.HealApp)
+	mon.SetHost(&hostinfo.Collector{Paths: []hostinfo.DiskPath{{Label: "Data", Path: cfg.DataDir}, {Label: "System", Path: "/"}}})
 	// DEPLOYMATE_DISABLE_MONITOR=1 keeps the monitor from probing and "healing"
 	// containers: the seeded demo fleet has none, and must keep its seeded state.
 	if os.Getenv("DEPLOYMATE_DISABLE_MONITOR") != "1" {

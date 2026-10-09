@@ -20,15 +20,23 @@ self-hosted server stop working. Planned 2026-10-09, built in three steps.
 - Demo instance: `DEPLOYMATE_DEMO_HOST=1` swaps in a fictional healthy host (`internal/demo/host.go`)
   and hides the real Docker panel; the website tour has a "Server" tab captured from it.
 
-## Step 2 — history (planned)
+## Step 2 — history and host alerts (done 2026-10-09)
 
-`host_metrics` table sampled every 60 s (CPU, memory used, swap, disk %, load, network, temperature),
-7-day retention like app metrics, 24-hour sparklines on the page, per-app contribution over time.
+- `host_metrics` (migration 0022): one reading a minute (CPU, memory in use, data-disk %, load, network
+  rates, temperature), kept 7 days (pruned hourly with the other metrics). Sampled by the monitor
+  (`monitor/host.go`) with its own `hostinfo.Collector`, so rates are minute averages.
+- `GET /server/history?range=6h|24h|7d` (session auth) returns CPU, memory, disk and load series,
+  averaged down to ≤240 points; four Chart.js charts under the page (outside the HTMX-refreshed body so
+  they are not rebuilt every 15 s). The website tour embeds a captured 24 h series
+  (`window.__hostHistory`).
+- Alerts: new catalog events `host_problem` ("Server problem") and `host_recovered`. A finding must hold
+  for 3 consecutive readings (3 min) before it alerts, each (area, level) alerts once, escalation to
+  critical alerts again, and recovery is announced once after 3 clear readings (`hostWatch`).
+  Traefik not running is part of this; Docker down shows on the page but is only caught indirectly.
 
-## Step 3 — alerts and cleanup (planned)
+## Step 3 — cleanup (planned)
 
-Host alert rules through the existing alert system (disk, memory, sustained CPU, temperature, Docker
-down), firing only on a change of state like the certificate alerts. A "Clean up" action that prunes
+A "Clean up" action that prunes
 build cache and unused images after showing the reclaimable size; never volumes or anything a running
 app uses; dashboard-only, not exposed to agents at first.
 

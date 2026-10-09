@@ -917,3 +917,5 @@ select { cursor: pointer; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; font-size: 13.5px; }
 .kv dt { color: var(--muted); }
 .kv dd { margin: 0; word-break: break-word; }
+.panel-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.range-select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 12.5px; }

@@ -72,6 +72,8 @@ type Monitor struct {
 	restartAlertAt map[string]time.Time
 	lastResize     map[string]time.Time
 	lastDiskAlert  time.Time
+	host           HostSource // nil = no host sampling
+	hostWatch      *hostWatch
 }
 
 // New builds a Monitor. The HTTP client skips TLS verification so staging
@@ -138,6 +140,8 @@ func (m *Monitor) Run(ctx context.Context) {
 	statsT := time.NewTicker(statsInterval)
 	probeT := time.NewTicker(probeInterval)
 	pruneT := time.NewTicker(pruneInterval)
+	hostT := time.NewTicker(hostSampleEvery)
+	defer hostT.Stop()
 	defer statsT.Stop()
 	defer probeT.Stop()
 	defer pruneT.Stop()
@@ -148,6 +152,7 @@ func (m *Monitor) Run(ctx context.Context) {
 	m.probeApps(ctx)
 	m.checkDisk(ctx)
 	m.detectResources(ctx)
+	go m.sampleHost(ctx) // blocks about half a second to measure rates
 
 	for {
 		select {
@@ -160,6 +165,8 @@ func (m *Monitor) Run(ctx context.Context) {
 			m.probeAll(ctx)
 			m.probeApps(ctx)
 			m.checkDisk(ctx)
+		case <-hostT.C:
+			m.sampleHost(ctx)
 		case <-pruneT.C:
 			m.prune()
 			m.detectResources(ctx)
@@ -661,6 +668,11 @@ func (m *Monitor) prune() {
 		slog.Error("monitor: prune metrics", "err", err)
 	} else if n > 0 {
 		slog.Info("monitor: pruned metrics", "count", n)
+	}
+	if n, err := m.store.PruneHostMetricsBefore(now.Add(-hostRetain)); err != nil {
+		slog.Error("monitor: prune host metrics", "err", err)
+	} else if n > 0 {
+		slog.Info("monitor: pruned host metrics", "count", n)
 	}
 	if n, err := m.store.PruneUptimeBefore(now.Add(-uptimeRetain)); err != nil {
 		slog.Error("monitor: prune uptime", "err", err)

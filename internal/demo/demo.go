@@ -7,6 +7,7 @@ package demo
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -170,6 +171,7 @@ func Seed(st *store.Store, key [32]byte, now time.Time, passwordHash string) err
 	}
 
 	_ = metrics
+	s.hostHistory()
 	return s.err
 }
 
@@ -378,5 +380,22 @@ func invoicerFailureLog() [][2]string {
 		{"system", "    at Object.<anonymous> (/app/server/index.js:4:16)"},
 		{"system", "── end of container output ──"},
 		{"system", "new container failed its health probe — the previous container is still serving"},
+	}
+}
+
+// hostHistory fills the last 24 hours of the fictional server's readings: a
+// calm machine with a busier afternoon and a data disk that slowly fills.
+func (s *seeder) hostHistory() {
+	for i := 1440; i >= 1; i-- {
+		at := s.now.Add(-time.Duration(i) * time.Minute)
+		hour := float64(at.Hour()) + float64(at.Minute())/60
+		day := math.Sin((hour - 9) / 24 * 2 * math.Pi) // peaks mid-afternoon
+		wobble := math.Sin(float64(i)*0.9) + math.Sin(float64(i)*0.37)
+		cpu := 16 + 9*day + 1.0*wobble
+		s.check(s.st.InsertHostMetric(store.HostMetric{
+			TS: ts(at), CPU: math.Max(cpu, 2), Mem: 38 + 3*day + 0.4*wobble + float64(1440-i)/1440*2,
+			Disk: 37.1 + float64(1440-i)/1440*0.7, Load1: math.Max(0.15, 0.45+0.25*day+0.03*wobble),
+			NetRx: uint64(120<<10 + int(60*day*1024)), NetTx: 40 << 10, TempC: 44 + 4*day,
+		}))
 	}
 }

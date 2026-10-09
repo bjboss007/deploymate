@@ -67,6 +67,37 @@ templ ServerPage(vc ViewCtx, v ServerView) {
 			</div>
 		</div>
 		@ServerBody(v)
+		if v.Supported {
+			<div class="panel">
+				<div class="panel-title panel-title-row">
+					<span>History</span>
+					<select id="host-range" class="range-select" aria-label="Time range">
+						<option value="6h">Last 6 hours</option>
+						<option value="24h" selected>Last 24 hours</option>
+						<option value="7d">Last 7 days</option>
+					</select>
+				</div>
+				<div class="chart-grid">
+					<div>
+						<div class="chart-label">CPU %</div>
+						<canvas id="host-cpu-chart" height="90"></canvas>
+					</div>
+					<div>
+						<div class="chart-label">Memory in use %</div>
+						<canvas id="host-mem-chart" height="90"></canvas>
+					</div>
+					<div>
+						<div class="chart-label">Data disk used %</div>
+						<canvas id="host-disk-chart" height="90"></canvas>
+					</div>
+					<div>
+						<div class="chart-label">Load average (1 min)</div>
+						<canvas id="host-load-chart" height="90"></canvas>
+					</div>
+				</div>
+				<p id="host-history-empty" class="muted-text" hidden>History starts filling in a minute after DeployMate starts.</p>
+			</div>
+		}
 	}
 }
 

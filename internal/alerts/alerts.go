@@ -33,6 +33,8 @@ const (
 	EventResourceResized  = "resource_resized"
 	EventBackupFailed     = "backup_failed"
 	EventRestoreFailed    = "restore_failed"
+	EventHostProblem      = "host_problem"
+	EventHostRecovered    = "host_recovered"
 )
 
 // CatalogEvent pairs an event name with its UI label.
@@ -56,6 +58,8 @@ var Catalog = []CatalogEvent{
 	{EventResourceResized, "Resource resized"},
 	{EventBackupFailed, "Backup failed"},
 	{EventRestoreFailed, "Restore failed"},
+	{EventHostProblem, "Server problem (disk, memory, CPU, temperature)"},
+	{EventHostRecovered, "Server recovered"},
 }
 
 // KnownEvent reports whether a name is in the catalog.

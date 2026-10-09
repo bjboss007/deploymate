@@ -107,3 +107,49 @@ func TestAPIServer(t *testing.T) {
 		t.Errorf("no token = %d, want 401", code)
 	}
 }
+
+func TestDownsampleAveragesIntoBuckets(t *testing.T) {
+	var ms []store.HostMetric
+	for i := 0; i < 1000; i++ {
+		ms = append(ms, store.HostMetric{TS: time.Unix(int64(i), 0).UTC().Format(time.RFC3339), CPU: float64(i % 100)})
+	}
+	got := downsample(ms, 100)
+	if len(got) == 0 || len(got) > 100 {
+		t.Fatalf("got %d points", len(got))
+	}
+	if few := downsample(ms[:10], 100); len(few) != 10 {
+		t.Errorf("a short series must be returned as is, got %d", len(few))
+	}
+}
+
+func TestServerHistoryEndpoint(t *testing.T) {
+	e := newWebhookEnv(t)
+	owner, _ := e.st.CreateUser(store.User{Email: "o@test.dev", PasswordHash: "x", Role: "owner"})
+	e.st.CreateSession(store.Session{UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "c", ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)})
+	now := time.Now().UTC()
+	for i := 0; i < 5; i++ {
+		e.st.InsertHostMetric(store.HostMetric{TS: now.Add(-time.Duration(i) * time.Minute).Format(time.RFC3339Nano), CPU: 10 * float64(i+1), Mem: 50, Disk: 40, Load1: 0.5, TempC: -1})
+	}
+	// Older than the 6 h window, so it must not appear in it.
+	e.st.InsertHostMetric(store.HostMetric{TS: now.Add(-10 * time.Hour).Format(time.RFC3339Nano), CPU: 99, TempC: -1})
+
+	get := func(q string) map[string]any {
+		req := httptest.NewRequest(http.MethodGet, "/server/history"+q, nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status %d", rec.Code)
+		}
+		return decode(t, rec.Body.String())
+	}
+	if n := len(get("?range=6h")["cpu"].([]any)); n != 5 {
+		t.Errorf("6h window has %d points, want 5", n)
+	}
+	if n := len(get("?range=24h")["cpu"].([]any)); n != 6 {
+		t.Errorf("24h window has %d points, want 6", n)
+	}
+	if got := get("?range=nonsense")["range"]; got != "24h" {
+		t.Errorf("unknown range should fall back to 24h, got %v", got)
+	}
+}
