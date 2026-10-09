@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/hostinfo"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
@@ -259,6 +261,13 @@ func (s *Server) handleServerPage(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	v := s.buildServerView(s.serverReport(ctx))
+	if d := s.diskStats(ctx); d != nil && d.Error == "" {
+		if _, ok := s.rt.(runtime.Pruner); ok {
+			v.CanCleanup = d.BuildCacheBytes+d.DanglingBytes > 0
+			v.CleanupBuildKB, v.CleanupImageB = d.BuildCacheBytes, d.DanglingBytes
+			v.CleanupBytes = d.BuildCacheBytes + d.DanglingBytes
+		}
+	}
 	if r.Header.Get("HX-Request") == "true" {
 		render(w, r, http.StatusOK, templates.ServerBody(v))
 		return
@@ -440,4 +449,34 @@ func (s *Server) handleServerHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+// handleServerCleanup: POST /server/cleanup prunes the build cache and untagged
+// unused images. Dashboard only (no API or MCP route), and never while a build
+// is queued or running.
+func (s *Server) handleServerCleanup(w http.ResponseWriter, r *http.Request) {
+	back := func(msg string) {
+		http.Redirect(w, r, "/server?flash="+url.QueryEscape(msg), http.StatusSeeOther)
+	}
+	p, ok := s.rt.(runtime.Pruner)
+	if !ok {
+		back("This server's container engine cannot clean up from here.")
+		return
+	}
+	if busy, err := s.store.HasBuildInFlight(); err != nil || busy {
+		back("A deploy is queued or running. Clean up when it finishes.")
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+	res, err := p.PruneUnused(ctx)
+	if err != nil {
+		slog.Error("server: cleanup", "err", err)
+		back("Clean up failed: " + err.Error())
+		return
+	}
+	total := res.BuildCacheBytes + res.ImagesBytes
+	slog.Info("server: cleanup", "build_cache", res.BuildCacheBytes, "images", res.ImagesBytes)
+	_ = s.store.RecordEvent("", store.EventServerCleanup, "freed "+fmtMB(total)+" (build cache "+fmtMB(res.BuildCacheBytes)+", images "+fmtMB(res.ImagesBytes)+")")
+	back("Freed " + fmtMB(total) + ".")
 }

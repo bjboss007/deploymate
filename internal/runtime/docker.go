@@ -15,7 +15,9 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/image"
 	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/network"
@@ -477,6 +479,24 @@ func (d *Docker) DiskUsage(ctx context.Context) (DiskUsage, error) {
 		out.ReclaimableBytes += uint64(bc.Size)
 	}
 	return out, nil
+}
+
+// PruneUnused frees the build cache and untagged images nothing uses. Tagged
+// images stay: DeployMate keeps previous releases tagged so they can be rolled
+// back to, and a running app's image is always tagged.
+func (d *Docker) PruneUnused(ctx context.Context) (PruneResult, error) {
+	var res PruneResult
+	bc, err := d.cli.BuildCachePrune(ctx, build.CachePruneOptions{All: true})
+	if err != nil {
+		return res, fmt.Errorf("build cache: %w", err)
+	}
+	res.BuildCacheBytes = bc.SpaceReclaimed
+	ir, err := d.cli.ImagesPrune(ctx, filters.NewArgs(filters.Arg("dangling", "true")))
+	if err != nil {
+		return res, fmt.Errorf("images: %w", err)
+	}
+	res.ImagesBytes = ir.SpaceReclaimed
+	return res, nil
 }
 
 // ImageSize inspects a local image and returns its on-disk size in bytes.

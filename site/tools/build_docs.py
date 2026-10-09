@@ -266,6 +266,7 @@ CONCEPTS = """
 <li><strong>Uptime</strong> probes per domain, and the real <strong>certificate state</strong> (valid until, expiring, untrusted, failed).</li>
 <li><strong>Alerts</strong> to a webhook (Slack-compatible) for failed deploys, unhealthy apps, uptime changes, restarts, expiring certificates and more.</li>
 <li><strong>CPU and memory</strong> every 5 seconds, and live logs.</li>
+<li><strong>The server itself</strong> on the <strong>Server</strong> page: CPU, memory, disk space, temperature and power (on a laptop), whether Docker and Traefik are running, and a week of history. It says in one sentence when something needs you, can alert you when a problem lasts a few minutes, and has a <strong>Clean up</strong> button that frees build cache and unused images without touching running apps, rollback versions or your data.</li>
 </ul>
 """
 

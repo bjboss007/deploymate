@@ -133,6 +133,21 @@ type MemoryReporter interface {
 	TotalMemory(ctx context.Context) (uint64, error)
 }
 
+// Pruner is implemented by runtimes that can free disk space. Optional, like
+// MemoryReporter: callers type-assert.
+type Pruner interface {
+	// PruneUnused deletes the build cache and untagged images no container uses.
+	// It never touches tagged images (DeployMate's rollback images are tagged),
+	// containers or volumes.
+	PruneUnused(ctx context.Context) (PruneResult, error)
+}
+
+// PruneResult is what a cleanup freed.
+type PruneResult struct {
+	BuildCacheBytes uint64
+	ImagesBytes     uint64
+}
+
 // DiskUsage is a point-in-time snapshot of the daemon's disk consumption
 // (docker system df) plus the detail behind the totals.
 type DiskUsage struct {

@@ -82,6 +82,12 @@ func (s *Server) diskStats(ctx context.Context) *templates.DiskStats {
 			trackedVolumes[sv.VolumeName] = true
 		}
 	}
+	for _, img := range du.Images {
+		if len(img.Tags) == 0 && img.UsedBy == 0 {
+			out.DanglingBytes += img.Size
+			out.DanglingCount++
+		}
+	}
 	for _, v := range du.Volumes {
 		out.Volumes = append(out.Volumes, templates.VolumeRow{Name: v.Name, Bytes: v.Size, Tracked: trackedVolumes[v.Name]})
 	}

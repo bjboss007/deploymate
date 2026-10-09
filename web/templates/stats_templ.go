@@ -29,7 +29,9 @@ type DiskStats struct {
 	ImageCount        int
 	ContainerCount    int
 	VolumeCount       int
-	TrackedImageBytes int64 // kept rollback images (images.size_bytes sum)
+	TrackedImageBytes int64  // kept rollback images (images.size_bytes sum)
+	DanglingBytes     uint64 // untagged images no container uses (safe to prune)
+	DanglingCount     int
 	TopImages         []DiskImage
 	Volumes           []VolumeRow
 }
@@ -89,7 +91,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 			var templ_7745c5c3_Var3 string
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(stats.Total)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 55, Col: 41}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 57, Col: 41}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -102,7 +104,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmtPct(stats.SuccessRate))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 59, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 61, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -115,7 +117,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmtSec(stats.AvgBuildSec))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 63, Col: 55}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 65, Col: 55}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -128,7 +130,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(jsonForDayCounts(perDay))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 70, Col: 65}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 72, Col: 65}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -156,7 +158,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var7 templ.SafeURL
 					templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs("/apps/" + a.Slug)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 96, Col: 56}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 98, Col: 56}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 					if templ_7745c5c3_Err != nil {
@@ -169,7 +171,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var8 string
 					templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(a.Name)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 96, Col: 67}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 98, Col: 67}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 					if templ_7745c5c3_Err != nil {
@@ -187,7 +189,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 						var templ_7745c5c3_Var9 string
 						templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.JoinStringErrs(a.Slug)
 						if templ_7745c5c3_Err != nil {
-							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 98, Col: 52}
+							return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 100, Col: 52}
 						}
 						_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var9))
 						if templ_7745c5c3_Err != nil {
@@ -205,7 +207,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var10 string
 					templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(a.Total)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 101, Col: 34}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 103, Col: 34}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 					if templ_7745c5c3_Err != nil {
@@ -218,7 +220,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var11 string
 					templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(fmtPct(pctOf(a.Succeeded, a.Total)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 102, Col: 62}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 104, Col: 62}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 					if templ_7745c5c3_Err != nil {
@@ -231,7 +233,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var12 string
 					templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinStringErrs(fmtSec(a.AvgBuildSec))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 103, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 105, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 					if templ_7745c5c3_Err != nil {
@@ -264,7 +266,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var13 string
 					templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinStringErrs(disk.Error)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 116, Col: 38}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 118, Col: 38}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 					if templ_7745c5c3_Err != nil {
@@ -282,7 +284,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var14 string
 					templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(disk.ImagesBytes))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 120, Col: 59}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 122, Col: 59}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 					if templ_7745c5c3_Err != nil {
@@ -295,7 +297,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var15 string
 					templ_7745c5c3_Var15, templ_7745c5c3_Err = templ.JoinStringErrs(disk.ImageCount)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 121, Col: 48}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 123, Col: 48}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var15))
 					if templ_7745c5c3_Err != nil {
@@ -308,7 +310,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var16 string
 					templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(disk.ContainersBytes))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 124, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 126, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var16))
 					if templ_7745c5c3_Err != nil {
@@ -321,7 +323,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var17 string
 					templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(disk.ContainerCount)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 125, Col: 52}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 127, Col: 52}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 					if templ_7745c5c3_Err != nil {
@@ -334,7 +336,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var18 string
 					templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(disk.VolumesBytes))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 128, Col: 60}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 130, Col: 60}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 					if templ_7745c5c3_Err != nil {
@@ -347,7 +349,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var19 string
 					templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(disk.VolumeCount)
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 129, Col: 49}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 131, Col: 49}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 					if templ_7745c5c3_Err != nil {
@@ -360,7 +362,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var20 string
 					templ_7745c5c3_Var20, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(disk.BuildCacheBytes))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 132, Col: 63}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 134, Col: 63}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var20))
 					if templ_7745c5c3_Err != nil {
@@ -373,7 +375,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var21 string
 					templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(disk.ReclaimableBytes))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 136, Col: 64}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 138, Col: 64}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 					if templ_7745c5c3_Err != nil {
@@ -386,7 +388,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 					var templ_7745c5c3_Var22 string
 					templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(uint64(disk.TrackedImageBytes)))
 					if templ_7745c5c3_Err != nil {
-						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 140, Col: 73}
+						return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 142, Col: 73}
 					}
 					_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var22))
 					if templ_7745c5c3_Err != nil {
@@ -409,7 +411,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 							var templ_7745c5c3_Var23 string
 							templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(v.Name)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 158, Col: 35}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 160, Col: 35}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 							if templ_7745c5c3_Err != nil {
@@ -422,7 +424,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 							var templ_7745c5c3_Var24 string
 							templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(v.Bytes))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 159, Col: 46}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 161, Col: 46}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 							if templ_7745c5c3_Err != nil {
@@ -470,7 +472,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 							var templ_7745c5c3_Var25 string
 							templ_7745c5c3_Var25, templ_7745c5c3_Err = templ.JoinStringErrs(img.Tag)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 186, Col: 36}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 188, Col: 36}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var25))
 							if templ_7745c5c3_Err != nil {
@@ -483,7 +485,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 							var templ_7745c5c3_Var26 string
 							templ_7745c5c3_Var26, templ_7745c5c3_Err = templ.JoinStringErrs(fmtBytes(img.Size))
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 187, Col: 47}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 189, Col: 47}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var26))
 							if templ_7745c5c3_Err != nil {
@@ -496,7 +498,7 @@ func StatsPage(vc ViewCtx, stats FleetStats, perApp []store.AppDeploymentStats, 
 							var templ_7745c5c3_Var27 string
 							templ_7745c5c3_Var27, templ_7745c5c3_Err = templ.JoinStringErrs(img.UsedBy)
 							if templ_7745c5c3_Err != nil {
-								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 188, Col: 39}
+								return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/stats.templ`, Line: 190, Col: 39}
 							}
 							_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var27))
 							if templ_7745c5c3_Err != nil {

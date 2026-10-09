@@ -125,3 +125,11 @@ func (s *Store) HasActiveDeployment(appID string) (bool, error) {
 	}
 	return n > 0, err
 }
+
+// HasBuildInFlight reports whether any deployment is queued or building; a
+// disk cleanup waits for it so it cannot pull a build's cache out from under it.
+func (s *Store) HasBuildInFlight() (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM deployments WHERE status IN ('queued', 'building')`).Scan(&n)
+	return n > 0, err
+}

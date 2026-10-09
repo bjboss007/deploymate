@@ -31,6 +31,8 @@ const (
 	EventRootDirChanged  = "root_directory_changed"
 	// EventDeploySkipped: a push arrived but changed nothing in the app's build folder.
 	EventDeploySkipped   = "deploy_skipped"
+	// EventServerCleanup: the owner pruned build cache and unused images from the Server page.
+	EventServerCleanup = "server_cleanup"
 	EventGitConnected    = "git_connected"
 	EventAPIAction       = "api_action" // something changed through the API (agent/script); the data names the token
 	EventServiceStarted  = "service_started"

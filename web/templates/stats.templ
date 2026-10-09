@@ -22,6 +22,8 @@ type DiskStats struct {
 	ContainerCount    int
 	VolumeCount       int
 	TrackedImageBytes int64 // kept rollback images (images.size_bytes sum)
+	DanglingBytes     uint64 // untagged images no container uses (safe to prune)
+	DanglingCount     int
 	TopImages         []DiskImage
 	Volumes           []VolumeRow
 }

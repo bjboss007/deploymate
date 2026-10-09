@@ -4,12 +4,14 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/hostinfo"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -151,5 +153,83 @@ func TestServerHistoryEndpoint(t *testing.T) {
 	}
 	if got := get("?range=nonsense")["range"]; got != "24h" {
 		t.Errorf("unknown range should fall back to 24h, got %v", got)
+	}
+}
+
+// prunerRuntime is the http fake plus a recorded PruneUnused.
+type prunerRuntime struct {
+	fakeRuntime
+	pruned int
+	res    runtime.PruneResult
+}
+
+func (p *prunerRuntime) PruneUnused(context.Context) (runtime.PruneResult, error) {
+	p.pruned++
+	return p.res, nil
+}
+
+func cleanupEnv(t *testing.T) (*webhookEnv, *prunerRuntime) {
+	t.Helper()
+	e := newWebhookEnv(t)
+	rt := &prunerRuntime{res: runtime.PruneResult{BuildCacheBytes: 3 << 30, ImagesBytes: 1 << 30}}
+	rt.disk = runtime.DiskUsage{BuildCacheBytes: 3 << 30, Images: []runtime.ImageUsage{{Size: 1 << 30}}}
+	e.s.rt = rt
+	owner, _ := e.st.CreateUser(store.User{Email: "o@test.dev", PasswordHash: "x", Role: "owner"})
+	e.st.CreateSession(store.Session{UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)})
+	return e, rt
+}
+
+func postCleanup(e *webhookEnv) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/server/cleanup", strings.NewReader(url.Values{"csrf_token": {"csrf"}}.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestServerCleanupFreesSpace(t *testing.T) {
+	e, rt := cleanupEnv(t)
+	rec := postCleanup(e)
+	if rec.Code != http.StatusSeeOther || rt.pruned != 1 {
+		t.Fatalf("status %d, pruned %d", rec.Code, rt.pruned)
+	}
+	if loc := rec.Header().Get("Location"); !strings.Contains(loc, "Freed+4.0+GB") {
+		t.Errorf("redirect %q should say what was freed", loc)
+	}
+}
+
+func TestServerCleanupWaitsForABuild(t *testing.T) {
+	e, rt := cleanupEnv(t)
+	_, app := e.addApp(t, "site", "main")
+	if _, err := e.st.CreateDeployment(store.Deployment{AppID: app.ID, Kind: "deploy", Status: "building"}); err != nil {
+		t.Fatal(err)
+	}
+	rec := postCleanup(e)
+	if rt.pruned != 0 {
+		t.Error("cleanup ran during a build")
+	}
+	if !strings.Contains(rec.Header().Get("Location"), "deploy") {
+		t.Errorf("redirect %q should explain the wait", rec.Header().Get("Location"))
+	}
+}
+
+func TestServerCleanupIsDashboardOnly(t *testing.T) {
+	e, _ := cleanupEnv(t)
+	for _, p := range []string{"/api/v1/server/cleanup", "/api/v1/cleanup"} {
+		req := httptest.NewRequest(http.MethodPost, p, nil)
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		if rec.Code == http.StatusOK || rec.Code == http.StatusSeeOther {
+			t.Errorf("%s answered %d: cleanup must not be reachable through the API", p, rec.Code)
+		}
+	}
+	// The page offers it, with the size.
+	req := httptest.NewRequest(http.MethodGet, "/server", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, req)
+	if body := rec.Body.String(); !strings.Contains(body, "Clean up (4.0 GB)") || !strings.Contains(body, "rollback") {
+		t.Errorf("page missing the clean-up panel")
 	}
 }

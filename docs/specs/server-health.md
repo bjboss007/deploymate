@@ -34,11 +34,15 @@ self-hosted server stop working. Planned 2026-10-09, built in three steps.
   critical alerts again, and recovery is announced once after 3 clear readings (`hostWatch`).
   Traefik not running is part of this; Docker down shows on the page but is only caught indirectly.
 
-## Step 3 — cleanup (planned)
+## Step 3 — Clean up (done 2026-10-09)
 
-A "Clean up" action that prunes
-build cache and unused images after showing the reclaimable size; never volumes or anything a running
-app uses; dashboard-only, not exposed to agents at first.
+`POST /server/cleanup` (dashboard only: no API route, no MCP tool; tested) calls `runtime.Pruner.PruneUnused`
+(`Docker`: `BuildCachePrune{All:true}` + `ImagesPrune{dangling=true}`). It never touches tagged images
+(rollback releases and running apps' images are tagged), containers or volumes, and refuses while any
+deployment is queued or building (`store.HasBuildInFlight`). The panel shows the size first (build cache +
+untagged unused images, from `DiskStats.DanglingBytes`) and asks for confirmation; the result is a flash
+message and a `server_cleanup` event. Limits: the cache of the separate `dm-buildkit` container (railpack
+builds) is not covered; the panel only appears when the engine reports something to free.
 
 ## Notes
 

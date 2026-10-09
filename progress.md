@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-09 (Server page, all three steps)** — Step 2: `host_metrics` table + monitor sampling every minute,
+history charts (6h/24h/7d, `/server/history`), host alerts (`host_problem`/`host_recovered`, a problem must last
+3 readings, one alert per area+level, recovery announced once). Step 3: dashboard-only **Clean up** (build cache
++ untagged unused images; never rollback images, volumes or running apps; refuses during a build). Tour tab and
+demo history added. Follow-ups in `docs/improvements.md`. Details: `docs/specs/server-health.md`.
+
 **2026-10-09 (Server page, step 1 of 3)** — New `/server` page, `GET /api/v1/server` and `server_status` MCP
 tool: `internal/hostinfo` (reads /proc and /sys, injectable root), `Evaluate` verdict with thresholds,
 page auto-refreshing via HTMX, Docker breakdown, busiest apps, demo host + website tour tab. Spec and the

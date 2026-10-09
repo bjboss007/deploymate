@@ -6,6 +6,12 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **Server page follow-ups** — 2026-10-09: (a) Clean up does not reach the `dm-buildkit` container's own
+  cache (railpack builds) — add a prune through the buildkit daemon; (b) host alerts see "Traefik not
+  running" but not "Docker down" directly (the monitor has no cheap ping on the Runtime interface);
+  (c) per-app history of CPU/memory on the Server page (the data exists in `metrics`); (d) nothing has been
+  looked at on the real Ubuntu server yet — check the numbers against `free`/`df`/`uptime` after updating.
+
 - [ ] **Dashboard notice for a new release** — 2026-10-08: `deploymate update --check` exists; show
   "v0.1.3 available" in the dashboard (checked at most daily, opt-out) instead of a silent auto-update.
 - [ ] **`update` should also refresh Traefik/host setup when a release needs it** — 2026-10-08: update only

@@ -14,6 +14,11 @@ type ServerView struct {
 	TopApps   []ServerApp
 	Docker    *DiskStats
 	Sampled   string
+	// Clean up: what pruning would free (build cache + untagged unused images).
+	CanCleanup      bool
+	CleanupBytes    uint64
+	CleanupBuildKB  uint64 // build cache bytes
+	CleanupImageB   uint64 // untagged image bytes
 }
 
 // ServerFinding is one thing the verdict wants you to know.
@@ -67,6 +72,19 @@ templ ServerPage(vc ViewCtx, v ServerView) {
 			</div>
 		</div>
 		@ServerBody(v)
+		if v.CanCleanup {
+			<div class="panel">
+				<div class="panel-title">Free disk space</div>
+				<p class="muted-text">
+					Removes the build cache ({ fmtBytes(v.CleanupBuildKB) }) and untagged images nothing uses ({ fmtBytes(v.CleanupImageB) }).
+					Your running apps, the previous releases you can roll back to, and all database data are kept. The next build may take longer while the cache refills.
+				</p>
+				<form method="post" action="/server/cleanup" onsubmit="return confirm('Free about ' + this.dataset.size + '? Running apps, rollback images and data are not touched.')" data-size={ fmtBytes(v.CleanupBytes) }>
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn" type="submit">Clean up ({ fmtBytes(v.CleanupBytes) })</button>
+				</form>
+			</div>
+		}
 		if v.Supported {
 			<div class="panel">
 				<div class="panel-title panel-title-row">
