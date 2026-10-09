@@ -214,7 +214,7 @@ change.
   protection, so sign-in is now rate-limited (10 failures per address / 15 min, 30 per email; the client
   address is the proxy's own X-Forwarded-For entry). Verified with real Traefik v3.7.14 on a bridge network
   (routing, priority, redirect, upgrade from an old container, rollback); **host networking itself is not
-  tested from here (Docker Desktop has none) — confirm on the owner's server**. Open: Settings UI for the
+  testable on Docker Desktop; confirmed on the owner's Ubuntu server 2026-10-09 (update migrated Traefik to `host`)**. Open: Settings UI for the
   host name; preview subdomains get Traefik's default certificate (no wildcard issuance by HTTP challenge);
   no 2FA.
 - [x] **Swap file on low-RAM hosts** — done: `bootstrap.sh` now

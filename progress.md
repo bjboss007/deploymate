@@ -7,6 +7,11 @@
 
 ## Where we stopped
 
+**2026-10-09 (v0.3.0 live on the real server)** — Tagged `v0.3.0`; owner ran `sudo deploymate update` on the Ubuntu
+server: binary swapped, Traefik v3.3 → v3.7.14 recreated on the **host network** (confirmed `host traefik:v3.7.14`),
+traefik.yml regenerated with the Let's Encrypt email kept. Still to confirm by the owner: `deploymate.link` and the
+dashboard load through the tunnel; `DEPLOYMATE_LE_MODE=off` active (then redeploy `site`); Clean up and "Push skipped".
+
 **2026-10-09 (dashboard on its own domain, backlog round 3 of 3)** — `DEPLOYMATE_DASHBOARD_HOST` → DeployMate
 writes a Traefik file-provider route (`internal/dashroute`, host validated, preview catch-all at priority 1);
 Traefik now runs on the **host network** (`deploy/traefik-run.sh`, which `update` uses to migrate servers and to
