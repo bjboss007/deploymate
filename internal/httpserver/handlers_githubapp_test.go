@@ -24,8 +24,9 @@ import (
 // fakeGitHub answers the two calls "Connect GitHub" makes.
 type fakeGitHub struct {
 	*httptest.Server
-	key    *rsa.PrivateKey
-	pemKey string
+	key        *rsa.PrivateKey
+	pemKey     string
+	tokenCalls int
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -47,6 +48,45 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			"pem": f.pemKey, "webhook_secret": "the-webhook-secret", "client_id": "Iv1.abc", "client_secret": "the-client-secret",
 			"owner": map[string]string{"login": "habib", "type": "User"},
 		})
+	})
+	mux.HandleFunc("/app/installations/", func(w http.ResponseWriter, r *http.Request) { // POST .../{id}/access_tokens
+		iss, err := githubapp.VerifyAppJWT(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), &k.PublicKey, time.Now())
+		if err != nil || iss != 4242 || r.Method != http.MethodPost {
+			w.WriteHeader(401)
+			w.Write([]byte(`{"message":"bad jwt"}`))
+			return
+		}
+		f.tokenCalls++
+		switch {
+		case strings.Contains(r.URL.Path, "/9/"):
+			w.Write([]byte(`{"token":"ghs_nine","expires_at":"` + time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`))
+		case strings.Contains(r.URL.Path, "/10/"):
+			w.Write([]byte(`{"token":"ghs_ten","expires_at":"` + time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`))
+		default:
+			w.WriteHeader(404)
+			w.Write([]byte(`{"message":"Not Found"}`))
+		}
+	})
+	mux.HandleFunc("/installation/repositories", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get("Authorization") {
+		case "Bearer ghs_nine":
+			w.Write([]byte(`{"total_count":2,"repositories":[
+				{"id":1,"full_name":"habib/site","private":true,"default_branch":"main","clone_url":"https://github.com/habib/site.git"},
+				{"id":2,"full_name":"habib/old","private":false,"default_branch":"main","clone_url":"https://github.com/habib/old.git","archived":true}]}`))
+		case "Bearer ghs_ten":
+			w.Write([]byte(`{"total_count":1,"repositories":[{"id":3,"full_name":"acme/web","private":false,"default_branch":"develop","clone_url":"https://github.com/acme/web.git"}]}`))
+		default:
+			w.WriteHeader(401)
+		}
+	})
+	mux.HandleFunc("/repos/", func(w http.ResponseWriter, r *http.Request) { // branches
+		ok := map[string]bool{"/repos/habib/site/branches/main": true, "/repos/habib/site/branches/feature/x": true, "/repos/acme/web/branches/develop": true}
+		if ok[r.URL.Path] && strings.HasPrefix(r.Header.Get("Authorization"), "Bearer ghs_") {
+			w.Write([]byte(`{"name":"x"}`))
+			return
+		}
+		w.WriteHeader(404)
+		w.Write([]byte(`{"message":"Branch not found"}`))
 	})
 	mux.HandleFunc("/app/installations", func(w http.ResponseWriter, r *http.Request) {
 		iss, err := githubapp.VerifyAppJWT(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer "), &k.PublicKey, time.Now())
@@ -294,5 +334,151 @@ func TestGitHubAppWebhookVerifiesItsSignature(t *testing.T) {
 	// The per-repository webhook route still works beside it.
 	if rec := post("push", "{}", ""); rec.Code != http.StatusUnauthorized {
 		t.Errorf("unexpected: %d", rec.Code)
+	}
+}
+
+// ---- repositories (phase 2) -------------------------------------------------
+
+func (e *ghEnv) newApp(t *testing.T, slug string) store.App {
+	t.Helper()
+	owner, _ := e.st.GetUserByEmail("o@test.dev")
+	proj, err := e.st.GetProjectBySlug(owner.ID, "gh")
+	if err != nil {
+		proj, err = e.st.CreateProject(store.Project{UserID: owner.ID, Name: "GH", Slug: "gh"})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	app, err := e.st.CreateApp(store.App{ProjectID: proj.ID, Name: slug, Slug: slug, Port: 8080})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return app
+}
+
+func (e *ghEnv) connectRepo(slug, repo, branch string) *httptest.ResponseRecorder {
+	return e.req(http.MethodPost, "/apps/"+slug+"/git/github", "dm.example.com", url.Values{"repo": {repo}, "branch": {branch}})
+}
+
+func TestAppPageOffersTheRepositoriesTheAppCanSee(t *testing.T) {
+	e := newGHEnv(t)
+	e.newApp(t, "web")
+
+	before := e.req(http.MethodGet, "/apps/web", "dm.example.com", nil).Body.String()
+	if strings.Contains(before, "From GitHub") || !strings.Contains(before, "connect GitHub") {
+		t.Error("without a connection the page should only hint at Connect GitHub")
+	}
+
+	e.connect(t, "dm.example.com")
+	body := e.req(http.MethodGet, "/apps/web", "dm.example.com", nil).Body.String()
+	for _, want := range []string{"From GitHub", `value="9:habib/site"`, "habib/site (private)", `value="10:acme/web"`, "No deploy key or webhook"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("picker missing %q", want)
+		}
+	}
+	if strings.Contains(body, "habib/old") {
+		t.Error("an archived repository must not be offered")
+	}
+	if strings.Contains(body, "ghs_") {
+		t.Error("an installation token reached the page")
+	}
+}
+
+func TestConnectingAPickedRepositoryCreatesAnAppSourceWithoutKeys(t *testing.T) {
+	e := newGHEnv(t)
+	app := e.newApp(t, "web")
+	e.connect(t, "dm.example.com")
+
+	rec := e.connectRepo("web", "9:habib/site", "")
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "Repository+connected") {
+		t.Fatalf("connect: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	got, _ := e.st.GetAppByID(app.ID)
+	gs, err := e.st.GetGitSource(got.GitSourceID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gs.CloneMethod != store.CloneGitHubApp || gs.InstallationID != 9 || gs.RepoFullName != "habib/site" ||
+		gs.DefaultBranch != "main" || gs.RepoURL != "https://github.com/habib/site.git" || gs.PrivateKeyEnc != "" {
+		t.Errorf("source: %+v", gs)
+	}
+	page := e.req(http.MethodGet, "/apps/web", "dm.example.com", nil).Body.String()
+	for _, bad := range []string{"Deploy key", "Webhook secret", "Webhook URL"} {
+		if i := strings.Index(page, bad); i >= 0 {
+			t.Errorf("an app source must show no %q, found at: ...%s...", bad, page[max(0, i-120):min(len(page), i+80)])
+		}
+	}
+	if !strings.Contains(page, "Through your GitHub app") {
+		t.Error("the page should say the access is through the GitHub app")
+	}
+	if !strings.Contains(page, "habib/site") {
+		t.Error("the repository should be shown")
+	}
+	// A branch with a slash and a non-default branch of another installation.
+	app2 := e.newApp(t, "web2")
+	if rec := e.connectRepo("web2", "9:habib/site", "feature/x"); !strings.Contains(rec.Header().Get("Location"), "Repository+connected") {
+		t.Errorf("branch with a slash: %s", rec.Header().Get("Location"))
+	}
+	got2, _ := e.st.GetAppByID(app2.ID)
+	if gs2, _ := e.st.GetGitSource(got2.GitSourceID); gs2.DefaultBranch != "feature/x" {
+		t.Errorf("branch = %q", gs2.DefaultBranch)
+	}
+	app3 := e.newApp(t, "web3")
+	e.connectRepo("web3", "10:acme/web", "")
+	got3, _ := e.st.GetAppByID(app3.ID)
+	if gs3, _ := e.st.GetGitSource(got3.GitSourceID); gs3.DefaultBranch != "develop" || gs3.InstallationID != 10 {
+		t.Errorf("default branch of a repository should come from GitHub: %+v", gs3)
+	}
+}
+
+func TestConnectingARepositoryRefusesWhatGitHubDoesNotShow(t *testing.T) {
+	e := newGHEnv(t)
+	e.newApp(t, "web")
+	// Not connected to GitHub yet.
+	if loc := e.connectRepo("web", "9:habib/site", "").Header().Get("Location"); !strings.Contains(loc, "not+connected") {
+		t.Errorf("not connected: %s", loc)
+	}
+	e.connect(t, "dm.example.com")
+	for name, c := range map[string]struct{ repo, branch, want string }{
+		"a repository the installation can't see":                        {"9:evil/other", "", "can%27t+see"},
+		"the right repository, the wrong installation":                   {"10:habib/site", "", "can%27t+see"},
+		"an archived repository still visible to the API is not special": {"9:habib/old", "", ""}, // visible to the API, so allowed
+		"a branch that does not exist":                                   {"9:habib/site", "nope", "does+not+exist"},
+		"a malformed choice":                                             {"habib/site", "", "Pick+a+repository"},
+		"an option injection in the branch":                              {"9:habib/site", "--upload-pack=x", "not+a+valid+branch"},
+	} {
+		app := e.newApp(t, strings.ReplaceAll(strings.ToLower(name[:8]), " ", "")+"x")
+		rec := e.connectRepo(app.Slug, c.repo, c.branch)
+		loc := rec.Header().Get("Location")
+		if c.want == "" {
+			continue
+		}
+		if !strings.Contains(loc, c.want) {
+			t.Errorf("%s: %s, want it to contain %q", name, loc, c.want)
+		}
+		got, _ := e.st.GetAppByID(app.ID)
+		if got.GitSourceID != "" {
+			t.Errorf("%s: a git source was created", name)
+		}
+	}
+	// Already connected.
+	app := e.newApp(t, "twice")
+	e.connectRepo("twice", "9:habib/site", "")
+	if loc := e.connectRepo("twice", "9:habib/site", "").Header().Get("Location"); !strings.Contains(loc, "already") {
+		t.Errorf("second connect: %s", loc)
+	}
+	_ = app
+}
+
+func TestInstallationTokensAreReusedAcrossRequests(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	e.newApp(t, "a1")
+	e.newApp(t, "a2")
+	e.connectRepo("a1", "9:habib/site", "")
+	before := e.gh.tokenCalls
+	e.connectRepo("a2", "9:habib/site", "main")
+	if e.gh.tokenCalls != before {
+		t.Errorf("a second connect minted %d more tokens; the cached one should be reused", e.gh.tokenCalls-before)
 	}
 }

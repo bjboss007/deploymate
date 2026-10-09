@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -24,13 +24,13 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/githubci"
-	"github.com/habibmuhammad/deploymate/internal/logos"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
+	"github.com/habibmuhammad/deploymate/internal/logos"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
-	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/sse"
+	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/swap"
 	"github.com/habibmuhammad/deploymate/web/templates"
@@ -324,7 +324,13 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 
 	var git *templates.GitInfo
 	if app.GitSourceID != "" {
-		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil {
+		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil && gs.CloneMethod == store.CloneGitHubApp {
+			// Connected through the GitHub App: no deploy key or webhook of its own.
+			git = &templates.GitInfo{Method: "github_app", RepoName: gs.RepoFullName, RepoURL: gs.RepoURL, Provider: gs.Provider, DefaultBranch: gs.DefaultBranch}
+			if app.DeployMode != store.DeployModeArtifact {
+				git.MemoryNote = s.jvmMemoryNote(r.Context(), app)
+			}
+		} else if err == nil {
 			secret, err1 := crypto.Decrypt(s.encKey, gs.WebhookSecretEnc)
 			pubKey, err2 := gitpkg.PublicKeyFromPEM(mustDecrypt(s, gs.PrivateKeyEnc))
 			if err1 == nil && err2 == nil {
@@ -389,7 +395,7 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs, s.replicasInfo(app), s.envPending(app, deployments)))
+	render(w, r, http.StatusOK, templates.AppPage(s.viewCtx(r), project, app, deployments, envVars, git, domains, s.leMode, uptime, s.previewURL(r, app), healthReason, commitURLs, s.replicasInfo(app), s.envPending(app, deployments), s.githubPick(r.Context(), git == nil)))
 }
 
 // replicasInfo builds the app page's replicas panel from the replica table.
@@ -1006,7 +1012,6 @@ func (s *Server) handleAppReplicas(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/deployments/"+d.ID, http.StatusSeeOther)
 }
 
-
 // envPending reports whether environment variables were changed after the
 // version the app is running was deployed — they only apply to a container
 // created from now on, so the page offers a Redeploy. Changes are read from
@@ -1040,7 +1045,6 @@ func (s *Server) envPending(app store.App, deployments []store.Deployment) bool 
 	return false
 }
 
-
 // handleAppearance saves the owner's logo and identity-colour choices for
 // the app's cards ("" for either means automatic).
 func (s *Server) handleAppearance(w http.ResponseWriter, r *http.Request) {
@@ -1068,7 +1072,6 @@ func (s *Server) handleAppearance(w http.ResponseWriter, r *http.Request) {
 	}
 	back("Appearance saved.")
 }
-
 
 // handleServiceExclusion opts an app out of (or back into) receiving one
 // service's connection URL. It takes effect when the app's container is next

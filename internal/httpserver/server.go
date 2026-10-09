@@ -3,6 +3,7 @@
 package httpserver
 
 import (
+	"github.com/habibmuhammad/deploymate/internal/gitauth"
 	"github.com/habibmuhammad/deploymate/internal/hostinfo"
 	"io/fs"
 	"log/slog"
@@ -48,6 +49,10 @@ type Server struct {
 	demoHost    bool
 	publicHost  string // DEPLOYMATE_DASHBOARD_HOST: how the internet reaches this server
 	githubWeb   string // https://github.com override (tests)
+	authOnce    sync.Once
+	repoMu      sync.Mutex
+	repoCacheV  repoCache // the app page's repository list, briefly cached
+	auth        *gitauth.Resolver
 	loginLimit  *loginLimiter
 	previewRR   sync.Map // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
@@ -211,6 +216,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/env/bulk", am.CheckCSRF(s.handleEnvVarBulk))
 		r.Post("/apps/{slug}/env/{id}/delete", am.CheckCSRF(s.handleEnvVarDelete))
 		r.Post("/apps/{slug}/git", am.CheckCSRF(s.handleGitConnect))
+		r.Post("/apps/{slug}/git/github", am.CheckCSRF(s.handleGitHubRepoConnect))
 		r.Post("/apps/{slug}/git/deploy", am.CheckCSRF(s.handleGitDeploy))
 		r.Post("/apps/{slug}/git/deploy-latest", am.CheckCSRF(s.handleDeployLatest))
 		r.Post("/apps/{slug}/git/rotate-secret", am.CheckCSRF(s.handleRotateWebhookSecret))

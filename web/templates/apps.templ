@@ -12,6 +12,10 @@ import (
 
 // GitInfo is the connected-repo data shown on the app page.
 type GitInfo struct {
+	// Method is how DeployMate reaches the repository: "deploy_key" (the manual
+	// setup) or "github_app" (Connect GitHub). RepoName is owner/name for the latter.
+	Method        string
+	RepoName      string
 	RepoURL       string
 	Provider      string
 	DefaultBranch string
@@ -28,6 +32,29 @@ type GitInfo struct {
 	WorkflowGradle string // generated workflow files, ready to copy
 	WorkflowMaven  string
 	MemoryNote     string // low-memory advice for an on-server Java build; "" = none
+}
+
+// repoOptionLabel is the text of one repository in the picker.
+func repoOptionLabel(o GitHubRepoOption) string {
+	if o.Private {
+		return o.Label + " (private)"
+	}
+	return o.Label
+}
+
+// GitHubPick is what the app page needs to offer "pick a repository" when GitHub is
+// connected (zero value: not connected, nothing to offer).
+type GitHubPick struct {
+	Connected bool
+	Repos     []GitHubRepoOption
+	Error     string
+}
+
+// GitHubRepoOption is one repository the app can be connected to.
+type GitHubRepoOption struct {
+	Value   string // installation id + ":" + owner/name
+	Label   string // owner/name
+	Private bool
 }
 
 // ReplicaView is one replica slot as the app page shows it.
@@ -301,7 +328,7 @@ templ appDeployAction(vc ViewCtx, app store.App, git *GitInfo) {
 	}
 }
 
-templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo, envPending bool) {
+templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []store.Deployment, envVars []store.EnvVar, git *GitInfo, domains []store.Domain, leMode string, uptime map[string][]bool, previewURL string, healthReason string, commitURLs map[string]string, replicas ReplicasInfo, envPending bool, ghPick GitHubPick) {
 	@Layout(vc, app.Name, app.Slug, []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: app.Name}}) {
 		<header class="app-head">
 			<div class="app-id app-id-tiled">
@@ -593,6 +620,32 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 			<div class="panel">
 				<div class="panel-title">Git</div>
 				if git == nil {
+					if ghPick.Connected {
+						if len(ghPick.Repos) > 0 {
+							<form method="post" action={ "/apps/" + app.Slug + "/git/github" } class="git-form">
+								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+								<label>From GitHub
+									<select name="repo" required>
+										for _, o := range ghPick.Repos {
+											<option value={ o.Value }>{ repoOptionLabel(o) }</option>
+										}
+									</select>
+								</label>
+								<label>Branch
+									<input class="branch-input" type="text" name="branch" placeholder="default branch"/>
+								</label>
+								<button class="btn btn-primary" type="submit">Connect repository</button>
+							</form>
+							<p class="muted panel-hint">No deploy key or webhook to set up: DeployMate reads the repository through your GitHub app. Leave the branch empty to use the repository's default.</p>
+						} else if ghPick.Error != "" {
+							<p class="warn-note">{ ghPick.Error }</p>
+						} else {
+							<p class="muted panel-hint">GitHub is connected, but the app isn't installed on any repository yet. <a href="/settings/github">Install it on GitHub</a>, then come back.</p>
+						}
+						<p class="muted panel-hint">Or connect any repository with a deploy key:</p>
+					} else {
+						<p class="muted panel-hint">Tip: <a href="/settings/github">connect GitHub</a> once to pick repositories from a list instead of pasting keys and webhook URLs.</p>
+					}
 					<form method="post" action={ "/apps/" + app.Slug + "/git" } class="git-form">
 						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 						<label>Repository
@@ -619,24 +672,31 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 									<td>Repository</td>
 									<td class="mono">{ git.RepoURL } <span class="muted">({ git.Provider }, { git.DefaultBranch })</span></td>
 								</tr>
-								<tr>
-									<td>Deploy key</td>
-									<td class="mono key-cell">{ git.PublicKey }</td>
-								</tr>
-								<tr>
-									<td>Webhook URL</td>
-									<td class="mono">https://your-host{ git.WebhookPath }</td>
-								</tr>
-								<tr>
-									<td>Webhook secret</td>
-									<td class="mono">
-										{ git.WebhookSecret }
-										<form method="post" action={ "/apps/" + app.Slug + "/git/rotate-secret" } class="inline-form" onsubmit="return confirm('Generate a new webhook secret? Pushes are rejected until you paste it into the webhook on your git provider.')">
-											<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-											<button class="btn btn-ghost btn-sm" type="submit">Rotate secret</button>
-										</form>
-									</td>
-								</tr>
+								if git.Method == "github_app" {
+									<tr>
+										<td>Access</td>
+										<td>Through your GitHub app. <a href="/settings/github">Manage</a></td>
+									</tr>
+								} else {
+									<tr>
+										<td>Deploy key</td>
+										<td class="mono key-cell">{ git.PublicKey }</td>
+									</tr>
+									<tr>
+										<td>Webhook URL</td>
+										<td class="mono">https://your-host{ git.WebhookPath }</td>
+									</tr>
+									<tr>
+										<td>Webhook secret</td>
+										<td class="mono">
+											{ git.WebhookSecret }
+											<form method="post" action={ "/apps/" + app.Slug + "/git/rotate-secret" } class="inline-form" onsubmit="return confirm('Generate a new webhook secret? Pushes are rejected until you paste it into the webhook on your git provider.')">
+												<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+												<button class="btn btn-ghost btn-sm" type="submit">Rotate secret</button>
+											</form>
+										</td>
+									</tr>
+								}
 							</tbody>
 						</table>
 						<div class="git-deploy">
@@ -664,7 +724,11 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 						if git.MemoryNote != "" {
 							<p class="notice notice-warn">{ git.MemoryNote }</p>
 						}
-						<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
+						if git.Method == "github_app" {
+							<p class="muted panel-hint">Every push to { git.DefaultBranch } builds and deploys automatically, through your GitHub app: no deploy key or webhook to add.</p>
+						} else {
+							<p class="muted panel-hint">Add the deploy key to your repo (read-only access), then configure the webhook to push events. Every push to { git.DefaultBranch } builds and deploys automatically.</p>
+						}
 					}
 					if git.GitHub {
 						<div class="prebuilt">
@@ -993,19 +1057,25 @@ templ firstDeployGuide(app store.App, git *GitInfo, deployments []store.Deployme
 	if git != nil && len(deployments) == 0 && !(git.GitHub && git.DeployMode == "artifact") {
 		<div class="diagnosis diagnosis-info" role="status">
 			<div class="diagnosis-title">Repository connected — deploy it for the first time</div>
-			<ol class="steps">
-				<li>
-					If the repository is private, add this deploy key to it (read-only):
-					<div class="url-readout">
-						<div class="url-readout-head">
-							<span class="svc-key">Deploy key</span>
-							<button class="btn btn-ghost btn-sm readout-copy js-copy" type="button" data-copy="first-deploy-key">Copy</button>
+			if git.Method == "github_app" {
+				<ol class="steps">
+					<li>Review what will ship and deploy <strong>{ git.DefaultBranch }</strong>. Nothing else to set up: DeployMate reads the repository through your GitHub app, and later pushes deploy by themselves.</li>
+				</ol>
+			} else {
+				<ol class="steps">
+					<li>
+						If the repository is private, add this deploy key to it (read-only):
+						<div class="url-readout">
+							<div class="url-readout-head">
+								<span class="svc-key">Deploy key</span>
+								<button class="btn btn-ghost btn-sm readout-copy js-copy" type="button" data-copy="first-deploy-key">Copy</button>
+							</div>
+							<code class="url-readout-value" id="first-deploy-key">{ git.PublicKey }</code>
 						</div>
-						<code class="url-readout-value" id="first-deploy-key">{ git.PublicKey }</code>
-					</div>
-				</li>
-				<li>Review what will ship and deploy <strong>{ git.DefaultBranch }</strong>. Add the webhook from Settings → Git later so pushes deploy by themselves.</li>
-			</ol>
+					</li>
+					<li>Review what will ship and deploy <strong>{ git.DefaultBranch }</strong>. Add the webhook from Settings → Git later so pushes deploy by themselves.</li>
+				</ol>
+			}
 			<div class="diagnosis-actions">
 				<a class="btn btn-primary btn-sm" href={ templ.SafeURL("/apps/" + app.Slug + "/deploy-preview") }>Review &amp; deploy</a>
 			</div>

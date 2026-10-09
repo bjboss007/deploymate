@@ -20,17 +20,24 @@ type GitSource struct {
 	// APITokenEnc is the encrypted fine-grained GitHub token (Actions: read)
 	// prebuilt deploys use to list runs and download artifacts; "" = none.
 	APITokenEnc string
+	// InstallationID and RepoFullName ("owner/name", lower case) are set for sources
+	// created through Connect GitHub (CloneMethod "github_app"); 0 and "" otherwise.
+	InstallationID int64
+	RepoFullName   string
 }
+
+// CloneGitHubApp is the clone method of a source that uses the GitHub App.
+const CloneGitHubApp = "github_app"
 
 // CreateGitSource inserts a new source and returns it.
 func (s *Store) CreateGitSource(gs GitSource) (GitSource, error) {
 	gs.ID = NewID()
 	gs.CreatedAt = Now()
 	_, err := s.db.Exec(
-		`INSERT INTO git_sources (id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO git_sources (id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		gs.ID, gs.Provider, gs.RepoURL, gs.CloneMethod, gs.PrivateKeyEnc, gs.PATEnc,
-		gs.WebhookSecretEnc, gs.DefaultBranch, gs.CreatedAt, gs.APITokenEnc,
+		gs.WebhookSecretEnc, gs.DefaultBranch, gs.CreatedAt, gs.APITokenEnc, gs.InstallationID, gs.RepoFullName,
 	)
 	return gs, err
 }
@@ -39,11 +46,11 @@ func (s *Store) CreateGitSource(gs GitSource) (GitSource, error) {
 func (s *Store) GetGitSource(id string) (GitSource, error) {
 	var gs GitSource
 	err := s.db.QueryRow(
-		`SELECT id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc
+		`SELECT id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name
 		 FROM git_sources WHERE id = ?`,
 		id,
 	).Scan(&gs.ID, &gs.Provider, &gs.RepoURL, &gs.CloneMethod, &gs.PrivateKeyEnc, &gs.PATEnc,
-		&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc)
+		&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc, &gs.InstallationID, &gs.RepoFullName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return gs, ErrNotFound
 	}

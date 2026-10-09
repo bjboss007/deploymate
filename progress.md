@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-09 (Connect GitHub, phase 2 of 4)** — Installation tokens (`githubapp.Tokens`, cached), `gitauth.Resolver`
+(deploy key or token per source), `gitpkg.Auth` (token as an HTTP header, not in URL/argv/.git/config), migration
+0024, the app page's "From GitHub" repository picker and `POST /apps/{slug}/git/github`, git panel/first-deploy guide for
+GitHub-app sources. Tested against a fake GitHub (picker, connect, refusals incl. path-climbing branch names, token
+reuse). **Pushes to these repos do not deploy yet** — phase 3 (app-level webhook: push → linked apps, per-folder filter,
+workflow_run, installation events) is next and must land before the next release.
+
 **2026-10-09 (Connect GitHub, phase 1 of 4)** — Spike done from GitHub's docs (facts + what is unverified in
 `docs/specs/github-app.md`). Built: `internal/githubapp` (manifest, JWT, code exchange, installations),
 `github_app` table (migration 0023, secrets encrypted), Settings → GitHub page + callback + disconnect, public

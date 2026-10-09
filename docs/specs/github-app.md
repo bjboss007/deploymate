@@ -47,11 +47,31 @@ Not verified yet: creating an app on a real account (needs the owner's click —
   whole flow (wrong or missing state stores nothing, stale code stores nothing, secrets not in plaintext or on
   the page, second connect refused, disconnect), webhook signature, pages need a session.
 
-## Phase 2 — Repositories and installation tokens (next)
+## Phase 2 — Repositories and installation tokens (done 2026-10-09)
 
-Installation token (cache ≈55 min), repository picker (`GET /installation/repositories`), create an app from a
-picked repo (clone over HTTPS with the token; no deploy key), branch list, the `installation` events keeping
-the repo list fresh.
+- Migration 0024: `git_sources.installation_id` and `repo_full_name` (lower case, indexed); clone method
+  `github_app` (`store.CloneGitHubApp`). Such a source has no deploy key; its webhook secret is random and unused.
+- `githubapp.Tokens`: installation tokens cached per installation (replaced 5 minutes before expiry; never
+  reused across app ids). `ListInstallationRepos` (≤1000 repositories), `BranchExists`; owner, repository and
+  branch names are validated before they reach an API path (no `..`, no empty segments).
+- `gitpkg.Auth{KeyPEM, Token}` with `CloneAuth`, `MirrorSyncAuth`, `MirrorEnsureSHAAuth` (the old functions are
+  wrappers). The token reaches git as an `Authorization: Basic` header through `GIT_CONFIG_*` environment
+  variables for https remotes only, so it is not in the URL, argv, `.git/config` or the error text (tested
+  against a local TLS server).
+- `internal/gitauth.Resolver.For(source)`: deploy key as before, or an installation token for `github_app`
+  sources, with plain errors when GitHub was disconnected or the app was uninstalled from the repository. The
+  deployment worker and the deploy-review page use it.
+- App page → Git: with GitHub connected, a "From GitHub" picker lists every non-archived repository of every
+  (non-suspended) installation (cached a minute) plus an optional branch (default: the repository's default
+  branch). `POST /apps/{slug}/git/github` accepts `installation:owner/name`, re-checks it against what
+  GitHub says the installation can see, verifies the branch exists, and creates the source. The manual
+  deploy-key form stays below it; connected apps show "Through your GitHub app" instead of key and webhook,
+  and the first-deploy guide has no key step.
+- Not done in this phase: pushes to a GitHub-app repository do not deploy yet (phase 3), the prebuilt-deploy
+  panel is hidden for these sources (phase 4), and repositories added later are only seen after the cache
+  minute (the `installation_repositories` event comes with phase 3).
+- Unverified against real GitHub: `GET /installation/repositories`, `GET /repos/{o}/{r}/branches/{b}` and the
+  token endpoint's exact shapes (written from GitHub's documented behaviour, tested against a fake).
 
 ## Phase 3 — App-level webhook handling
 

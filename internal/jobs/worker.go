@@ -12,12 +12,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/builder"
-	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/gitauth"
 	"github.com/habibmuhammad/deploymate/internal/gitpkg"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
@@ -52,6 +53,8 @@ type Worker struct {
 	// githubAPI overrides the GitHub REST base URL for prebuilt deploys
 	// (tests); "" = https://api.github.com.
 	githubAPI string
+	authOnce  sync.Once
+	auth      *gitauth.Resolver
 	// buildFn builds a Docker context into an image; nil = builder.Build.
 	// A seam so artifact-deploy tests do not need a Docker daemon.
 	buildFn func(ctx context.Context, contextDir, rootDir, imageTag string, log func(string)) error
@@ -62,6 +65,13 @@ type Worker struct {
 	probeURL      func(hostPort int) string
 	probeAttempts int
 	probeInterval time.Duration
+}
+
+// gitAuth is the credential resolver for git sources; it is built on first use so
+// it sees the GitHub API override set after construction, and keeps its token cache.
+func (w *Worker) gitAuth() *gitauth.Resolver {
+	w.authOnce.Do(func() { w.auth = gitauth.New(w.store, w.encKey, w.githubAPI) })
+	return w.auth
 }
 
 // NewWorker builds a Worker. buildEnv supplies the app container environment
@@ -202,9 +212,9 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 	if err != nil {
 		return fmt.Errorf("git source: %w", err)
 	}
-	privateKey, err := crypto.Decrypt(w.encKey, gs.PrivateKeyEnc)
+	gitAuth, err := w.gitAuth().For(ctx, gs)
 	if err != nil {
-		return fmt.Errorf("decrypt deploy key: %w", err)
+		return err
 	}
 
 	checkoutDir := filepath.Join(w.dataDir, "repos", d.ID)
@@ -212,7 +222,7 @@ func (w *Worker) runGitDeploy(ctx context.Context, app store.App, d store.Deploy
 
 	w.log(d, "system", "cloning "+gs.RepoURL+" ("+gs.DefaultBranch+")")
 	w.publish("deploy:"+app.Slug, "log", "cloning "+gs.RepoURL)
-	if err := gitpkg.Clone(ctx, gs.RepoURL, gs.DefaultBranch, d.CommitSHA, privateKey, checkoutDir); err != nil {
+	if err := gitpkg.CloneAuth(ctx, gs.RepoURL, gs.DefaultBranch, d.CommitSHA, gitAuth, checkoutDir); err != nil {
 		return fmt.Errorf("clone: %w", err)
 	}
 	sha, message, err := gitpkg.Head(ctx, checkoutDir)
@@ -323,17 +333,17 @@ func (w *Worker) logDiffRecord(ctx context.Context, app store.App, gs store.GitS
 	if err != nil || cur.CommitSHA == "" {
 		return
 	}
-	privateKey, err := crypto.Decrypt(w.encKey, gs.PrivateKeyEnc)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	gitAuth, err := w.gitAuth().For(ctx, gs)
 	if err != nil {
 		return
 	}
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
 	dir := gitpkg.MirrorDir(w.dataDir, gs.ID)
-	if err := gitpkg.MirrorSync(ctx, gs.RepoURL, gs.DefaultBranch, privateKey, dir); err != nil {
+	if err := gitpkg.MirrorSyncAuth(ctx, gs.RepoURL, gs.DefaultBranch, gitAuth, dir); err != nil {
 		return
 	}
-	if err := gitpkg.MirrorEnsureSHA(ctx, dir, gs.RepoURL, privateKey, cur.CommitSHA); err != nil {
+	if err := gitpkg.MirrorEnsureSHAAuth(ctx, dir, gs.RepoURL, gitAuth, cur.CommitSHA); err != nil {
 		return
 	}
 	rg, err := gitpkg.MirrorRange(ctx, dir, gs.DefaultBranch, cur.CommitSHA)

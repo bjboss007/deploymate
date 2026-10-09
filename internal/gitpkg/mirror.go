@@ -50,6 +50,13 @@ func MirrorDir(dataDir, sourceID string) string {
 // MirrorSync ensures a full (non-shallow) mirror of repoURL exists at dir
 // and is up to date: clone on first use, fetch --prune afterwards.
 func MirrorSync(ctx context.Context, repoURL, branch, privateKeyPEM, dir string) error {
+	return MirrorSyncAuth(ctx, repoURL, branch, Auth{KeyPEM: privateKeyPEM}, dir)
+}
+
+// MirrorSyncAuth is MirrorSync with an explicit credential.
+func MirrorSyncAuth(ctx context.Context, repoURL, branch string, auth Auth, dir string) error {
+	privateKeyPEM := auth.KeyPEM
+	env := auth.env(repoURL)
 	if err := os.MkdirAll(filepath.Dir(dir), 0o755); err != nil {
 		return fmt.Errorf("prepare mirror dir: %w", err)
 	}
@@ -60,12 +67,12 @@ func MirrorSync(ctx context.Context, repoURL, branch, privateKeyPEM, dir string)
 	defer cleanup()
 
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
-		if out, err := runGit(ctx, sshCmd, "clone", "--branch", branch, repoURL, dir); err != nil {
+		if out, err := runGit(ctx, sshCmd, env, "clone", "--branch", branch, repoURL, dir); err != nil {
 			return fmt.Errorf("mirror clone: %w: %s", err, out)
 		}
 		return nil
 	}
-	if out, err := runGit(ctx, sshCmd, "-C", dir, "fetch", "--prune", "origin"); err != nil {
+	if out, err := runGit(ctx, sshCmd, env, "-C", dir, "fetch", "--prune", "origin"); err != nil {
 		return fmt.Errorf("mirror fetch: %w: %s", err, out)
 	}
 	return nil
@@ -74,10 +81,17 @@ func MirrorSync(ctx context.Context, repoURL, branch, privateKeyPEM, dir string)
 // MirrorEnsureSHA makes sha available in the mirror, fetching it from the
 // remote on demand. Returns ErrCommitGone when the remote no longer has it.
 func MirrorEnsureSHA(ctx context.Context, dir, repoURL, privateKeyPEM, sha string) error {
+	return MirrorEnsureSHAAuth(ctx, dir, repoURL, Auth{KeyPEM: privateKeyPEM}, sha)
+}
+
+// MirrorEnsureSHAAuth is MirrorEnsureSHA with an explicit credential.
+func MirrorEnsureSHAAuth(ctx context.Context, dir, repoURL string, auth Auth, sha string) error {
+	privateKeyPEM := auth.KeyPEM
+	env := auth.env(repoURL)
 	if sha == "" {
 		return nil
 	}
-	if _, err := runGit(ctx, "", "-C", dir, "cat-file", "-e", sha+"^{commit}"); err == nil {
+	if _, err := runGit(ctx, "", nil, "-C", dir, "cat-file", "-e", sha+"^{commit}"); err == nil {
 		return nil // already present
 	}
 	sshCmd, cleanup, err := sshCommand(repoURL, privateKeyPEM)
@@ -85,7 +99,7 @@ func MirrorEnsureSHA(ctx context.Context, dir, repoURL, privateKeyPEM, sha strin
 		return err
 	}
 	defer cleanup()
-	if out, err := runGit(ctx, sshCmd, "-C", dir, "fetch", "origin", sha); err != nil {
+	if out, err := runGit(ctx, sshCmd, env, "-C", dir, "fetch", "origin", sha); err != nil {
 		return fmt.Errorf("%w (%s)", ErrCommitGone, strings.TrimSpace(out))
 	}
 	return nil
@@ -96,7 +110,7 @@ func MirrorEnsureSHA(ctx context.Context, dir, repoURL, privateKeyPEM, sha strin
 // Returns an empty Range when the deployed commit IS the branch head.
 func MirrorRange(ctx context.Context, dir, branch, deployedSHA string) (Range, error) {
 	var r Range
-	head, err := runGitOut(ctx, "", "-C", dir, "rev-parse", "origin/"+branch)
+	head, err := runGitOut(ctx, "", nil, "-C", dir, "rev-parse", "origin/"+branch)
 	if err != nil {
 		return r, fmt.Errorf("resolve branch head: %w", err)
 	}
@@ -125,7 +139,7 @@ func MirrorRange(ctx context.Context, dir, branch, deployedSHA string) (Range, e
 	}
 	r.Commits = commits
 
-	out, err := runGitOut(ctx, "", "-C", dir, "diff", "--numstat", deployedSHA+".."+head)
+	out, err := runGitOut(ctx, "", nil, "-C", dir, "diff", "--numstat", deployedSHA+".."+head)
 	if err != nil {
 		return r, fmt.Errorf("diff stat: %w", err)
 	}
@@ -162,7 +176,7 @@ func commitInfos(ctx context.Context, dir, rev string, single bool) ([]CommitInf
 	}
 	args = append(args, rev)
 	argv := append([]string{"-C", dir}, args...)
-	out, err := runGitOut(ctx, "", argv...)
+	out, err := runGitOut(ctx, "", nil, argv...)
 	if err != nil {
 		return nil, fmt.Errorf("log %s: %w", rev, err)
 	}

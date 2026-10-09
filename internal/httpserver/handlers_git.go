@@ -102,17 +102,16 @@ func (s *Server) handleDeployPreview(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	privateKey, err := crypto.Decrypt(s.encKey, gs.PrivateKeyEnc)
-	if err != nil {
-		slog.Error("deploy-preview: decrypt key", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
+	gitAuth, err := s.gitAuth().For(ctx, gs)
+	if err != nil {
+		slog.Error("deploy-preview: credentials", "err", err)
+		http.Error(w, "could not reach the repository: "+err.Error(), http.StatusBadGateway)
+		return
+	}
 	dir := gitpkg.MirrorDir(s.dataDir, gs.ID)
-	if err := gitpkg.MirrorSync(ctx, gs.RepoURL, gs.DefaultBranch, privateKey, dir); err != nil {
+	if err := gitpkg.MirrorSyncAuth(ctx, gs.RepoURL, gs.DefaultBranch, gitAuth, dir); err != nil {
 		slog.Error("deploy-preview: mirror sync", "err", err)
 		http.Error(w, "could not reach the repository: "+err.Error(), http.StatusBadGateway)
 		return
@@ -125,7 +124,7 @@ func (s *Server) handleDeployPreview(w http.ResponseWriter, r *http.Request) {
 			deployedSHA = cur.CommitSHA
 		}
 	}
-	if err := gitpkg.MirrorEnsureSHA(ctx, dir, gs.RepoURL, privateKey, deployedSHA); err != nil {
+	if err := gitpkg.MirrorEnsureSHAAuth(ctx, dir, gs.RepoURL, gitAuth, deployedSHA); err != nil {
 		render(w, r, http.StatusOK, templates.DeployPreviewError(s.viewCtx(r), project, app,
 			"the currently deployed commit ("+shortSHA(deployedSHA)+") is not on the remote anymore — likely force-pushed away. Roll back, or deploy HEAD without a diff."))
 		return

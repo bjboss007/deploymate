@@ -179,3 +179,71 @@ func TestConvertManifestAndListInstallations(t *testing.T) {
 		t.Error("a JWT for the wrong app id must be refused by GitHub")
 	}
 }
+
+func TestTokensAreReusedUntilCloseToExpiry(t *testing.T) {
+	_, pemKey := newKey(t)
+	calls := 0
+	exp := time.Now().Add(time.Hour)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		json.NewEncoder(w).Encode(map[string]any{"token": "tok" + string(rune('0'+calls)), "expires_at": exp.UTC().Format(time.RFC3339)})
+	}))
+	defer srv.Close()
+	ts := NewTokens(New(srv.URL))
+	now := time.Now()
+	ts.now = func() time.Time { return now }
+
+	a, _ := ts.Get(context.Background(), 1, pemKey, 5)
+	b, _ := ts.Get(context.Background(), 1, pemKey, 5)
+	if a != b || calls != 1 {
+		t.Fatalf("reuse: %q %q calls=%d", a, b, calls)
+	}
+	now = exp.Add(-4 * time.Minute) // inside the refresh margin
+	c, _ := ts.Get(context.Background(), 1, pemKey, 5)
+	if c == a || calls != 2 {
+		t.Errorf("a token about to expire must be replaced (calls=%d)", calls)
+	}
+	// A different app id never gets another app's cached token.
+	if _, _ = ts.Get(context.Background(), 2, pemKey, 5); calls != 3 {
+		t.Errorf("another app must not reuse the cache (calls=%d)", calls)
+	}
+}
+
+func TestBranchExistsAndRepoListing(t *testing.T) {
+	var paths []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		paths = append(paths, r.URL.RequestURI())
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/repos/o/r/branches/"):
+			if strings.HasSuffix(r.URL.Path, "/main") || strings.HasSuffix(r.URL.Path, "/feature/x") {
+				w.Write([]byte(`{}`))
+				return
+			}
+			w.WriteHeader(404)
+			w.Write([]byte(`{"message":"Branch not found"}`))
+		case r.URL.Path == "/installation/repositories":
+			w.Write([]byte(`{"repositories":[{"id":1,"full_name":"o/r","clone_url":"https://github.com/o/r.git","default_branch":"main"}]}`))
+		}
+	}))
+	defer srv.Close()
+	c := New(srv.URL)
+	for branch, want := range map[string]bool{"main": true, "feature/x": true, "nope": false} {
+		got, err := c.BranchExists(context.Background(), "t", "o/r", branch)
+		if err != nil || got != want {
+			t.Errorf("BranchExists(%q) = %v, %v; want %v", branch, got, err, want)
+		}
+	}
+	if _, err := c.BranchExists(context.Background(), "t", "../etc", "main"); err == nil {
+		t.Error("a repository that is not owner/name must be refused before any request")
+	}
+	for _, bad := range []string{"../../x", "a/../b", "/lead", "trail/", "a//b", ".."} {
+		before := len(paths)
+		if _, err := c.BranchExists(context.Background(), "t", "o/r", bad); err == nil || len(paths) != before {
+			t.Errorf("branch %q must be refused without any request (err %v)", bad, err)
+		}
+	}
+	repos, err := c.ListInstallationRepos(context.Background(), "t")
+	if err != nil || len(repos) != 1 || repos[0].DefaultBranch != "main" {
+		t.Errorf("repos: %+v %v", repos, err)
+	}
+}

@@ -6,7 +6,9 @@ package gitpkg
 import (
 	"context"
 	"crypto/ed25519"
+	"encoding/base64"
 	"encoding/pem"
+	"net/url"
 	"fmt"
 	"os"
 	"os/exec"
@@ -52,11 +54,44 @@ func GenerateDeployKey() (*DeployKey, error) {
 	}, nil
 }
 
+// Auth is how git proves itself to the remote: an SSH deploy key for ssh URLs, or
+// an HTTPS access token (a GitHub App installation token) for https URLs.
+type Auth struct {
+	KeyPEM string
+	Token  string
+}
+
+// env returns the environment git needs for repoURL. A token goes in an HTTP
+// header passed through GIT_CONFIG_* variables, never in the URL or argv, so it
+// is not written to .git/config nor shown by ps.
+func (a Auth) env(repoURL string) []string {
+	if a.Token == "" {
+		return nil
+	}
+	u, err := url.Parse(repoURL)
+	if err != nil || u.Scheme != "https" || u.Host == "" {
+		return nil // a token is never sent to a non-https remote
+	}
+	cred := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + a.Token))
+	return []string{
+		"GIT_TERMINAL_PROMPT=0",
+		"GIT_CONFIG_COUNT=1",
+		"GIT_CONFIG_KEY_0=http." + u.Scheme + "://" + u.Host + "/.extraheader",
+		"GIT_CONFIG_VALUE_0=Authorization: Basic " + cred,
+	}
+}
+
 // Clone checks out repoURL into destDir. branch is required; commitSHA, when
 // non-empty, pins the checkout to that commit. SSH URLs (git@…, ssh://…)
 // authenticate with the deploy key written to a 0600 temp file; HTTPS URLs
 // clone without a key (public repos, or PAT-in-URL later).
 func Clone(ctx context.Context, repoURL, branch, commitSHA, privateKeyPEM, destDir string) error {
+	return CloneAuth(ctx, repoURL, branch, commitSHA, Auth{KeyPEM: privateKeyPEM}, destDir)
+}
+
+// CloneAuth is Clone with an explicit credential (deploy key or access token).
+func CloneAuth(ctx context.Context, repoURL, branch, commitSHA string, auth Auth, destDir string) error {
+	privateKeyPEM := auth.KeyPEM
 	if err := os.MkdirAll(filepath.Dir(destDir), 0o755); err != nil {
 		return fmt.Errorf("prepare clone dir: %w", err)
 	}
@@ -74,15 +109,16 @@ func Clone(ctx context.Context, repoURL, branch, commitSHA, privateKeyPEM, destD
 		)
 	}
 
+	env := auth.env(repoURL)
 	args := []string{"clone", "--filter=blob:none", "--depth", "1", "--branch", branch, repoURL, destDir}
-	if out, err := runGit(ctx, sshCmd, args...); err != nil {
+	if out, err := runGit(ctx, sshCmd, env, args...); err != nil {
 		return fmt.Errorf("clone: %w: %s", err, out)
 	}
 	if commitSHA != "" {
-		if out, err := runGit(ctx, sshCmd, "-C", destDir, "fetch", "--depth", "1", "origin", commitSHA); err != nil {
+		if out, err := runGit(ctx, sshCmd, env, "-C", destDir, "fetch", "--depth", "1", "origin", commitSHA); err != nil {
 			return fmt.Errorf("fetch pinned commit: %w: %s", err, out)
 		}
-		if out, err := runGit(ctx, sshCmd, "-C", destDir, "checkout", "--detach", commitSHA); err != nil {
+		if out, err := runGit(ctx, sshCmd, env, "-C", destDir, "checkout", "--detach", commitSHA); err != nil {
 			return fmt.Errorf("checkout pinned commit: %w: %s", err, out)
 		}
 	}
@@ -124,26 +160,31 @@ func normalizeModes(root string) error {
 
 // Head returns the HEAD commit sha and message of a checkout.
 func Head(ctx context.Context, dir string) (sha, message string, err error) {
-	sha, err = runGitOut(ctx, "", "-C", dir, "rev-parse", "HEAD")
+	sha, err = runGitOut(ctx, "", nil, "-C", dir, "rev-parse", "HEAD")
 	if err != nil {
 		return "", "", err
 	}
-	message, err = runGitOut(ctx, "", "-C", dir, "log", "-1", "--pretty=%B")
+	message, err = runGitOut(ctx, "", nil, "-C", dir, "log", "-1", "--pretty=%B")
 	if err != nil {
 		return "", "", err
 	}
 	return strings.TrimSpace(sha), strings.TrimSpace(message), nil
 }
 
-func runGit(ctx context.Context, sshCmd string, args ...string) (string, error) {
-	out, err := runGitOut(ctx, sshCmd, args...)
+func runGit(ctx context.Context, sshCmd string, env []string, args ...string) (string, error) {
+	out, err := runGitOut(ctx, sshCmd, env, args...)
 	return out, err
 }
 
-func runGitOut(ctx context.Context, sshCmd string, args ...string) (string, error) {
+// runGitOut runs git with an optional SSH command and extra environment.
+func runGitOut(ctx context.Context, sshCmd string, env []string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
-	if sshCmd != "" {
-		cmd.Env = append(os.Environ(), "GIT_SSH_COMMAND="+sshCmd)
+	if sshCmd != "" || len(env) > 0 {
+		cmd.Env = os.Environ()
+		if sshCmd != "" {
+			cmd.Env = append(cmd.Env, "GIT_SSH_COMMAND="+sshCmd)
+		}
+		cmd.Env = append(cmd.Env, env...)
 	}
 	out, err := cmd.CombinedOutput()
 	return strings.TrimSpace(string(out)), err

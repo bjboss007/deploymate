@@ -10,10 +10,13 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/gitauth"
 	"github.com/habibmuhammad/deploymate/internal/githubapp"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/webhooks"
@@ -64,6 +67,12 @@ func originOf(r *http.Request) string {
 		scheme = "https"
 	}
 	return scheme + "://" + r.Host
+}
+
+// gitAuth is the credential resolver for git sources (built once: it caches tokens).
+func (s *Server) gitAuth() *gitauth.Resolver {
+	s.authOnce.Do(func() { s.auth = gitauth.New(s.store, s.encKey, s.githubAPI) })
+	return s.auth
 }
 
 func (s *Server) ghClient() *githubapp.Client { return githubapp.New(s.githubAPI) }
@@ -274,4 +283,182 @@ func (s *Server) handleGitHubAppWebhook(w http.ResponseWriter, r *http.Request) 
 
 func redirectWithFlash(w http.ResponseWriter, r *http.Request, path, msg string) {
 	http.Redirect(w, r, path+"?flash="+url.QueryEscape(msg), http.StatusSeeOther)
+}
+
+// ---- repositories ------------------------------------------------------------
+
+type repoCache struct {
+	at    time.Time
+	repos []templates.GitHubRepoOption
+	err   string
+}
+
+const repoCacheTTL = time.Minute
+
+// githubPick lists the repositories the app can be connected to, for the app
+// page. It asks GitHub at most once a minute and never blocks the page for long.
+// wanted is false when the app already has a repository (nothing to pick).
+func (s *Server) githubPick(ctx context.Context, wanted bool) templates.GitHubPick {
+	if !wanted {
+		return templates.GitHubPick{}
+	}
+	app, err := s.store.GetGitHubApp()
+	if err != nil {
+		return templates.GitHubPick{}
+	}
+	pick := templates.GitHubPick{Connected: true}
+	s.repoMu.Lock()
+	if s.repoCacheV.at.After(time.Now().Add(-repoCacheTTL)) {
+		c := s.repoCacheV
+		s.repoMu.Unlock()
+		pick.Repos, pick.Error = c.repos, c.err
+		return pick
+	}
+	s.repoMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	repos, msg := s.listGitHubRepos(ctx, app)
+	s.repoMu.Lock()
+	s.repoCacheV = repoCache{at: time.Now(), repos: repos, err: msg}
+	s.repoMu.Unlock()
+	pick.Repos, pick.Error = repos, msg
+	return pick
+}
+
+func (s *Server) listGitHubRepos(ctx context.Context, app store.GitHubApp) ([]templates.GitHubRepoOption, string) {
+	pemKey, err := crypto.Decrypt(s.encKey, app.PEMEnc)
+	if err != nil {
+		return nil, "DeployMate could not read the GitHub app's key. Disconnect and connect GitHub again."
+	}
+	cl := s.ghClient()
+	ins, err := cl.ListInstallations(ctx, app.AppID, pemKey)
+	if err != nil {
+		slog.Warn("github: list installations for the picker", "err", err)
+		return nil, "Could not ask GitHub for your repositories right now."
+	}
+	var out []templates.GitHubRepoOption
+	for _, in := range ins {
+		if in.SuspendedAt != "" {
+			continue
+		}
+		tok, err := s.gitAuth().Tokens.Get(ctx, app.AppID, pemKey, in.ID)
+		if err != nil {
+			slog.Warn("github: installation token", "installation", in.ID, "err", err)
+			continue
+		}
+		repos, err := cl.ListInstallationRepos(ctx, tok)
+		if err != nil {
+			slog.Warn("github: list repositories", "installation", in.ID, "err", err)
+			continue
+		}
+		for _, r := range repos {
+			if r.Archived {
+				continue
+			}
+			out = append(out, templates.GitHubRepoOption{Value: strconv.FormatInt(in.ID, 10) + ":" + r.FullName, Label: r.FullName, Private: r.Private})
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Label) < strings.ToLower(out[j].Label) })
+	return out, ""
+}
+
+// connectGitHubRepoCore connects an app to a repository through the GitHub App.
+// The repository must be one the installation can see, as GitHub says: the form
+// value is the browser's word, not a permission. A non-empty refusal is for the person.
+func (s *Server) connectGitHubRepoCore(ctx context.Context, app store.App, choice, branch string) (gs store.GitSource, refusal string, err error) {
+	if app.GitSourceID != "" {
+		return gs, "This app already has a repository connected.", nil
+	}
+	idStr, fullName, ok := strings.Cut(strings.TrimSpace(choice), ":")
+	installID, perr := strconv.ParseInt(idStr, 10, 64)
+	if !ok || perr != nil || installID <= 0 || !strings.Contains(fullName, "/") {
+		return gs, "Pick a repository from the list.", nil
+	}
+	ghApp, err := s.store.GetGitHubApp()
+	if errors.Is(err, store.ErrNotFound) {
+		return gs, "GitHub is not connected.", nil
+	}
+	if err != nil {
+		return gs, "", err
+	}
+	pemKey, err := crypto.Decrypt(s.encKey, ghApp.PEMEnc)
+	if err != nil {
+		return gs, "", err
+	}
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	tok, err := s.gitAuth().Tokens.Get(ctx, ghApp.AppID, pemKey, installID)
+	if err != nil {
+		slog.Warn("github: installation token", "err", err)
+		return gs, "GitHub would not let DeployMate's app in. Check that the app is still installed there.", nil
+	}
+	cl := s.ghClient()
+	repos, err := cl.ListInstallationRepos(ctx, tok)
+	if err != nil {
+		slog.Warn("github: list repositories", "err", err)
+		return gs, "Could not ask GitHub about that repository right now. Try again in a moment.", nil
+	}
+	var repo *githubapp.Repo
+	for i := range repos {
+		if strings.EqualFold(repos[i].FullName, fullName) {
+			repo = &repos[i]
+			break
+		}
+	}
+	if repo == nil {
+		return gs, "The GitHub app can't see that repository. Add it to the app's installation on GitHub.", nil
+	}
+	if !strings.HasPrefix(repo.CloneURL, "https://") {
+		return gs, "GitHub returned a repository address DeployMate won't clone from.", nil
+	}
+	branch = strings.TrimSpace(branch)
+	if branch == "" {
+		branch = repo.DefaultBranch
+	}
+	if branch == "" || len(branch) > 200 || strings.ContainsAny(branch, " \t\n~^:?*[\\") || strings.HasPrefix(branch, "-") ||
+		strings.Contains(branch, "..") || strings.Contains(branch, "//") || strings.HasPrefix(branch, "/") || strings.HasSuffix(branch, "/") {
+		return gs, "That is not a valid branch name.", nil
+	}
+	exists, err := cl.BranchExists(ctx, tok, repo.FullName, branch)
+	if err != nil {
+		return gs, "Could not check the branch on GitHub right now. Try again in a moment.", nil
+	}
+	if !exists {
+		return gs, "The branch \"" + branch + "\" does not exist in " + repo.FullName + ".", nil
+	}
+	secretEnc, err := crypto.Encrypt(s.encKey, randomHex(24))
+	if err != nil {
+		return gs, "", err
+	}
+	gs, err = s.store.CreateGitSource(store.GitSource{
+		Provider: "github", RepoURL: repo.CloneURL, CloneMethod: store.CloneGitHubApp, WebhookSecretEnc: secretEnc,
+		DefaultBranch: branch, InstallationID: installID, RepoFullName: strings.ToLower(repo.FullName),
+	})
+	if err != nil {
+		return gs, "", err
+	}
+	if err := s.store.UpdateAppGitSource(app.ID, gs.ID); err != nil {
+		return gs, "", err
+	}
+	_ = s.store.RecordEvent(app.ID, store.EventGitConnected, "repository "+repo.FullName+" ("+branch+") connected through GitHub")
+	return gs, "", nil
+}
+
+func (s *Server) handleGitHubRepoConnect(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	_, refusal, err := s.connectGitHubRepoCore(r.Context(), app, r.FormValue("repo"), r.FormValue("branch"))
+	if err != nil {
+		slog.Error("github: connect repository", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if refusal != "" {
+		redirectWithFlash(w, r, "/apps/"+app.Slug, refusal)
+		return
+	}
+	redirectWithFlash(w, r, "/apps/"+app.Slug, "Repository connected. Review & deploy to publish it.")
 }
