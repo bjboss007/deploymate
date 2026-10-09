@@ -11,6 +11,8 @@
 #
 # Environment:
 #   DEPLOYMATE_LE_EMAIL   your email, for Let's Encrypt (recommended)
+#   DEPLOYMATE_DASHBOARD_HOST  serve the dashboard on this domain, e.g. dm.example.com
+#   DEPLOYMATE_LE_MODE    staging (default) | production | off (behind a tunnel)
 #   DEPLOYMATE_VERSION    a tag such as v0.1.0 (default: latest)
 #   DEPLOYMATE_REPO       owner/name (default: bjboss007/deploymate)
 #   DEPLOYMATE_BASE_URL   download from here instead (tests, mirrors)

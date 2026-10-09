@@ -18,6 +18,7 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -26,12 +27,14 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/backup"
 	"github.com/habibmuhammad/deploymate/internal/config"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/dashroute"
 	"github.com/habibmuhammad/deploymate/internal/demo"
 	"github.com/habibmuhammad/deploymate/internal/dns"
 	"github.com/habibmuhammad/deploymate/internal/hostinfo"
 	"github.com/habibmuhammad/deploymate/internal/httpserver"
 	"github.com/habibmuhammad/deploymate/internal/jobs"
 	"github.com/habibmuhammad/deploymate/internal/monitor"
+	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
@@ -140,6 +143,7 @@ func serve() error {
 	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsManager, backupMgr)
 	server.SetGitHubAPI(cfg.GitHubAPIURL)
 	server.SetVersion(version)
+	routeDashboard(cfg)
 	if os.Getenv("DEPLOYMATE_DEMO_HOST") == "1" {
 		server.SetDemoHost(demo.Host{}) // the website's demo instance has no real machine to show
 	}
@@ -236,4 +240,21 @@ func setupAdmin() error {
 	}
 	slog.Info("admin user ready — start deploymate with: deploymate serve")
 	return nil
+}
+
+// routeDashboard writes (or removes) the Traefik route that serves the dashboard
+// on its own domain. A problem here is logged, never fatal: the dashboard still
+// works on loopback.
+func routeDashboard(cfg *config.Config) {
+	err := dashroute.Write(filepath.Join(cfg.DataDir, "traefik-dynamic"), dashroute.Opts{
+		Host: cfg.DashboardHost, PreviewHost: cfg.PreviewHost, ListenAddr: cfg.Addr,
+		Resolver: proxy.ResolverForLEMode(cfg.LEMode),
+	})
+	if err != nil {
+		slog.Warn("dashboard domain route not written", "host", cfg.DashboardHost, "err", err)
+		return
+	}
+	if cfg.DashboardHost != "" {
+		slog.Info("dashboard route written", "host", cfg.DashboardHost)
+	}
 }

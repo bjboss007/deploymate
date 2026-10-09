@@ -21,6 +21,11 @@ providers:
     endpoint: "unix:///var/run/docker.sock"
     exposedByDefault: false
     network: deploymate-net
+  # DeployMate writes dashboard.yml here (DEPLOYMATE_DASHBOARD_HOST) so the
+  # dashboard, a host service on 127.0.0.1, gets a domain of its own.
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
 
 certificatesResolvers:
   letsencrypt:

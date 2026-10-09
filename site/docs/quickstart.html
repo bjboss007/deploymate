@@ -57,7 +57,13 @@ DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymat
 <h2 id="dashboard">3. Open the dashboard</h2>
 <p>The dashboard listens on <code>127.0.0.1:8080</code> on the server — not on the internet. To reach it from your laptop, tunnel in:</p>
 <pre class="code">ssh -L 8080:127.0.0.1:8080 deploymate@your-server-ip</pre>
-<p>then open <a href="http://127.0.0.1:8080">http://127.0.0.1:8080</a>. To serve the dashboard itself on a domain with HTTPS, follow the <a href="https://github.com/bjboss007/deploymate/blob/main/docs/knowledge/server-setup.md">server setup guide</a>.</p>
+<p>then open <a href="http://127.0.0.1:8080">http://127.0.0.1:8080</a>.</p>
+<h3 id="dashboard-domain">Or give the dashboard a domain</h3>
+<p>To open it at <code>https://dm.example.com</code> like any app, point an A record for that name at the server and tell the installer (it is safe to run again):</p>
+<pre class="code">curl -fsSL https://deploymate.link/install \
+  | sudo DEPLOYMATE_DASHBOARD_HOST=dm.example.com DEPLOYMATE_LE_MODE=production \
+       DEPLOYMATE_LE_EMAIL=you@example.com bash</pre>
+<p>DeployMate then writes the route for Traefik, which gets a certificate for the name. Sign-in attempts are rate-limited (ten wrong tries from one address, then a 15-minute pause), but the dashboard is now on the internet, so use a long password. Behind a Cloudflare Tunnel you don't need this: point the tunnel at <code>localhost:8080</code> instead.</p>
 
 <h2 id="image">4. Deploy something: an image</h2>
 <ol>

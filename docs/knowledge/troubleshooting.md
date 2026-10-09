@@ -157,3 +157,17 @@ sudo mkdir -p /etc/systemd/system/docker.service.d
 printf '[Service]\nEnvironment=DOCKER_MIN_API_VERSION=1.24\n' | sudo tee /etc/systemd/system/docker.service.d/deploymate-min-api.conf
 sudo systemctl daemon-reload && sudo systemctl restart docker
 ```
+
+## The dashboard's own domain answers 404 or a certificate error
+
+Set `DEPLOYMATE_DASHBOARD_HOST` and DeployMate writes `<data dir>/traefik-dynamic/dashboard.yml` at startup
+(check `journalctl -u deploymate | grep "dashboard route"`). Traefik reads it through its `file` provider, and
+reaches the dashboard at `127.0.0.1:8080` because Traefik runs on the **host network**. If it 404s:
+1. `docker inspect traefik -f '{{.HostConfig.NetworkMode}}'` must print `host` (a server installed before
+   v0.3 has `deploymate-net`; run `sudo deploymate update`, which migrates it).
+2. `grep -A3 "file:" /var/lib/deploymate/traefik.yml` must show `directory: /etc/traefik/dynamic`; the
+   update regenerates the file (the old one is `traefik.yml.bak`) if it does not.
+3. The DNS A record must point here. Certificates come from the resolver for `DEPLOYMATE_LE_MODE`
+   (`staging` certificates show a browser warning by design; `off` serves Traefik's default certificate).
+Sign-in is rate-limited: ten wrong passwords from one address pause that address for 15 minutes ("Too many
+failed sign-ins").

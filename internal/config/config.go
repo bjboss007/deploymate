@@ -30,6 +30,10 @@ type Config struct {
 	// Defaults to "railpack" (resolved via PATH); set it explicitly in dev
 	// where go/bin etc. is not on the server's PATH.
 	RailpackPath string
+	// DashboardHost, when set (e.g. "dm.example.com"), makes Traefik serve the
+	// dashboard itself on that domain (internal/dashroute). Unset: reach it on
+	// 127.0.0.1 (SSH tunnel, Cloudflare Tunnel).
+	DashboardHost string
 	// PreviewHost, when set (e.g. "dm.example.com"), gives every app a
 	// public subdomain: {slug}.{PreviewHost} routes straight to the app
 	// through the Host header (the reverse proxy must forward it).
@@ -77,6 +81,7 @@ func Load() (*Config, error) {
 		SetupPassword:      os.Getenv("DEPLOYMATE_SETUP_PASSWORD"),
 		LEMode:             getenv("DEPLOYMATE_LE_MODE", "staging"),
 		RailpackPath:       getenv("DEPLOYMATE_RAILPACK", "railpack"),
+		DashboardHost:      getenv("DEPLOYMATE_DASHBOARD_HOST", ""),
 		PreviewHost:        getenv("DEPLOYMATE_PREVIEW_HOST", ""),
 		CloudflareAPIToken: os.Getenv("DEPLOYMATE_CLOUDFLARE_API_TOKEN"),
 		CloudflareZoneID:   os.Getenv("DEPLOYMATE_CLOUDFLARE_ZONE_ID"),

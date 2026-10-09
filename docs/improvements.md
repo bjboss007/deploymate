@@ -204,17 +204,19 @@ change.
   Progress/failures land on the deployment page like git deploys; manual
   rows now get `started_at`/`finished_at` (durations on the releases page
   were empty before). E2e-verified on a throwaway server (Sep 2026).
-- [ ] **Server-side dashboard routing (Traefik file provider)** — bootstrap
-  installs Traefik with the docker provider only, but the dashboard runs
-  as a host systemd service on `127.0.0.1:8080` (not a container), so on a
-  real server nothing routes `dm.example.com` or preview subdomains to it
-  — in dev this was always cloudflared → localhost. Add a file-provider
-  router (dashboard hostname + preview wildcard → `http://127.0.0.1:8080`)
-  with **explicit router priority** so the preview catch-all can't swallow
-  app-domain routers (Traefik's default priority = rule length, which the
-  `HostRegexp` catch-all would win — exact `Host()` rules on apps would
-  lose). **Blocker for the first real-server run (shape A)**. Found Aug
-  2026 during deployment planning.
+- [x] **Server-side dashboard routing (Traefik file provider)** — done 2026-10-09: `DEPLOYMATE_DASHBOARD_HOST`
+  (installer variable or unit environment) makes DeployMate write `<data>/traefik-dynamic/dashboard.yml`
+  (`internal/dashroute`: dashboard host → the dashboard's listen address, host validated; with
+  `DEPLOYMATE_PREVIEW_HOST` a priority-1 `HostRegexp` catch-all that an app's exact `Host()` router always
+  beats — tested). To let Traefik reach a loopback service, **Traefik now runs on the host network**
+  (`deploy/traefik-run.sh`; `deploymate update` migrates existing servers and regenerates traefik.yml with the
+  `file` provider, keeping the Let's Encrypt email and a `.bak`). A public dashboard needs brute-force
+  protection, so sign-in is now rate-limited (10 failures per address / 15 min, 30 per email; the client
+  address is the proxy's own X-Forwarded-For entry). Verified with real Traefik v3.7.14 on a bridge network
+  (routing, priority, redirect, upgrade from an old container, rollback); **host networking itself is not
+  tested from here (Docker Desktop has none) — confirm on the owner's server**. Open: Settings UI for the
+  host name; preview subdomains get Traefik's default certificate (no wildcard issuance by HTTP challenge);
+  no 2FA.
 - [x] **Swap file on low-RAM hosts** — done: `bootstrap.sh` now
   provisions a swap file (default 4 GB, `SWAP_SIZE_GB` override; skipped
   if swap already exists or `SWAP_SIZE_GB=0`) with `vm.swappiness=10`,

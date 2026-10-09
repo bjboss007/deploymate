@@ -51,7 +51,7 @@ designed):**
 A named tunnel (free) gives stable public URLs with TLS at Cloudflare's
 edge. Note: our Traefik Let's Encrypt flow assumes public 80/443, so with
 a tunnel use Cloudflare's own certificates for app domains (SSL mode
-Full) and skip `DEPLOYMATE_LE_MODE=production`. The dashboard + webhooks
+Full) and set `DEPLOYMATE_LE_MODE=off` so Traefik stops asking Let's Encrypt for certificates it cannot get. The dashboard + webhooks
 work identically. This is the quick-tunnel setup we used in dev, made
 permanent:
 
@@ -128,3 +128,9 @@ The reboot test is the one that tells you it's a real server now.
 - **Updates**: `sudo apt upgrade` on a schedule; deploymate + railpack
   upgrades are version bumps in bootstrap.sh (railpack) and the binary
   (deploymate).
+
+## Dashboard on its own domain (v0.3)
+
+Re-run the installer with `DEPLOYMATE_DASHBOARD_HOST=dm.example.com` (and `DEPLOYMATE_LE_MODE=production` once
+DNS points at the server), or add the variable to the unit with `systemctl edit deploymate` and restart. The
+details, and why Traefik runs on the host network, are in `docs/improvements.md` (server-side dashboard routing).

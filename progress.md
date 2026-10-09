@@ -7,6 +7,15 @@
 
 ## Where we stopped
 
+**2026-10-09 (dashboard on its own domain, backlog round 3 of 3)** — `DEPLOYMATE_DASHBOARD_HOST` → DeployMate
+writes a Traefik file-provider route (`internal/dashroute`, host validated, preview catch-all at priority 1);
+Traefik now runs on the **host network** (`deploy/traefik-run.sh`, which `update` uses to migrate servers and to
+regenerate traefik.yml with the `file` provider); installer accepts `DEPLOYMATE_DASHBOARD_HOST` /
+`DEPLOYMATE_LE_MODE` / `DEPLOYMATE_PREVIEW_HOST` (drop-in `10-install.conf`, values checked); login rate limit
+(`login_limit.go`). Verified with real Traefik on a bridge network; **host networking is untested until the
+owner's server runs it** — that is the one risk in this release (Traefik briefly down while it is recreated; the
+script restores the previous container if the new one won't stay up). Ready to tag a release (v0.3.0).
+
 **2026-10-09 (Traefik v3.7.14, backlog round 1 of 3)** — Pinned Traefik moved v3.3 → v3.7.14 (Docker 29 support).
 `deploy/traefik-run.sh` is now the one place for the container's flags and the pin (`image` / `apply`: pull, replace only
 if different, restore the previous image if the new one doesn't stay up); `bootstrap.sh` uses it and no longer adds the

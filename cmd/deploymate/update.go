@@ -137,6 +137,11 @@ func updateCmd(args []string) error {
 		return err
 	}
 
+	traefikTemplate := filepath.Join(pkg, "traefik-static.yml")
+	if err := updater.Extract(archive, pkg, map[string]string{"deploy/traefik/static.yml": "traefik-static.yml"}); err != nil {
+		traefikTemplate = "" // an older archive: leave the static config as it is
+	}
+
 	dataDir := firstNonEmpty(os.Getenv("DEPLOYMATE_DATA_DIR"), unitEnv("DEPLOYMATE_DATA_DIR"), "/var/lib/deploymate")
 	addr := firstNonEmpty(unitEnv("DEPLOYMATE_ADDR"), "127.0.0.1:8080")
 	in := &updater.Installer{
@@ -168,7 +173,11 @@ func updateCmd(args []string) error {
 	if haveTraefik && !*skipTraefik {
 		in.Traefik = func(ctx context.Context) error {
 			fmt.Println("==> checking Traefik (the proxy that serves your domains)")
-			cmd := exec.CommandContext(ctx, "bash", traefikScript, "apply", dataDir)
+			scriptArgs := []string{traefikScript, "apply", dataDir}
+			if traefikTemplate != "" {
+				scriptArgs = append(scriptArgs, traefikTemplate)
+			}
+			cmd := exec.CommandContext(ctx, "bash", scriptArgs...)
 			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 			err := cmd.Run()
 			var ee *exec.ExitError

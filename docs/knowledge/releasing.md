@@ -45,7 +45,9 @@ recreates Traefik and resets the Let's Encrypt email), so changes to Traefik's c
 Docker/host setup still need a manual step — say so in the release notes when they exist.
 After a healthy start it also runs `deploy/traefik-run.sh apply` from the package, which pulls the pinned
 Traefik, replaces the container only if the image differs, and puts the previous image back if the new one
-does not stay up (`--skip-traefik` opts out; a Traefik failure does not roll back DeployMate). Releases before
+does not stay up (it also passes the static config template, so a release can change `traefik.yml` — the Let's Encrypt email is
+kept and the old file is saved as `traefik.yml.bak`; the container is recreated on the host network if it was not;
+`--skip-traefik` opts out; a Traefik failure does not roll back DeployMate). Releases before
 0.3 lack the script and skip the step. The pin lives in that one script; bootstrap uses it too.
 Unit tests cover swap, rollback, checksum and extraction; the systemd/real-restart path has
 only been exercised by hand.

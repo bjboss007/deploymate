@@ -186,6 +186,7 @@ off a dev machine.
 | `DEPLOYMATE_SETUP_EMAIL` / `_PASSWORD` | — | create the owner user at startup |
 | `DEPLOYMATE_LE_MODE` | `staging` | `production` for real Let's Encrypt certs; `off` behind a tunnel or proxy that serves the certificate (DeployMate asks for none) |
 | `DEPLOYMATE_RAILPACK` | `railpack` | path to the railpack CLI |
+| `DEPLOYMATE_DASHBOARD_HOST` | — | e.g. `dm.example.com`: Traefik serves the dashboard itself on this domain (DeployMate writes the route to `<data>/traefik-dynamic/dashboard.yml`); unset = loopback only |
 | `DEPLOYMATE_PREVIEW_HOST` | — | e.g. `dm.example.com`: every app gets a public `{slug}.{host}` subdomain routed by Host header (see docs/specs/cloudflare-tunnel.md) |
 | `DEPLOYMATE_CLOUDFLARE_API_TOKEN` | — | auto-DNS: Cloudflare API token (scope `Zone.DNS:Edit`) that creates each new app's preview CNAME; requires the two vars below |
 | `DEPLOYMATE_CLOUDFLARE_ZONE_ID` | — | auto-DNS: zone that owns the preview host |

@@ -46,6 +46,7 @@ type Server struct {
 	host        HostSource            // the machine's vitals for the Server page
 	version     string
 	demoHost    bool
+	loginLimit  *loginLimiter
 	previewRR   sync.Map // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
@@ -66,6 +67,9 @@ func (s *Server) Handler() http.Handler {
 	am := &auth.Middleware{Store: s.store}
 	if s.apiRate == nil {
 		s.apiRate = newAPILimiter()
+	}
+	if s.loginLimit == nil {
+		s.loginLimit = newLoginLimiter()
 	}
 
 	r := chi.NewRouter()

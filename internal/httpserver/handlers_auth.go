@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -45,9 +46,18 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
+	ip := clientIP(r)
+	if blocked, wait := s.loginLimit.blocked(ip, email); blocked {
+		mins := int(wait.Minutes()) + 1
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		render(w, r, http.StatusTooManyRequests, templates.LoginPage("Too many failed sign-ins. Try again in "+strconv.Itoa(mins)+" minutes."))
+		return
+	}
+
 	user, err := s.store.GetUserByEmail(email)
 	if errors.Is(err, store.ErrNotFound) {
 		// Same response as a wrong password: don't leak which emails exist.
+		s.loginLimit.fail(ip, email)
 		render(w, r, http.StatusUnauthorized, templates.LoginPage("Invalid email or password."))
 		return
 	}
@@ -58,9 +68,11 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	ok, err := auth.VerifyPassword(password, user.PasswordHash)
 	if err != nil || !ok {
+		s.loginLimit.fail(ip, email)
 		render(w, r, http.StatusUnauthorized, templates.LoginPage("Invalid email or password."))
 		return
 	}
+	s.loginLimit.succeed(ip)
 
 	sess, token, err := auth.NewSession(user.ID)
 	if err != nil {

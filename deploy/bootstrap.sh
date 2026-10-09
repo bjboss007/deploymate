@@ -118,16 +118,43 @@ docker start dm-buildkit >/dev/null 2>&1 || true
 echo "==> traefik static config"
 sed "s/ADMIN_EMAIL/$LE_EMAIL/" "$(dirname "$0")/traefik/static.yml" > "$DATA_DIR/traefik.yml"
 
-bash "$(dirname "$0")/traefik-run.sh" apply "$DATA_DIR"
+bash "$(dirname "$0")/traefik-run.sh" apply "$DATA_DIR"  # (the static config was just written from the template above)
 
 echo "==> systemd service"
 sed "s|/var/lib/deploymate|$DATA_DIR|" "$(dirname "$0")/deploymate.service" > /etc/systemd/system/deploymate.service
+
+# Optional settings given to the installer become a drop-in, so they survive updates of the
+# unit file: DEPLOYMATE_DASHBOARD_HOST (serve the dashboard on this domain),
+# DEPLOYMATE_LE_MODE (staging | production | off) and DEPLOYMATE_PREVIEW_HOST.
+# Values are checked first: they end up in a unit file and, for hosts, in a proxy rule.
+DROPIN_DIR=/etc/systemd/system/deploymate.service.d
+DROPIN="$DROPIN_DIR/10-install.conf"
+ENV_LINES=""
+for var in DEPLOYMATE_DASHBOARD_HOST DEPLOYMATE_PREVIEW_HOST DEPLOYMATE_LE_MODE; do
+  val="${!var:-}"
+  [[ -n "$val" ]] || continue
+  if ! [[ "$val" =~ ^[a-z0-9.-]+$ ]]; then
+    echo "$var must be lowercase letters, digits, dots and dashes only (got '$val')" >&2
+    exit 1
+  fi
+  ENV_LINES+="Environment=$var=$val"$'\n'
+done
+if [[ -n "$ENV_LINES" ]]; then
+  mkdir -p "$DROPIN_DIR"
+  printf '[Service]\n%s' "$ENV_LINES" > "$DROPIN"
+  echo "    settings written to $DROPIN"
+fi
+
 systemctl daemon-reload
 systemctl enable --now deploymate
 
 echo
 echo "done. next steps:"
-echo "  1. point an A record at this server, e.g. dm.example.com"
-echo "  2. create your login:  sudo -u $SERVICE_USER DEPLOYMATE_DATA_DIR=$DATA_DIR /usr/local/bin/deploymate setup-admin"
-echo "  3. open the dashboard through traefik once a domain is attached, or"
-echo "     ssh -L 8080:127.0.0.1:8080 $SERVICE_USER@$(hostname -I | awk '{print $1}')"
+echo "  1. create your login:  sudo -u $SERVICE_USER DEPLOYMATE_DATA_DIR=$DATA_DIR /usr/local/bin/deploymate setup-admin"
+if [[ -n "${DEPLOYMATE_DASHBOARD_HOST:-}" ]]; then
+  echo "  2. point an A record for ${DEPLOYMATE_DASHBOARD_HOST} at this server, then open https://${DEPLOYMATE_DASHBOARD_HOST}"
+else
+  echo "  2. open the dashboard on this machine at http://127.0.0.1:8080, or from your computer with"
+  echo "     ssh -L 8080:127.0.0.1:8080 $SERVICE_USER@$(hostname -I | awk '{print $1}')"
+  echo "     (to give it a domain of its own, re-run this installer with DEPLOYMATE_DASHBOARD_HOST=dm.example.com)"
+fi
