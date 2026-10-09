@@ -239,3 +239,17 @@ func TestWebhookSkipsPushesOutsideTheBuildFolder(t *testing.T) {
 		t.Errorf("push without file info: %q", body)
 	}
 }
+
+// A push that deletes the branch has nothing to deploy; it used to queue a deploy
+// of the all-zero commit, which could only fail.
+func TestWebhookIgnoresADeletedBranch(t *testing.T) {
+	e := newWebhookEnv(t)
+	src, app := e.addApp(t, "app-dev", "main")
+	body := `{"ref":"refs/heads/main","after":"0000000000000000000000000000000000000000","deleted":true}`
+	if code, got := e.deliver(t, src, "push", "del1", body); code != 200 || got != "ignored: branch deleted" {
+		t.Errorf("deleted branch: %d %q", code, got)
+	}
+	if n := e.deployments(t, app); n != 0 {
+		t.Errorf("%d deployments queued for a deleted branch", n)
+	}
+}

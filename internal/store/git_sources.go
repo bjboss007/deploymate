@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"errors"
+	"strings"
 )
 
 // GitSource is a connected repository: credentials (encrypted at rest by the
@@ -78,4 +79,27 @@ func (s *Store) UpdateAppGitSource(appID, gitSourceID string) error {
 	}
 	_, err := s.db.Exec(`UPDATE apps SET git_source_id = ? WHERE id = ?`, gitSourceID, appID)
 	return err
+}
+
+// ListGitSourcesByRepo returns the sources created through Connect GitHub for a
+// repository ("owner/name", any case): the apps a GitHub event about it concerns.
+func (s *Store) ListGitSourcesByRepo(fullName string) ([]GitSource, error) {
+	rows, err := s.db.Query(
+		`SELECT id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name
+		 FROM git_sources WHERE clone_method = ? AND repo_full_name = ? ORDER BY created_at`,
+		CloneGitHubApp, strings.ToLower(fullName))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []GitSource
+	for rows.Next() {
+		var gs GitSource
+		if err := rows.Scan(&gs.ID, &gs.Provider, &gs.RepoURL, &gs.CloneMethod, &gs.PrivateKeyEnc, &gs.PATEnc,
+			&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc, &gs.InstallationID, &gs.RepoFullName); err != nil {
+			return nil, err
+		}
+		out = append(out, gs)
+	}
+	return out, rows.Err()
 }

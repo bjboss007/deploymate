@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -480,5 +481,187 @@ func TestInstallationTokensAreReusedAcrossRequests(t *testing.T) {
 	e.connectRepo("a2", "9:habib/site", "main")
 	if e.gh.tokenCalls != before {
 		t.Errorf("a second connect minted %d more tokens; the cached one should be reused", e.gh.tokenCalls-before)
+	}
+}
+
+// ---- push handling (phase 3) ------------------------------------------------
+
+func (e *ghEnv) deliver(event, delivery, body string) string {
+	r := httptest.NewRequest(http.MethodPost, "/hooks/github-app", strings.NewReader(body))
+	r.Header.Set("X-GitHub-Event", event)
+	r.Header.Set("X-GitHub-Delivery", delivery)
+	m := hmac.New(sha256.New, []byte("the-webhook-secret"))
+	m.Write([]byte(body))
+	r.Header.Set("X-Hub-Signature-256", "sha256="+hex.EncodeToString(m.Sum(nil)))
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, r)
+	return strings.TrimSpace(rec.Body.String())
+}
+
+func push(repo, ref, after string, files ...string) string {
+	b, _ := json.Marshal(map[string]any{
+		"ref": ref, "after": after, "head_commit": map[string]string{"message": "ship it"},
+		"repository": map[string]string{"full_name": repo},
+		"commits":    []map[string]any{{"modified": files}},
+	})
+	return string(b)
+}
+
+func (e *ghEnv) deployments(t *testing.T, appID string) []store.Deployment {
+	t.Helper()
+	ds, err := e.st.ListDeployments(appID, 20)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ds
+}
+
+func TestAPushToAConnectedRepositoryDeploysItsApps(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	web := e.newApp(t, "web")
+	e.connectRepo("web", "9:habib/site", "")
+
+	if got := e.deliver("push", "d1", push("habib/site", "refs/heads/main", "abc123", "x.go")); got != "queued" {
+		t.Fatalf("push: %q", got)
+	}
+	ds := e.deployments(t, web.ID)
+	if len(ds) != 1 || ds[0].Status != "queued" || ds[0].Trigger != "webhook" || ds[0].CommitSHA != "abc123" || ds[0].CommitMessage != "ship it" {
+		t.Fatalf("deployments: %+v", ds)
+	}
+	// The repository name is matched without regard to case.
+	if got := e.deliver("push", "d2", push("Habib/Site", "refs/heads/main", "def456", "x.go")); got != "queued" {
+		t.Errorf("mixed-case repository: %q", got)
+	}
+}
+
+func TestPushesThatShouldNotDeployAreAnsweredWhy(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	web := e.newApp(t, "web")
+	e.connectRepo("web", "9:habib/site", "")
+
+	cases := []struct{ name, body, want string }{
+		{"another branch", push("habib/site", "refs/heads/feature", "a1", "x.go"), "ignored: not the deploy branch"},
+		{"another repository", push("habib/other", "refs/heads/main", "a2", "x.go"), "ignored: no app uses this repository"},
+		{"a deleted branch", push("habib/site", "refs/heads/main", "0000000000000000000000000000000000000000"), "ignored: branch deleted"},
+		{"a tag", push("habib/site", "refs/tags/v1", "a3", "x.go"), "ignored: not the deploy branch"},
+	}
+	for i, c := range cases {
+		if got := e.deliver("push", "x"+strconv.Itoa(i), c.body); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	if n := len(e.deployments(t, web.ID)); n != 0 {
+		t.Errorf("%d deployments were queued by pushes that should not deploy", n)
+	}
+	// A deploy-key source for the same repository name is not touched by the app webhook.
+	_, other := e.addApp(t, "keyed", "main")
+	if got := e.deliver("push", "k1", push("habib/site", "refs/heads/main", "k", "x.go")); got != "queued" {
+		t.Fatalf("push: %q", got)
+	}
+	if n := len(e.deployments(t, other.ID)); n != 0 {
+		t.Error("the GitHub App webhook queued a deploy for a deploy-key app")
+	}
+}
+
+func TestTheAppWebhookFiltersByBuildFolderAndBranchPerApp(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	site := e.newApp(t, "site")
+	api := e.newApp(t, "api")
+	e.connectRepo("site", "9:habib/site", "main")
+	e.connectRepo("api", "9:habib/site", "feature/x")
+	if err := e.st.UpdateAppRootDirectory(site.ID, "site"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Only the Go code changed on main: the site app (folder "site") is skipped.
+	if got := e.deliver("push", "f1", push("habib/site", "refs/heads/main", "s1", "internal/x.go")); got != "ignored: no changes in the build folder" {
+		t.Errorf("unrelated files: %q", got)
+	}
+	if got := e.deliver("push", "f2", push("habib/site", "refs/heads/main", "s2", "site/index.html")); got != "queued" {
+		t.Errorf("the build folder changed: %q", got)
+	}
+	// The api app tracks another branch, so a push to main never reaches it.
+	if n := len(e.deployments(t, api.ID)); n != 0 {
+		t.Errorf("api (branch feature/x) got %d deployments from a push to main", n)
+	}
+	if got := e.deliver("push", "f3", push("habib/site", "refs/heads/feature/x", "s3", "anything")); got != "queued" {
+		t.Errorf("push to the api app's branch: %q", got)
+	}
+	if n := len(e.deployments(t, api.ID)); n != 1 {
+		t.Errorf("api deployments = %d, want 1", n)
+	}
+	if n := len(e.deployments(t, site.ID)); n != 1 {
+		t.Errorf("site deployments = %d, want 1 (only the push that touched site/)", n)
+	}
+}
+
+func TestTheSameDeliveryIsHandledOnce(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	a := e.newApp(t, "a")
+	b := e.newApp(t, "b")
+	e.connectRepo("a", "9:habib/site", "")
+	e.connectRepo("b", "9:habib/site", "")
+
+	body := push("habib/site", "refs/heads/main", "same", "x.go")
+	if got := e.deliver("push", "dup", body); got != "queued" {
+		t.Fatalf("first: %q", got)
+	}
+	if got := e.deliver("push", "dup", body); got != "duplicate delivery ignored" {
+		t.Errorf("replay: %q", got)
+	}
+	if len(e.deployments(t, a.ID)) != 1 || len(e.deployments(t, b.ID)) != 1 {
+		t.Error("two apps on one repository must each deploy exactly once for one delivery")
+	}
+	// A new delivery id is a new push.
+	if got := e.deliver("push", "dup2", body); got != "queued" {
+		t.Errorf("new delivery: %q", got)
+	}
+}
+
+func TestAPrebuiltAppWaitsForItsCIRunNotThePush(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.newApp(t, "jar")
+	e.connectRepo("jar", "9:habib/site", "")
+	if err := e.st.UpdateAppDeployMode(app.ID, store.DeployModeArtifact, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.deliver("push", "p1", push("habib/site", "refs/heads/main", "z", "x.go")); got != "ignored: this app deploys from CI runs, not pushes" {
+		t.Errorf("prebuilt: %q", got)
+	}
+	if n := len(e.deployments(t, app.ID)); n != 0 {
+		t.Error("a prebuilt app was deployed on push")
+	}
+}
+
+func TestInstallationChangesRefreshTheRepositoryList(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	e.newApp(t, "web")
+	e.req(http.MethodGet, "/apps/web", "dm.example.com", nil) // fills the picker's cache
+	e.s.repoMu.Lock()
+	filled := !e.s.repoCacheV.at.IsZero()
+	e.s.repoMu.Unlock()
+	if !filled {
+		t.Fatal("the picker should have cached the repository list")
+	}
+	for _, ev := range []string{"installation", "installation_repositories"} {
+		e.req(http.MethodGet, "/apps/web", "dm.example.com", nil)
+		if got := e.deliver(ev, "i-"+ev, `{"action":"added"}`); got != "ok" {
+			t.Errorf("%s: %q", ev, got)
+		}
+		e.s.repoMu.Lock()
+		cleared := e.s.repoCacheV.at.IsZero()
+		e.s.repoMu.Unlock()
+		if !cleared {
+			t.Errorf("%s did not clear the cache", ev)
+		}
+	}
+	if got := e.deliver("issues", "i3", `{}`); got != "ignored: not a push event" {
+		t.Errorf("other events: %q", got)
 	}
 }

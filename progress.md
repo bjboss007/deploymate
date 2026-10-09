@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-09 (Connect GitHub, phase 3 of 4)** — The GitHub App's webhook now deploys: `push` → apps connected to that
+repository+branch (per-source de-dup, per-folder filter, prebuilt apps wait for CI), `installation*` clears the
+repository-list cache, `workflow_run` still ignored. Shared `queuePushDeploys`; per-repository webhook now ignores
+deleted branches. End to end (connect → install → pick → push → queued) tested against a fake GitHub. **Never run
+against the real GitHub yet.** Next: phase 4 (prebuilt apps via the app's token, no PAT), then a release + site guide.
+
 **2026-10-09 (Connect GitHub, phase 2 of 4)** — Installation tokens (`githubapp.Tokens`, cached), `gitauth.Resolver`
 (deploy key or token per source), `gitpkg.Auth` (token as an HTTP header, not in URL/argv/.git/config), migration
 0024, the app page's "From GitHub" repository picker and `POST /apps/{slug}/git/github`, git panel/first-deploy guide for

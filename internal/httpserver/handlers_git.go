@@ -226,6 +226,10 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unparseable payload", http.StatusBadRequest)
 		return
 	}
+	if push.Deleted {
+		_, _ = w.Write([]byte("ignored: branch deleted"))
+		return
+	}
 	if webhooks.BranchFromRef(push.Ref) != gs.DefaultBranch {
 		_, _ = w.Write([]byte("ignored: not the deploy branch"))
 		return
@@ -235,45 +239,56 @@ func (s *Server) handleWebhook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Queue a deployment for the app(s) linked to this source.
-	n, ciOnly, skipped := 0, 0, 0
-	if apps, err := s.store.ListAppsByGitSource(gs.ID); err == nil {
-		for _, app := range apps {
-			if app.DeployMode == store.DeployModeArtifact {
-				// A prebuilt app deploys when its CI run finishes, not on the
-				// push: the artifact doesn't exist yet.
-				ciOnly++
-				continue
-			}
-			if !push.TouchesFolder(app.RootDirectory) {
-				skipped++
-				_ = s.store.RecordEvent(app.ID, store.EventDeploySkipped,
-					"push "+shortSHA(push.CommitSHA)+" changed nothing in "+orRoot(app.RootDirectory))
-				continue
-			}
-			_, err := s.store.CreateDeployment(store.Deployment{
-				AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "webhook",
-				CommitSHA: push.CommitSHA, CommitMessage: push.CommitMessage,
-			})
-			if err != nil {
-				slog.Error("webhook: queue deployment", "err", err)
-				continue
-			}
-			n++
-		}
-	}
-	if n == 0 && ciOnly > 0 {
+	out := s.queuePushDeploys(gs, push)
+	if out.queued == 0 && out.ciOnly > 0 {
 		_, _ = w.Write([]byte("ignored: this app deploys from CI runs, not pushes"))
 		return
 	}
-	if n == 0 && skipped > 0 {
+	if out.queued == 0 && out.skipped > 0 {
 		_, _ = w.Write([]byte("ignored: no changes in the build folder"))
 		return
 	}
-	if n == 0 {
+	if out.queued == 0 {
 		slog.Warn("webhook: no apps linked to source", "source", gs.ID)
 	}
 	_, _ = w.Write([]byte("queued"))
+}
+
+// pushOutcome counts what a push did to the apps linked to one git source.
+type pushOutcome struct{ queued, ciOnly, skipped int }
+
+// queuePushDeploys queues a deployment for each app linked to the source that a
+// push should deploy: not prebuilt apps (they deploy when their CI run finishes)
+// and not apps whose build folder the push did not touch. Shared by the
+// per-repository webhook and the GitHub App's webhook.
+func (s *Server) queuePushDeploys(gs store.GitSource, push webhooks.Push) pushOutcome {
+	var out pushOutcome
+	apps, err := s.store.ListAppsByGitSource(gs.ID)
+	if err != nil {
+		return out
+	}
+	for _, app := range apps {
+		if app.DeployMode == store.DeployModeArtifact {
+			out.ciOnly++
+			continue
+		}
+		if !push.TouchesFolder(app.RootDirectory) {
+			out.skipped++
+			_ = s.store.RecordEvent(app.ID, store.EventDeploySkipped,
+				"push "+shortSHA(push.CommitSHA)+" changed nothing in "+orRoot(app.RootDirectory))
+			continue
+		}
+		_, err := s.store.CreateDeployment(store.Deployment{
+			AppID: app.ID, Kind: "deploy", Status: "queued", Trigger: "webhook",
+			CommitSHA: push.CommitSHA, CommitMessage: push.CommitMessage,
+		})
+		if err != nil {
+			slog.Error("webhook: queue deployment", "err", err)
+			continue
+		}
+		out.queued++
+	}
+	return out
 }
 
 // randomHex returns n random bytes as hex (for webhook secrets).

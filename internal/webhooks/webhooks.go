@@ -46,6 +46,10 @@ type Push struct {
 	// 20-commit cap cut it off); callers must then assume everything changed.
 	Files      []string
 	FilesKnown bool
+	// RepoFullName ("owner/name") and Deleted come from a GitHub push payload:
+	// a pushed-then-deleted branch has nothing to deploy.
+	RepoFullName string
+	Deleted      bool
 }
 
 // maxPayloadCommits is how many commits GitHub and GitLab include in a push
@@ -94,13 +98,18 @@ func ParseGitHubPush(body []byte) (Push, error) {
 		Head  struct {
 			Message string `json:"message"`
 		} `json:"head_commit"`
-		Commits []commitFiles `json:"commits"`
+		Commits    []commitFiles `json:"commits"`
+		Deleted    bool          `json:"deleted"`
+		Repository struct {
+			FullName string `json:"full_name"`
+		} `json:"repository"`
 	}
 	if err := json.Unmarshal(body, &p); err != nil {
 		return Push{}, err
 	}
 	files, known := collectFiles(p.Commits)
-	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: p.Head.Message, Files: files, FilesKnown: known}, nil
+	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: p.Head.Message, Files: files, FilesKnown: known,
+		RepoFullName: p.Repository.FullName, Deleted: p.Deleted || isZeroSHA(p.After)}, nil
 }
 
 // WorkflowRun is the data prebuilt deploys read from a GitHub `workflow_run`
@@ -161,6 +170,10 @@ func ParseGitHubWorkflowRun(body []byte) (WorkflowRun, error) {
 		HeadBranch: r.HeadBranch, HeadSHA: r.HeadSHA, HeadMessage: r.HeadCommit.Message,
 		HeadRepo: r.HeadRepository.FullName, Repo: p.Repository.FullName,
 	}, nil
+}
+
+func isZeroSHA(sha string) bool {
+	return sha != "" && strings.Trim(sha, "0") == ""
 }
 
 // ParseGitLabPush extracts the push data from a GitLab push payload.

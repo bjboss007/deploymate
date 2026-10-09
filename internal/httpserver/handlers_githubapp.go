@@ -273,12 +273,73 @@ func (s *Server) handleGitHubAppWebhook(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "bad signature", http.StatusUnauthorized)
 		return
 	}
-	switch r.Header.Get("X-GitHub-Event") {
+	switch event := r.Header.Get("X-GitHub-Event"); event {
 	case "ping":
 		_, _ = w.Write([]byte("pong"))
+	case "push":
+		push, err := webhooks.ParseGitHubPush(body)
+		if err != nil {
+			http.Error(w, "unparseable payload", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(s.handleAppPush(push, r.Header.Get("X-GitHub-Delivery"))))
+	case "installation", "installation_repositories":
+		// The repositories the app can see changed: let the picker ask GitHub again.
+		s.repoMu.Lock()
+		s.repoCacheV = repoCache{}
+		s.repoMu.Unlock()
+		_, _ = w.Write([]byte("ok"))
+	case "workflow_run":
+		_, _ = w.Write([]byte("ignored: prebuilt deploys through the GitHub app are not supported yet"))
 	default:
-		_, _ = w.Write([]byte("ignored: not handled yet"))
+		_, _ = w.Write([]byte("ignored: not a push event"))
 	}
+}
+
+// handleAppPush queues deployments for the apps connected to the pushed
+// repository and branch, and returns the answer GitHub's delivery log will show.
+func (s *Server) handleAppPush(push webhooks.Push, delivery string) string {
+	if push.Deleted {
+		return "ignored: branch deleted"
+	}
+	sources, err := s.store.ListGitSourcesByRepo(push.RepoFullName)
+	if err != nil {
+		slog.Error("github webhook: list sources", "err", err)
+		return "error"
+	}
+	if len(sources) == 0 {
+		return "ignored: no app uses this repository"
+	}
+	branch := webhooks.BranchFromRef(push.Ref)
+	var total pushOutcome
+	matched, duplicates := 0, 0
+	for _, gs := range sources {
+		if gs.DefaultBranch != branch {
+			continue
+		}
+		matched++
+		if s.deliveries.Seen("github-app", gs.ID, delivery) {
+			duplicates++
+			continue
+		}
+		o := s.queuePushDeploys(gs, push)
+		total.queued += o.queued
+		total.ciOnly += o.ciOnly
+		total.skipped += o.skipped
+	}
+	switch {
+	case matched == 0:
+		return "ignored: not the deploy branch"
+	case total.queued > 0:
+		return "queued"
+	case duplicates == matched:
+		return "duplicate delivery ignored"
+	case total.ciOnly > 0:
+		return "ignored: this app deploys from CI runs, not pushes"
+	case total.skipped > 0:
+		return "ignored: no changes in the build folder"
+	}
+	return "ignored: no app uses this repository"
 }
 
 func redirectWithFlash(w http.ResponseWriter, r *http.Request, path, msg string) {

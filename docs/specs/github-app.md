@@ -73,10 +73,22 @@ Not verified yet: creating an app on a real account (needs the owner's click —
 - Unverified against real GitHub: `GET /installation/repositories`, `GET /repos/{o}/{r}/branches/{b}` and the
   token endpoint's exact shapes (written from GitHub's documented behaviour, tested against a fake).
 
-## Phase 3 — App-level webhook handling
+## Phase 3 — App-level webhook handling (done 2026-10-09)
 
-`push` → apps linked to that repository and branch (existing per-folder filtering applies), `workflow_run` →
-prebuilt apps, `installation*` → repository list. Delivery de-duplication as for per-source hooks.
+`POST /hooks/github-app` (signature checked first):
+- `push` → `ListGitSourcesByRepo(repository.full_name)` (case-insensitive, `github_app` sources only), per source
+  the branch must equal its tracked branch, delivery de-duplication is per source (key `github-app` + source id),
+  and `queuePushDeploys` (shared with the per-repository webhook) queues a deployment for each linked app that is
+  not prebuilt and whose build folder the push touched (`Push.TouchesFolder`). Answers: `queued`,
+  `duplicate delivery ignored`, `ignored: not the deploy branch`, `ignored: no app uses this repository`,
+  `ignored: no changes in the build folder`, `ignored: this app deploys from CI runs, not pushes`,
+  `ignored: branch deleted`.
+- `installation` / `installation_repositories` → the app page's repository list cache is cleared (`ok`).
+- `workflow_run` → acknowledged and ignored until phase 4.
+- Also fixed for the per-repository webhook: a push that deletes the branch (`deleted` or an all-zero `after`)
+  is ignored instead of queueing a deploy of a commit that does not exist.
+- Not handled: a repository renamed or transferred keeps its old `repo_full_name` until re-connected (we do not
+  store GitHub's repository id); `repository` events are not subscribed.
 
 ## Phase 4 — Prebuilt apps and fallbacks
 
