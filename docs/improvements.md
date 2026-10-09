@@ -675,8 +675,8 @@ change.
 - [ ] **Traefik hardening** — put `tecnativa/docker-socket-proxy`
   between Traefik and the socket so the proxy only sees the API verbs it
   needs.
-- [ ] **Self-update** — `deploymate update` (download + replace binary +
-  restart via systemd) plus a version endpoint in the dashboard.
+- [x] **Self-update** — done 2026-10-08: `deploymate update` (verified download, swap, health check, rollback;
+  `docs/knowledge/releasing.md`). Still open: a version/"update available" notice in the dashboard (Near-term).
 - [ ] **Postgres metadata migration** — if/when multi-server or
   multi-user pushes SQLite, goose SQL is portable; the work is in
   connection handling (drop `SetMaxOpenConns(1)`, add a pool).
