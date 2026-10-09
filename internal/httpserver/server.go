@@ -46,6 +46,8 @@ type Server struct {
 	host        HostSource            // the machine's vitals for the Server page
 	version     string
 	demoHost    bool
+	publicHost  string // DEPLOYMATE_DASHBOARD_HOST: how the internet reaches this server
+	githubWeb   string // https://github.com override (tests)
 	loginLimit  *loginLimiter
 	previewRR   sync.Map // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
@@ -158,6 +160,7 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	// Git provider webhooks: public, authenticated by their secret instead.
+	r.Post("/hooks/github-app", s.handleGitHubAppWebhook) // the GitHub App's one webhook (before the per-source {id} route)
 	r.Post("/hooks/{id}", s.handleWebhook)
 
 	// Dashboard.
@@ -169,6 +172,11 @@ func (s *Server) Handler() http.Handler {
 		})
 		r.Get("/projects", s.handleProjectsList)
 		r.Post("/projects", am.CheckCSRF(s.handleProjectCreate))
+		r.Get("/settings/github", s.handleGitHubPage)
+		r.Post("/settings/github/connect", am.CheckCSRF(s.handleGitHubConnect))
+		r.Get("/settings/github/callback", s.handleGitHubCallback)
+		r.Get("/settings/github/installed", s.handleGitHubInstalled)
+		r.Post("/settings/github/disconnect", am.CheckCSRF(s.handleGitHubDisconnect))
 		r.Get("/settings/tokens", s.handleTokensPage)
 		r.Post("/settings/tokens", am.CheckCSRF(s.handleTokenCreate))
 		r.Post("/settings/tokens/{id}/revoke", am.CheckCSRF(s.handleTokenRevoke))

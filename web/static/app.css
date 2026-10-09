@@ -919,3 +919,5 @@ select { cursor: pointer; }
 .kv dd { margin: 0; word-break: break-word; }
 .panel-title-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .range-select { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 3px 8px; font: inherit; font-size: 12.5px; }
+.gh-note { margin: 10px 0 14px; font-size: 13.5px; }
+.field-inline { display: inline-flex; align-items: center; gap: 8px; }

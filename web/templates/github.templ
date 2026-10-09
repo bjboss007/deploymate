@@ -1,0 +1,147 @@
+package templates
+
+// GitHubView is the "Connect GitHub" page (assembled in httpserver).
+type GitHubView struct {
+	Connected bool
+
+	// Connected app.
+	AppName    string
+	AppURL     string // the app's page on GitHub
+	Owner      string
+	OwnerType  string
+	WebhookURL string // "" = created with the webhook switched off
+	InstallURL string
+
+	Installations []GitHubInstallation
+	InstallError  string
+
+	// Not connected.
+	Public bool // GitHub can reach this server's webhook address
+}
+
+// GitHubInstallation is one account the app is installed on.
+type GitHubInstallation struct {
+	Account   string
+	Type      string
+	Selection string // "all repositories" | "selected repositories"
+	Suspended bool
+}
+
+templ GitHubPage(vc ViewCtx, v GitHubView) {
+	@Layout(vc, "GitHub", "", []Crumb{{Label: "GitHub"}}) {
+		<div class="page-head">
+			<div>
+				<h1>GitHub</h1>
+				<p class="muted-text">Connect once, then pick repositories instead of pasting keys and webhook URLs.</p>
+			</div>
+		</div>
+		if !v.Connected {
+			<div class="panel">
+				<div class="panel-title">Connect GitHub</div>
+				<p class="muted-text">
+					DeployMate will ask GitHub to create a private app on your account. You click <strong>Create GitHub App</strong> once on GitHub, and DeployMate keeps the app's key, encrypted, on this server. The app can read your code, read CI runs and start a workflow. It can't change your code. The manual deploy-key setup keeps working next to it.
+				</p>
+				if !v.Public {
+					<p class="lvl-warn gh-note">
+						This server's address isn't reachable from the internet, so GitHub can't send pushes to it yet. The app is created with its webhook switched off. Set a public address first (<code>DEPLOYMATE_DASHBOARD_HOST</code> or a tunnel), or edit the app's webhook on GitHub afterwards.
+					</p>
+				}
+				<form method="post" action="/settings/github/connect" class="env-form">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<label class="field-inline">
+						<span class="muted-text">Create it under</span>
+						<select name="kind" aria-label="Where to create the app">
+							<option value="user">my personal account</option>
+							<option value="org">an organisation</option>
+						</select>
+					</label>
+					<input type="text" name="org" placeholder="organisation name" aria-label="Organisation name" autocomplete="off" spellcheck="false" pattern="[A-Za-z0-9-]*" maxlength="39"/>
+					<button class="btn btn-primary" type="submit">Connect GitHub</button>
+				</form>
+			</div>
+		} else {
+			<div class="panel">
+				<div class="panel-title">Connected</div>
+				<dl class="kv">
+					<dt>App</dt>
+					<dd><a href={ templ.SafeURL(v.AppURL) } rel="noopener noreferrer" target="_blank">{ v.AppName }</a></dd>
+					<dt>Owner</dt>
+					<dd>{ v.Owner } <span class="muted-text">({ v.OwnerType })</span></dd>
+					<dt>Webhook</dt>
+					if v.WebhookURL != "" {
+						<dd class="mono">{ v.WebhookURL }</dd>
+					} else {
+						<dd class="lvl-warn">switched off: the app was created before this server had a public address. Edit the app on GitHub to turn it on.</dd>
+					}
+				</dl>
+			</div>
+			<div class="panel">
+				<div class="panel-title">Where it is installed</div>
+				if v.InstallError != "" {
+					<p class="warn-note">{ v.InstallError }</p>
+				} else if len(v.Installations) == 0 {
+					<p class="muted-text">Not installed anywhere yet. Install it on the repositories you want to deploy.</p>
+				} else {
+					<table class="deploy-table">
+						<thead>
+							<tr>
+								<th>Account</th>
+								<th>Access</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, in := range v.Installations {
+								<tr>
+									<td>{ in.Account } <span class="muted-text">({ in.Type })</span></td>
+									<td>
+										{ in.Selection }
+										if in.Suspended {
+											<span class="badge badge-failed">suspended</span>
+										}
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+				<p><a class="btn btn-sm" href={ templ.SafeURL(v.InstallURL) } rel="noopener noreferrer" target="_blank">Install on GitHub</a></p>
+			</div>
+			<div class="panel">
+				<div class="panel-title">Disconnect</div>
+				<p class="muted-text">
+					DeployMate forgets the app's key. Apps already created from it keep their code but stop deploying on push. The app itself stays on GitHub until you delete it there.
+				</p>
+				<form method="post" action="/settings/github/disconnect" onsubmit="return confirm('Disconnect GitHub from this DeployMate?')">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-danger" type="submit">Disconnect</button>
+				</form>
+			</div>
+		}
+	}
+}
+
+// GitHubRedirectPage hands the browser to GitHub's "create app from manifest"
+// form. GitHub only accepts the manifest as a POSTed form field, so this page
+// submits itself.
+templ GitHubRedirectPage(formURL string, manifest string) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>Opening GitHub · DeployMate</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+		</head>
+		<body>
+			<main style="max-width:520px;margin:15vh auto;padding:0 16px">
+				<h1>Opening GitHub…</h1>
+				<p class="muted-text">If nothing happens, press the button.</p>
+				<form id="gh" method="post" action={ templ.SafeURL(formURL) }>
+					<input type="hidden" name="manifest" value={ manifest }/>
+					<button class="btn btn-primary" type="submit">Continue to GitHub</button>
+				</form>
+				<script>document.getElementById("gh").submit();</script>
+			</main>
+		</body>
+	</html>
+}

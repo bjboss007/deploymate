@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-09 (Connect GitHub, phase 1 of 4)** — Spike done from GitHub's docs (facts + what is unverified in
+`docs/specs/github-app.md`). Built: `internal/githubapp` (manifest, JWT, code exchange, installations),
+`github_app` table (migration 0023, secrets encrypted), Settings → GitHub page + callback + disconnect, public
+`/hooks/github-app` (signature check; ping only). Tested end to end against a fake GitHub. **Owner to try it for
+real**: open Settings → GitHub (top-bar branch icon) on the server (needs `DEPLOYMATE_DASHBOARD_HOST` or a public
+address for the webhook), press Connect GitHub, create the app on GitHub, install it on a repo, and confirm the
+page lists the installation. Manual deploy-key/webhook flow untouched. Next: phase 2.
+
 **2026-10-09 (v0.3.0 live on the real server)** — Tagged `v0.3.0`; owner ran `sudo deploymate update` on the Ubuntu
 server: binary swapped, Traefik v3.3 → v3.7.14 recreated on the **host network** (confirmed `host traefik:v3.7.14`),
 traefik.yml regenerated with the Let's Encrypt email kept. Still to confirm by the owner: `deploymate.link` and the

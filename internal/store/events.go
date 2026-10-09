@@ -33,6 +33,8 @@ const (
 	EventDeploySkipped   = "deploy_skipped"
 	// EventServerCleanup: the owner pruned build cache and unused images from the Server page.
 	EventServerCleanup = "server_cleanup"
+	EventGitHubConnected    = "github_connected"
+	EventGitHubDisconnected = "github_disconnected"
 	EventGitConnected    = "git_connected"
 	EventAPIAction       = "api_action" // something changed through the API (agent/script); the data names the token
 	EventServiceStarted  = "service_started"
