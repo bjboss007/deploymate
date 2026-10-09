@@ -171,3 +171,17 @@ reaches the dashboard at `127.0.0.1:8080` because Traefik runs on the **host net
    (`staging` certificates show a browser warning by design; `off` serves Traefik's default certificate).
 Sign-in is rate-limited: ten wrong passwords from one address pause that address for 15 minutes ("Too many
 failed sign-ins").
+
+## A Postgres service never becomes ready ("service did not become ready")
+
+Fixed in v0.4.1. A bare `postgres` in `deploymate.yml` means `postgres:latest`, which since Postgres 18 stores
+its data in `/var/lib/postgresql/18/docker` and refuses to start when a volume is mounted at the old
+`/var/lib/postgresql/data` (`docker logs dm-svc-<slug>` shows "in 18+, these Docker images are configured to
+store database data in a format which is compatible with pg_ctlcluster"). DeployMate now sets
+`PGDATA=/var/lib/postgresql/data` on every Postgres service, which keeps all versions and all existing volumes
+where they were; the service is recreated from the current template on the next deploy, so a failed service
+heals by redeploying. The deploy log also now says why a service did not start (its state and last log lines),
+and an already-exited container fails at once instead of after 60 seconds. If you see the same refusal with
+your own pinned image, pin `postgres:17` (or older) or set `PGDATA` yourself.
+Note: a volume created by Postgres 16 cannot be opened by Postgres 18 (a major upgrade needs `pg_upgrade`); pin
+the major version you already run.

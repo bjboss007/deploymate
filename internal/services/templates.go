@@ -5,13 +5,16 @@ import (
 	"net/url"
 )
 
+// postgresDataDir is where the volume is mounted and where Postgres is told to keep its data.
+const postgresDataDir = "/var/lib/postgresql/data"
+
 // Postgres provisions postgres:16-alpine with a generated superuser.
 var Postgres = Template{
-	Type:  "postgres",
-	Label: "PostgreSQL",
-	Image: "postgres:16-alpine",
-	Port:  5432,
-	Mount: "/var/lib/postgresql/data",
+	Type:   "postgres",
+	Label:  "PostgreSQL",
+	Image:  "postgres:16-alpine",
+	Port:   5432,
+	Mount:  postgresDataDir,
 	URLEnv: "DATABASE_URL",
 	CredsGen: map[string]func() string{
 		"user":     func() string { return "dm" },
@@ -23,6 +26,10 @@ var Postgres = Template{
 			"POSTGRES_USER=" + c["user"],
 			"POSTGRES_PASSWORD=" + c["password"],
 			"POSTGRES_DB=" + c["db"],
+			// Postgres 18 moved the default data directory to /var/lib/postgresql/18/docker and
+			// refuses to start when a volume is mounted at the old /var/lib/postgresql/data. Naming the
+			// directory keeps every version, and every existing volume, exactly where it is.
+			"PGDATA=" + postgresDataDir,
 		}
 	},
 	ConnURL: func(c map[string]string, host string) string {
@@ -39,11 +46,11 @@ var Postgres = Template{
 
 // MySQL provisions mysql:8.4 (LTS) with a generated root + app user.
 var MySQL = Template{
-	Type:  "mysql",
-	Label: "MySQL",
-	Image: "mysql:8.4",
-	Port:  3306,
-	Mount: "/var/lib/mysql",
+	Type:   "mysql",
+	Label:  "MySQL",
+	Image:  "mysql:8.4",
+	Port:   3306,
+	Mount:  "/var/lib/mysql",
 	URLEnv: "MYSQL_URL",
 	CredsGen: map[string]func() string{
 		"root_password": GenPassword,

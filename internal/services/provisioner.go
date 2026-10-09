@@ -333,9 +333,35 @@ func (p *Provisioner) waitReady(ctx context.Context, name string, tpl Template, 
 		if _, err := p.rt.Exec(ctx, name, tpl.ReadyCmd(creds)); err == nil {
 			return nil
 		}
+		// A container that has already exited will never become ready: say so now, with
+		// what it printed, instead of waiting out the minute.
+		if info, err := p.rt.Inspect(ctx, name); err == nil && !info.Running && info.State != "" && info.State != "created" {
+			return fmt.Errorf("service did not become ready: %s", whyNotReady(ctx, p.rt, name))
+		}
 		time.Sleep(readinessInterval)
 	}
-	return fmt.Errorf("service did not become ready within 60s — check its logs")
+	return fmt.Errorf("service did not become ready within 60s: %s", whyNotReady(ctx, p.rt, name))
+}
+
+// whyNotReady is the container's state and its last log lines in one line, so
+// the deploy log carries the cause (a bad image tag, a data directory the image
+// refuses, no memory) rather than "check its logs".
+func whyNotReady(ctx context.Context, rt runtime.Runtime, name string) string {
+	summary, lines := runtime.Evidence(ctx, rt, name, 6)
+	if len(lines) > 0 {
+		last := strings.Join(lines, " ⏎ ")
+		if r := []rune(last); len(r) > 700 {
+			last = "…" + string(r[len(r)-700:])
+		}
+		if summary == "" {
+			return "last log lines: " + last
+		}
+		return summary + "; last log lines: " + last
+	}
+	if summary == "" {
+		return "check its logs"
+	}
+	return summary + " — check its logs"
 }
 
 // decryptCreds decrypts an encrypted credential map, dropping entries that

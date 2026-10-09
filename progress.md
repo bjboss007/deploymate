@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-09 (v0.4.1: Postgres 18 fix, found while testing Connect GitHub)** — Owner connected GitHub for real (phase 1
+verified live: manifest, code exchange, JWT, installations; repository picker listed their repos; the clone with the
+installation token worked). The test deploy then failed on a service: a bare `postgres` in deploymate.yml is
+`postgres:latest` = 18, which refuses a volume at /var/lib/postgresql/data. Fix: `PGDATA` set on every Postgres
+service (verified against the real image: fails without, starts and keeps data with); readiness now fails fast for an
+exited container and quotes the container's last log lines. Install button on the GitHub page is a real button.
+Still to confirm by the owner: a push deploying through the app webhook (step 4).
+
 **2026-10-09 (Connect GitHub, phase 3 of 4)** — The GitHub App's webhook now deploys: `push` → apps connected to that
 repository+branch (per-source de-dup, per-folder filter, prebuilt apps wait for CI), `installation*` clears the
 repository-list cache, `workflow_run` still ignored. Shared `queuePushDeploys`; per-repository webhook now ignores

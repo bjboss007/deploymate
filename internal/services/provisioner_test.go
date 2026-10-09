@@ -1,10 +1,12 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +24,9 @@ type fakeRuntime struct {
 	removed  []string
 	execs    int
 	failExec bool
+	// What Inspect and Logs report (zero values: container not found, no logs).
+	info    *runtime.Info
+	logText string
 }
 
 func (f *fakeRuntime) EnsureNetwork(ctx context.Context, name string) error { return nil }
@@ -48,10 +53,19 @@ func (f *fakeRuntime) Remove(ctx context.Context, name string) error {
 }
 func (f *fakeRuntime) Rename(ctx context.Context, oldName, newName string) error { return nil }
 func (f *fakeRuntime) Inspect(ctx context.Context, name string) (runtime.Info, error) {
+	if f.info != nil {
+		return *f.info, nil
+	}
 	return runtime.Info{}, runtime.ErrContainerNotFound
 }
 func (f *fakeRuntime) Logs(ctx context.Context, name string, follow bool, tail int) (io.ReadCloser, error) {
-	return nil, nil
+	if f.logText == "" {
+		return nil, nil
+	}
+	// docker multiplexes stdout/stderr: an 8-byte header (stream, 0,0,0, big-endian length) per frame.
+	n := len(f.logText)
+	hdr := []byte{1, 0, 0, 0, byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n)}
+	return io.NopCloser(bytes.NewReader(append(hdr, f.logText...))), nil
 }
 func (f *fakeRuntime) Exec(ctx context.Context, name string, cmd []string) (string, error) {
 	return f.execEnv(ctx, name, cmd, nil)
@@ -161,8 +175,11 @@ func TestEnsureCreatesMissingService(t *testing.T) {
 	if len(spec.Binds) != 1 || spec.Binds[0] != "dm-svc-postgres-data:/var/lib/postgresql/data" {
 		t.Fatalf("binds = %v", spec.Binds)
 	}
-	if len(spec.Env) != 3 {
-		t.Fatalf("env = %v, want 3 entries", spec.Env)
+	// PGDATA pins the data directory to the mounted volume: Postgres 18 would otherwise
+	// look in /var/lib/postgresql/18/docker and refuse to start beside a volume mounted
+	// at the old path (found live 2026-10-09 with a bare "postgres" in deploymate.yml).
+	if len(spec.Env) != 4 || !containsStr(spec.Env, "PGDATA=/var/lib/postgresql/data") {
+		t.Fatalf("env = %v, want 4 entries including PGDATA=/var/lib/postgresql/data", spec.Env)
 	}
 	if rt.execs < 1 {
 		t.Fatal("readiness probe never ran")
@@ -576,4 +593,50 @@ func ensureOnceEnv(t *testing.T, p *Provisioner, projectID, env string, types ..
 		t.Fatalf("Ensure(%s %v) error = %v", env, types, err)
 	}
 	return res
+}
+
+func containsStr(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+// A service container that has already exited fails the deploy at once, and the
+// error carries what it printed (the Postgres 18 refusal, a bad password setting…).
+func TestWaitReadyFailsFastAndQuotesTheLogsOfAnExitedContainer(t *testing.T) {
+	p, _, rt := newTestProvisioner(t)
+	rt.failExec = true
+	rt.info = &runtime.Info{Running: false, State: "exited", ExitCode: 1}
+	rt.logText = "Error: in 18+, these Docker images are configured to store database data in a\nformat which is compatible with pg_ctlcluster\n"
+	readinessAttempts, readinessInterval = 30, time.Hour // a wait would hang the test
+	err := p.waitReady(context.Background(), "dm-svc-x", Postgres, map[string]string{"user": "dm", "db": "app"})
+	if err == nil {
+		t.Fatal("an exited container cannot become ready")
+	}
+	for _, want := range []string{"service did not become ready", "exited with code 1", "in 18+, these Docker images"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q lacks %q", err, want)
+		}
+	}
+	if strings.Contains(err.Error(), "within 60s") {
+		t.Error("an exited container must not wait out the minute")
+	}
+	if rt.execs != 1 {
+		t.Errorf("probed %d times, want 1", rt.execs)
+	}
+}
+
+// A container that stays up but never answers still times out, now saying what it printed.
+func TestWaitReadyTimeoutQuotesTheLogs(t *testing.T) {
+	p, _, rt := newTestProvisioner(t)
+	rt.failExec = true
+	rt.info = &runtime.Info{Running: true, State: "running"}
+	rt.logText = "starting up, still recovering\n"
+	err := p.waitReady(context.Background(), "dm-svc-x", Postgres, map[string]string{"user": "dm", "db": "app"})
+	if err == nil || !strings.Contains(err.Error(), "within 60s") || !strings.Contains(err.Error(), "still recovering") {
+		t.Errorf("timeout error = %v", err)
+	}
 }
