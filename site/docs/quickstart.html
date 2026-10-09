@@ -22,7 +22,7 @@
   </div>
 </div></header>
 <main id="main"><div class="wrap doc">
-<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html" aria-current="page">Quickstart</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
+<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html" aria-current="page">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
 <article>
 
 <p class="kicker">Start</p>
@@ -78,7 +78,7 @@ DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymat
 <li>In the repository, add the <strong>deploy key</strong> (read-only). The app's Overview shows it with a Copy button.</li>
 <li>Choose how it builds: leave it for a <code>Dockerfile</code>, or pick a <strong>runtime</strong> (Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno, Elixir, .NET, static) and DeployMate builds it for you.</li>
 <li>Press <strong>Review &amp; deploy</strong>. You'll see the commits and files that would ship; confirm, and watch the build log.</li>
-<li>For deploys on every push, add a <strong>webhook</strong> to the repository — a two-minute step, covered in <a href="deploy-on-push.html">Deploy on every push</a>.</li>
+<li>For deploys on every push on GitHub, <a href="connect-github.html">connect GitHub once</a> and pick the repository from a list. For GitLab, Gitea, or GitHub without the app, add a <strong>webhook</strong> yourself: a two-minute step, covered in <a href="deploy-on-push.html">Deploy on every push</a>.</li>
 </ol>
 
 <h2 id="database">6. Add a database</h2>
@@ -103,7 +103,7 @@ DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymat
 
 <div class="callout warn"><strong>Back up before you trust it</strong>Backups are opt-in. Configure a storage destination (S3, R2, MinIO) with the <code>DEPLOYMATE_BACKUP_DEST_*</code> variables, then enable them on each PostgreSQL service's page. MySQL and Redis are not backed up yet.</div>
 
-<div class="pager"><span></span><a href="deploy-on-push.html">Deploy on every push →</a></div>
+<div class="pager"><span></span><a href="connect-github.html">Connect GitHub →</a></div>
 </article>
 </div></main>
 <footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad · Apache-2.0</span><span class="links"><a href="../">Home</a><a href="https://github.com/bjboss007/deploymate">GitHub</a></span></div></footer>

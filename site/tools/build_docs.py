@@ -17,7 +17,7 @@ DOCS = HERE.parent / "docs"
 WORKFLOW = (HERE / "workflow.example.yml").read_text()
 
 NAV = [
-    ("Start", [("quickstart.html", "Quickstart"), ("deploy-on-push.html", "Deploy on every push"), ("concepts.html", "How it fits together")]),
+    ("Start", [("quickstart.html", "Quickstart"), ("connect-github.html", "Connect GitHub"), ("deploy-on-push.html", "Deploy on every push"), ("concepts.html", "How it fits together")]),
     ("Agents", [("agents.html", "AI agents (MCP)")]),
     ("Optional", [("cloudflare-tunnel.html", "No open ports? Use a tunnel")]),
 ]
@@ -134,7 +134,7 @@ QUICK = """
 <li>In the repository, add the <strong>deploy key</strong> (read-only). The app's Overview shows it with a Copy button.</li>
 <li>Choose how it builds: leave it for a <code>Dockerfile</code>, or pick a <strong>runtime</strong> (Node.js, Python, Go, Ruby, PHP, Java, Rust, Deno, Elixir, .NET, static) and DeployMate builds it for you.</li>
 <li>Press <strong>Review &amp; deploy</strong>. You'll see the commits and files that would ship; confirm, and watch the build log.</li>
-<li>For deploys on every push, add a <strong>webhook</strong> to the repository — a two-minute step, covered in <a href="deploy-on-push.html">Deploy on every push</a>.</li>
+<li>For deploys on every push on GitHub, <a href="connect-github.html">connect GitHub once</a> and pick the repository from a list. For GitLab, Gitea, or GitHub without the app, add a <strong>webhook</strong> yourself: a two-minute step, covered in <a href="deploy-on-push.html">Deploy on every push</a>.</li>
 </ol>
 
 <h2 id="database">6. Add a database</h2>
@@ -175,6 +175,7 @@ PUSH = """
 <h1>Deploy on every push</h1>
 <p>Connecting a repository lets DeployMate <em>download</em> your code. It does not make your git host <em>tell</em> DeployMate when you push. For that you add a <strong>webhook</strong> to the repository: one entry, pointing at your dashboard, once per repository. After that, every push to the app's branch builds and deploys by itself.</p>
 <p>Without a webhook nothing is broken — you just deploy by pressing <strong>Deploy</strong>.</p>
+<div class="callout"><strong>On GitHub? You can skip this page.</strong><a href="connect-github.html">Connect GitHub</a> sets up the repository access and the push notifications for every repository in one go. Use this page for GitLab, Gitea, or when you'd rather not create a GitHub app.</div>
 
 <h2 id="values">1. Get the two values</h2>
 <p>On the app, open <strong>Settings → Source &amp; build</strong>. Under the connected repository you'll find:</p>
@@ -390,13 +391,71 @@ TUNNEL_BLOCKS = {
 }
 
 # --------------------------------------------------------------------------- index
+CONNECT = """
+<p class="kicker">Start</p>
+<h1>Connect GitHub</h1>
+<p>Connect GitHub once and DeployMate can clone your repositories and deploy on every push, with <strong>no deploy keys, no webhook URLs to paste and no access tokens</strong> to create or renew. You pick repositories from a list.</p>
+<p>It works by creating a small <strong>private GitHub app</strong> on your own GitHub account. The app belongs to you, only sees the repositories you give it, and you can remove it at any time. The older manual setup (a deploy key plus a webhook per repository, <a href="deploy-on-push.html">covered here</a>) keeps working next to it, and is still the way for GitLab and Gitea.</p>
+
+<div class="callout"><strong>What you need</strong>A DeployMate you can sign in to, and an address for it that GitHub can reach from the internet (a domain, or your tunnel's hostname), because GitHub sends push notifications to <code>https://your-address/hooks/github-app</code>. Open the dashboard at that public address when you connect.</div>
+
+<h2 id="connect">1. Connect</h2>
+<ol>
+<li>In the dashboard, click the <strong>GitHub</strong> icon in the top bar, then <strong>Connect GitHub</strong>. Choose your personal account, or an organisation (type its name).</li>
+<li>GitHub opens a page titled <em>Register new GitHub App</em>, already filled in. The name is <code>DeployMate</code> plus your address; you can change it. Press <strong>Create GitHub App</strong>.</li>
+<li>You land back on DeployMate's GitHub page, which now says <strong>Connected</strong> and shows the app and its webhook address.</li>
+</ol>
+
+<h2 id="install">2. Install it on your repositories</h2>
+<ol>
+<li>Press <strong>Install on GitHub</strong>.</li>
+<li>Choose <strong>Only select repositories</strong> and tick the ones you want to deploy (or <em>All repositories</em> if you prefer). You can change this later on GitHub.</li>
+<li>Back on DeployMate's GitHub page, <strong>Where it is installed</strong> lists your account.</li>
+</ol>
+
+<h2 id="repo">3. Connect a repository to an app</h2>
+<ol>
+<li>Open the app, then <strong>Settings → Source &amp; build → Git</strong>.</li>
+<li>Under <strong>From GitHub</strong>, pick the repository. Leave <strong>Branch</strong> empty to use the repository's default branch.</li>
+<li>Press <strong>Connect repository</strong>, then <strong>Review &amp; deploy</strong>.</li>
+</ol>
+<p>There is nothing to copy: the app shows <em>Through your GitHub app</em> instead of a key and a webhook.</p>
+
+<h2 id="push">4. Push</h2>
+<p>From now on, every push to the app's branch deploys by itself. It appears in the app's history, triggered by <em>webhook</em>, with the usual build log. If several apps are built from one repository, a push only deploys the apps whose <strong>build folder</strong> it changed; the others show <em>Push skipped</em> in their activity.</p>
+<p><strong>Prebuilt apps</strong> (a GitHub Actions workflow builds the JAR) work the same way and need no token either: switch the app to <em>Prebuilt</em> under the same panel. DeployMate reads the workflow's runs and downloads the artifact through the app, and can start the workflow with <strong>Run workflow now</strong>.</p>
+
+<h2 id="access">What the app can and can't do</h2>
+<table>
+<tr><th>Read your code</th><td>Permission <em>Contents: read</em>, only for the repositories you installed it on. DeployMate clones with a short-lived token (about an hour) that GitHub issues on demand, which is never written to disk.</td></tr>
+<tr><th>Read CI runs, download artifacts, start a workflow</th><td>Permission <em>Actions: read and write</em>. Used by prebuilt apps only.</td></tr>
+<tr><th>Hear about pushes and finished runs</th><td>Subscribed to the <em>push</em> and <em>workflow run</em> events, sent to your DeployMate's webhook address and checked against a secret before anything runs.</td></tr>
+<tr><th>Change your code</th><td><strong>No.</strong> It has no write access to contents, issues, pull requests or settings.</td></tr>
+<tr><th>See other accounts or repositories</th><td>No. Only what you installed it on.</td></tr>
+</table>
+<p>The app's private key is stored encrypted on your server and is never shown on any page. <strong>Disconnect</strong> on the GitHub page deletes it; to remove the app from GitHub as well, delete it under <em>Settings → Developer settings → GitHub Apps</em>. Apps already connected keep their code but stop deploying on push.</p>
+
+<h2 id="tunnel">Behind a login or a tunnel</h2>
+<p>GitHub has to reach <code>/hooks/github-app</code> without signing in. If the dashboard is behind <strong>Cloudflare Access</strong>, the <code>hooks/*</code> bypass from <a href="deploy-on-push.html#tunnel">Deploy on every push</a> already covers it. Everything else stays locked.</p>
+<p>If you connected from an address GitHub can't reach (for example <code>http://127.0.0.1:8080</code> through an SSH tunnel), the GitHub page warns you and the app is created with its webhook <strong>switched off</strong>: cloning and the repository list work, but pushes won't deploy. To fix it, open <em>Settings → Developer settings → GitHub Apps → your app</em> on GitHub, tick <strong>Active</strong>, and set the webhook URL to <code>https://your-address/hooks/github-app</code> (leave the secret as it is).</p>
+
+<h2 id="trouble">If something doesn't work</h2>
+<table>
+<tr><th>The setup page says GitHub didn't accept it</th><td>The one-time code from GitHub was used or is older than an hour. Press <strong>Connect GitHub</strong> again.</td></tr>
+<tr><th>The repository list is empty</th><td>The app isn't installed on any repository yet: press <strong>Install on GitHub</strong> and select some. A repository you add on GitHub shows up within a minute.</td></tr>
+<tr><th>A deploy fails with “no longer lets DeployMate's app reach this repository”</th><td>The app was removed from that repository (or deleted on GitHub). Install it again, or connect the app to a different repository.</td></tr>
+<tr><th>A push doesn't deploy</th><td>On GitHub open <em>Settings → Developer settings → GitHub Apps → your app → Advanced</em>. <strong>Recent Deliveries</strong> shows what DeployMate answered: <code>queued</code> worked; <code>ignored: not the deploy branch</code> means you pushed another branch; <code>ignored: no app uses this repository</code> means no app is connected to it; <code>ignored: no changes in the build folder</code> means the push didn't touch the app's folder; <code>bad signature</code> means DeployMate and GitHub disagree about the secret, so disconnect and connect again. A login page, 302 or 403 means something in front of the dashboard is blocking GitHub.</td></tr>
+<tr><th>The webhook says it is switched off</th><td>See <em>Behind a login or a tunnel</em> above.</td></tr>
+</table>
+"""
 INDEX = """
 <p class="kicker">Docs</p>
 <h1>Documentation</h1>
 <p>Short on purpose: enough to get running and to know why it behaves as it does. The full reference lives next to the code.</p>
 <table>
 <tr><th><a href="quickstart.html">Quickstart</a></th><td>Install, first deploy, database, domain.</td></tr>
-<tr><th><a href="deploy-on-push.html">Deploy on every push</a></th><td>Add a webhook so a push to your branch deploys by itself.</td></tr>
+<tr><th><a href="connect-github.html">Connect GitHub</a></th><td>Connect once, pick repositories from a list, and every push deploys. No keys or tokens.</td></tr>
+<tr><th><a href="deploy-on-push.html">Deploy on every push</a></th><td>The manual way: add a webhook yourself. For GitLab, Gitea, or GitHub without the app.</td></tr>
 <tr><th><a href="concepts.html">How it fits together</a></th><td>Zero-downtime deploys, build modes, services and environments, recovery.</td></tr>
 <tr><th><a href="agents.html">AI agents (MCP)</a></th><td>Connect an agent with scoped, audited, delete-free access.</td></tr>
 <tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
@@ -414,10 +473,13 @@ def main():
     DOCS.mkdir(parents=True, exist_ok=True)
     render("quickstart.html", "Quickstart",
            "Install DeployMate on a fresh Ubuntu server, deploy an app and a database, and put it on your domain.",
-           QUICK, QUICK_BLOCKS, None, ("deploy-on-push.html", "Deploy on every push"))
+           QUICK, QUICK_BLOCKS, None, ("connect-github.html", "Connect GitHub"))
+    render("connect-github.html", "Connect GitHub",
+           "Connect GitHub once to clone your repositories and deploy on every push, with no deploy keys, webhook URLs or access tokens.",
+           CONNECT, {}, ("quickstart.html", "Quickstart"), ("deploy-on-push.html", "Deploy on every push"))
     render("deploy-on-push.html", "Deploy on every push",
            "Add a webhook so every push to your branch deploys automatically: GitHub, GitLab, Gitea, and what to do behind a login or tunnel.",
-           PUSH, {}, ("quickstart.html", "Quickstart"), ("concepts.html", "How it fits together"))
+           PUSH, {}, ("connect-github.html", "Connect GitHub"), ("concepts.html", "How it fits together"))
     render("concepts.html", "How it fits together",
            "How DeployMate deploys, builds, wires services to apps, and recovers.",
            CONCEPTS, CONCEPTS_BLOCKS, ("deploy-on-push.html", "Deploy on every push"), ("agents.html", "AI agents (MCP)"))

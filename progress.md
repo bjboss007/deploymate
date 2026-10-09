@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-09 (website guide: Connect GitHub)** — New docs page `site/docs/connect-github.html` (generated from `CONNECT` in
+`site/tools/build_docs.py`): connect, install, pick a repository, push, prebuilt apps, what the app can and can't do,
+behind a login/tunnel (incl. enabling the webhook of an app created from a private address), troubleshooting. Linked from
+the quickstart, "Deploy on every push" (callout), the docs index, sitemap and the Start nav. The site redeploys itself on
+this push (per-folder webhook: only `site/` changes rebuild it).
+
 **2026-10-09 (v0.4.2 live; push-to-deploy through the GitHub app confirmed on real GitHub)** — Owner updated the server to
 v0.4.2 and a push to a repository connected via Connect GitHub deployed on its own (app webhook → queued → build).
 Verified live now: manifest flow, code exchange, JWT/installations, repository picker, clone with an installation
