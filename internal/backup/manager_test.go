@@ -136,9 +136,15 @@ func TestBackupNowGates(t *testing.T) {
 	}
 	waitForEvent(t, st, store.EventBackupOK)
 
-	// In flight → ErrInFlight.
-	if !mgr.acquire(svc.ID) {
-		t.Fatal("acquire failed")
+	// In flight → ErrInFlight. The run records backup_ok BEFORE it releases its
+	// lock (and then writes last-run), so wait for the release instead of assuming
+	// the event means the run is over.
+	deadline := time.Now().Add(5 * time.Second)
+	for !mgr.acquire(svc.ID) {
+		if time.Now().After(deadline) {
+			t.Fatal("the finished backup never released its lock")
+		}
+		time.Sleep(5 * time.Millisecond)
 	}
 	err := mgr.BackupNow(svc)
 	mgr.release(svc.ID)
