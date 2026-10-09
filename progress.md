@@ -7,6 +7,10 @@
 
 ## Where we stopped
 
+**2026-10-09 (v0.2.0 live, Server page verified)** — Tagged `v0.2.0`; the owner ran `sudo deploymate update` on the real
+Ubuntu server (first real use of the updater) and confirmed the Server page's numbers match the machine. Still
+unverified on the server: the Clean up button against real Docker, and the "Push skipped" per-folder filter.
+
 **2026-10-09 (Server page, all three steps)** — Step 2: `host_metrics` table + monitor sampling every minute,
 history charts (6h/24h/7d, `/server/history`), host alerts (`host_problem`/`host_recovered`, a problem must last
 3 readings, one alert per area+level, recovery announced once). Step 3: dashboard-only **Clean up** (build cache
