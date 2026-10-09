@@ -22,10 +22,10 @@ mkdir -p "$STAGE/deploy/traefik" "$OUT"
 (cd "$ROOT" && CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" \
   go build -trimpath -ldflags "-s -w -X main.version=$VERSION" -o "$STAGE/deploymate" ./cmd/deploymate)
 
-cp "$ROOT/deploy/bootstrap.sh" "$ROOT/deploy/deploymate.service" "$STAGE/deploy/"
+cp "$ROOT/deploy/bootstrap.sh" "$ROOT/deploy/traefik-run.sh" "$ROOT/deploy/deploymate.service" "$STAGE/deploy/"
 cp "$ROOT/deploy/traefik/static.yml" "$STAGE/deploy/traefik/"
 cp "$ROOT/LICENSE" "$ROOT/NOTICE" "$ROOT/README.md" "$STAGE/"
-chmod 0755 "$STAGE/deploymate" "$STAGE/deploy/bootstrap.sh"
+chmod 0755 "$STAGE/deploymate" "$STAGE/deploy/bootstrap.sh" "$STAGE/deploy/traefik-run.sh"
 
 ARCHIVE="$OUT/deploymate_${GOOS}_${GOARCH}.tar.gz"
 tar -czf "$ARCHIVE" -C "$STAGE" .

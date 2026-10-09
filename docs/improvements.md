@@ -14,8 +14,8 @@ change.
 
 - [ ] **Dashboard notice for a new release** — 2026-10-08: `deploymate update --check` exists; show
   "v0.1.3 available" in the dashboard (checked at most daily, opt-out) instead of a silent auto-update.
-- [ ] **`update` should also refresh Traefik/host setup when a release needs it** — 2026-10-08: update only
-  swaps the binary + unit. Add a release-notes marker and an `update --bootstrap` that applies the
+- [ ] **`update` should also refresh host setup when a release needs it** — 2026-10-08: update swaps the binary +
+  unit and (since 2026-10-09) upgrades Traefik; other host changes (Docker, firewall, packages) are still manual. Add a release-notes marker and an `update --bootstrap` that applies the
   Traefik config without losing the Let's Encrypt email.
 
 - [x] **Only deploy when the app's build folder changed** — done 2026-10-08: webhook pushes read the
@@ -29,11 +29,12 @@ change.
   "Unable to obtain ACME certificate" repeatedly. Harmless (Cloudflare serves the real cert; staging
   resolver), but noisy, and the Domains page's "Secure" comes from the edge. Offer a setting that omits
   `certresolver`, and say so in the Domains panel.
-- [ ] **Upgrade the pinned Traefik (v3.3) to a release that supports Docker Engine 29** — found
-  2026-10-07 on the owner's server: Docker 29 + Traefik 3.3 = no containers seen, every domain 404.
-  Worked around in `bootstrap.sh` with `DOCKER_MIN_API_VERSION=1.24` on the daemon. Do the upgrade
-  properly: bump the tag in bootstrap.sh/dev.yml, re-run the replica label spike
-  (docs/specs/app-replicas.md) and `make e2e-replicas`, then drop the override.
+- [x] **Upgrade the pinned Traefik (v3.3) to a release that supports Docker Engine 29** — done 2026-10-09: pinned
+  `traefik:v3.7.14` in `deploy/traefik-run.sh` (the fix landed in 3.6.1). The label contract (TLS router +
+  certresolver, two replicas on one service, healthcheck failover) behaved identically on v3.3, v3.6.25 and
+  v3.7.14. `bootstrap.sh` no longer adds the Docker min-API override; `deploymate update` upgrades the running
+  Traefik (rollback to the previous image if the new one won't stay up). Not tested against a real Docker 29
+  daemon from here: confirm on the owner's server.
 - [x] **Build folder (root directory) setting** — done 2026-10-07: Settings → Build →
   "Build folder" (and `configure_app`'s `root_directory`). The worker already built from a
   subfolder; nothing in the UI could set it (needed to host `site/` and for monorepos). Validated

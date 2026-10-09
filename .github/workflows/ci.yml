@@ -29,4 +29,4 @@ jobs:
             CGO_ENABLED=0 GOOS="${t%/*}" GOARCH="${t#*/}" go build -o /dev/null ./cmd/deploymate
           done
       - name: Scripts parse
-        run: bash -n deploy/install.sh && bash -n deploy/bootstrap.sh && bash -n deploy/package.sh
+        run: bash -n deploy/install.sh && bash -n deploy/bootstrap.sh && bash -n deploy/package.sh && bash -n deploy/traefik-run.sh

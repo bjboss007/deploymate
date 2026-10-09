@@ -195,3 +195,40 @@ func TestResolveBase(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyRunsTheTraefikStepAndItsFailureDoesNotRollBack(t *testing.T) {
+	f, pkg := newFake(t, true)
+	called := 0
+	f.in.Traefik = func(context.Context) error { called++; return errors.New("pull failed") }
+	err := f.in.Apply(context.Background(), pkg)
+	var te *TraefikError
+	if !errors.As(err, &te) || called != 1 {
+		t.Fatalf("err = %v, called %d: want a TraefikError after one call", err, called)
+	}
+	if read(t, f.in.Binary) != "NEW-BIN" {
+		t.Error("a Traefik failure must not undo a healthy DeployMate update")
+	}
+
+	f2, pkg2 := newFake(t, true)
+	f2.in.Traefik = func(context.Context) error { return nil }
+	if err := f2.in.Apply(context.Background(), pkg2); err != nil {
+		t.Errorf("successful update with Traefik step: %v", err)
+	}
+}
+
+func TestApplySkipsTraefikWhenUnhealthy(t *testing.T) {
+	f, pkg := newFake(t, false)
+	f.in.HealthTimeout = 1200 * time.Millisecond
+	f.in.Traefik = func(context.Context) error { t.Error("Traefik step ran for a failed update"); return nil }
+	if err := f.in.Apply(context.Background(), pkg); err == nil {
+		t.Fatal("expected failure")
+	}
+}
+
+func TestExtractMissingEntryIsRecognisable(t *testing.T) {
+	a := makeArchive(t, t.TempDir(), map[string]string{"./deploymate": "x"})
+	err := Extract(a, t.TempDir(), map[string]string{"deploy/traefik-run.sh": "traefik-run.sh"})
+	if !errors.Is(err, ErrNotInArchive) {
+		t.Errorf("err = %v, want ErrNotInArchive", err)
+	}
+}

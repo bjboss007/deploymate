@@ -21,6 +21,9 @@ import (
 	"time"
 )
 
+// ErrNotInArchive is returned by Extract for an entry the archive lacks.
+var ErrNotInArchive = errors.New("not in the archive")
+
 // Release names where a version's files live.
 type Release struct {
 	Base    string // directory URL holding the archive and checksums.txt
@@ -173,7 +176,7 @@ func Extract(archivePath, outDir string, entries map[string]string) error {
 	}
 	for _, out := range entries {
 		if !found[out] {
-			return fmt.Errorf("the archive does not contain %s", out)
+			return fmt.Errorf("%w: %s", ErrNotInArchive, out)
 		}
 	}
 	return nil

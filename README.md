@@ -169,7 +169,7 @@ certificates, and open `https://your-domain`. Webhooks live at
 **Updating:** `sudo deploymate update` downloads the latest release, verifies its
 checksum, swaps the binary, restarts the service and rolls back on its own if the new
 version doesn't come up (`--check`, `--version vX.Y.Z`, `--from archive.tar.gz`). Apps
-and Traefik are not touched.
+keep running; Traefik is upgraded too when the release pins a newer one (`--skip-traefik`).
 
 **Turning an old laptop into that server?** Full guide in
 [docs/knowledge/server-setup.md](docs/knowledge/server-setup.md) — Ubuntu

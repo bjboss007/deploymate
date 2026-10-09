@@ -2,6 +2,7 @@ package updater
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,6 +24,10 @@ type Installer struct {
 	// SmokeTest runs the new binary's `version` to prove it executes on this host.
 	SmokeTest func(ctx context.Context, bin string) (string, error)
 	Out       io.Writer
+	// Traefik, when set, runs after a successful update to bring the reverse
+	// proxy to the version this release pins (deploy/traefik-run.sh). Its
+	// failure does not undo the update: DeployMate itself is already healthy.
+	Traefik func(ctx context.Context) error
 	// HealthTimeout bounds how long the new version gets to come up.
 	HealthTimeout time.Duration
 }
@@ -71,7 +76,8 @@ func (in *Installer) Apply(ctx context.Context, pkgDir string) (err error) {
 		_ = in.Systemctl(ctx, "start", "deploymate")
 	}
 	defer func() {
-		if err != nil {
+		var te *TraefikError
+		if err != nil && !errors.As(err, &te) {
 			restore()
 		}
 	}()
@@ -130,8 +136,20 @@ func (in *Installer) Apply(ctx context.Context, pkgDir string) (err error) {
 		}
 	}
 	in.say("healthy. Updated to %s", ver)
+	if in.Traefik != nil {
+		if terr := in.Traefik(ctx); terr != nil {
+			return &TraefikError{terr}
+		}
+	}
 	return nil
 }
+
+// TraefikError means DeployMate was updated but the Traefik step failed; the
+// caller reports it without claiming the update was rolled back.
+type TraefikError struct{ Err error }
+
+func (e *TraefikError) Error() string { return "Traefik upgrade failed: " + e.Err.Error() }
+func (e *TraefikError) Unwrap() error { return e.Err }
 
 func copyFile(src, dst string, mode os.FileMode) error {
 	in, err := os.Open(src)

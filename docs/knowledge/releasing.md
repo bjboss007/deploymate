@@ -43,6 +43,10 @@ dir), starts it and polls `/healthz`. Any failure after the stop restores binary
 unit and starts the old version. It deliberately does **not** re-run `bootstrap.sh` (that
 recreates Traefik and resets the Let's Encrypt email), so changes to Traefik's config or to
 Docker/host setup still need a manual step — say so in the release notes when they exist.
+After a healthy start it also runs `deploy/traefik-run.sh apply` from the package, which pulls the pinned
+Traefik, replaces the container only if the image differs, and puts the previous image back if the new one
+does not stay up (`--skip-traefik` opts out; a Traefik failure does not roll back DeployMate). Releases before
+0.3 lack the script and skip the step. The pin lives in that one script; bootstrap uses it too.
 Unit tests cover swap, rollback, checksum and extraction; the systemd/real-restart path has
 only been exercised by hand.
 

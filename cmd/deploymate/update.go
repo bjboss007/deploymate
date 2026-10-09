@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -42,6 +43,7 @@ func updateCmd(args []string) error {
 	check := fs.Bool("check", false, "only report whether a newer release exists")
 	ver := fs.String("version", "latest", "a tag such as v0.1.2 (also how you go back)")
 	from := fs.String("from", "", "install this local release archive instead of downloading (checksum is printed, not verified)")
+	skipTraefik := fs.Bool("skip-traefik", false, "do not upgrade the Traefik container to the version this release pins")
 	force := fs.Bool("force", false, "reinstall even when already on this version")
 	repo := fs.String("repo", envOr("DEPLOYMATE_REPO", "bjboss007/deploymate"), "owner/name on GitHub")
 	_ = fs.Parse(args)
@@ -126,6 +128,15 @@ func updateCmd(args []string) error {
 		return err
 	}
 
+	// Optional: releases before 0.2 do not ship the Traefik script.
+	traefikScript := filepath.Join(pkg, "traefik-run.sh")
+	haveTraefik := false
+	if err := updater.Extract(archive, pkg, map[string]string{"deploy/traefik-run.sh": "traefik-run.sh"}); err == nil {
+		haveTraefik = true
+	} else if !errors.Is(err, updater.ErrNotInArchive) {
+		return err
+	}
+
 	dataDir := firstNonEmpty(os.Getenv("DEPLOYMATE_DATA_DIR"), unitEnv("DEPLOYMATE_DATA_DIR"), "/var/lib/deploymate")
 	addr := firstNonEmpty(unitEnv("DEPLOYMATE_ADDR"), "127.0.0.1:8080")
 	in := &updater.Installer{
@@ -154,10 +165,28 @@ func updateCmd(args []string) error {
 			return strings.TrimSpace(string(out)), err
 		},
 	}
+	if haveTraefik && !*skipTraefik {
+		in.Traefik = func(ctx context.Context) error {
+			fmt.Println("==> checking Traefik (the proxy that serves your domains)")
+			cmd := exec.CommandContext(ctx, "bash", traefikScript, "apply", dataDir)
+			cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+			err := cmd.Run()
+			var ee *exec.ExitError
+			if errors.As(err, &ee) && ee.ExitCode() == 3 {
+				fmt.Println("    not managed by DeployMate here; left alone")
+				return nil
+			}
+			return err
+		}
+	}
 	if err := in.Apply(ctx, pkg); err != nil {
+		var te *updater.TraefikError
+		if errors.As(err, &te) {
+			return fmt.Errorf("DeployMate is updated, but %w. Your apps keep serving whatever Traefik is running; re-run with the output above in hand, or use --skip-traefik", err)
+		}
 		return fmt.Errorf("update failed, previous version restored: %w", err)
 	}
-	fmt.Println("Done. Traefik and your apps were not touched. The previous binary is kept at " + installedBinary + ".prev.")
+	fmt.Println("Done. Your apps kept running. The previous binary is kept at " + installedBinary + ".prev.")
 	return nil
 }
 

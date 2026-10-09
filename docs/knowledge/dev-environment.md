@@ -72,7 +72,7 @@ make e2e-git # git-deploy path on a self-contained throwaway server (see below)
   `-v /var/run/docker.sock:/var/run/docker.sock` (the path inside
   Docker Desktop's VM) works, and the docker provider sees every
   container. That's how the replicas label scheme was spiked (2026-09-30,
-  `traefik:v3.3` + `traefik/whoami`; see docs/specs/app-replicas.md
+  `traefik:v3.3` + `traefik/whoami`; re-checked 2026-10-09 on v3.3, v3.6.25 and v3.7.14 with identical results — the pin is `deploy/traefik-run.sh`; see docs/specs/app-replicas.md
   "Spike results"). Recipe: `docker network create spike-net`, run
   `traefik:v3.3` on it with `--providers.docker.network=spike-net
   --providers.docker.exposedbydefault=false --entrypoints.web.address=:80
