@@ -87,6 +87,12 @@ var readTools = []tool{
 		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/fleet", nil, nil },
 	},
 	{
+		Name: "server_status", Scope: store.ScopeRead,
+		Description: "Health of the server itself: overall status with plain-words problems, CPU, memory, swap, disk space (data and system), temperature, battery, whether Docker and Traefik are running, what Docker is holding, and the apps using the most memory. Use it when deploys are slow or failing, or before deploying something large.",
+		Schema:      schema(map[string]any{}),
+		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/server", nil, nil },
+	},
+	{
 		Name: "list_projects", Scope: store.ScopeRead,
 		Description: "List projects with how many apps and services each has.",
 		Schema:      schema(map[string]any{}),

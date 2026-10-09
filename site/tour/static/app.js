@@ -8,6 +8,20 @@ document.body.addEventListener("htmx:afterSwap", (e) => {
   }
 });
 
+// --- tidy the address bar -----------------------------------------------
+// Forms redirect back with ?flash=<message>. The page has already shown it, so
+// take it out of the URL: a reload or a shared link must not replay it, and the
+// address should stay readable.
+(function () {
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has("flash")) {
+      u.searchParams.delete("flash");
+      history.replaceState(null, "", u.pathname + u.search + u.hash);
+    }
+  } catch (e) { /* an old browser keeps the long URL; nothing breaks */ }
+})();
+
 // --- copy-to-clipboard --------------------------------------------------
 // Generic: any [data-copy="elementId"] button copies that element's text.
 // Falls back to a prompt on non-secure origins (plain-http tunnels), where

@@ -26,6 +26,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/backup"
 	"github.com/habibmuhammad/deploymate/internal/config"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/demo"
 	"github.com/habibmuhammad/deploymate/internal/dns"
 	"github.com/habibmuhammad/deploymate/internal/httpserver"
 	"github.com/habibmuhammad/deploymate/internal/jobs"
@@ -137,6 +138,10 @@ func serve() error {
 	}
 	server := httpserver.New(st, rt, prov, events, encKey, cfg.LEMode, cfg.PreviewHost, cfg.DataDir, dnsManager, backupMgr)
 	server.SetGitHubAPI(cfg.GitHubAPIURL)
+	server.SetVersion(version)
+	if os.Getenv("DEPLOYMATE_DEMO_HOST") == "1" {
+		server.SetDemoHost(demo.Host{}) // the website's demo instance has no real machine to show
+	}
 
 	// The deployment worker: one in-process loop, builds serialized.
 	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)

@@ -294,7 +294,7 @@ AGENTS = """
 <h2 id="scopes">Three levels of trust</h2>
 <table>
 <tr><th>Scope</th><th>The agent can</th></tr>
-<tr><td><code>read</code></td><td>See everything: the fleet, apps, deployments, build logs, container logs, history, services. Variables show names only.</td></tr>
+<tr><td><code>read</code></td><td>See everything: the fleet, the server's health, apps, deployments, build logs, container logs, history, services. Variables show names only.</td></tr>
 <tr><td><code>deploy</code></td><td>Also: deploy, redeploy, retry a failed deploy, roll back, start, stop, restart, run the CI workflow.</td></tr>
 <tr><td><code>provision</code></td><td>Also: create projects, apps and databases/caches, start services, set variables, connect a repository, add a domain, set an app's image and port.</td></tr>
 </table>
@@ -302,7 +302,7 @@ AGENTS = """
 
 <h2 id="tools">The tools</h2>
 <table>
-<tr><th>Read</th><td><code>fleet_status</code> <code>list_projects</code> <code>get_project</code> <code>get_app</code> <code>list_deployments</code> <code>get_deployment</code> <code>get_deployment_log</code> <code>get_app_logs</code> <code>get_app_activity</code> <code>get_service</code> <code>wait_for_deployment</code></td></tr>
+<tr><th>Read</th><td><code>fleet_status</code> <code>server_status</code> <code>list_projects</code> <code>get_project</code> <code>get_app</code> <code>list_deployments</code> <code>get_deployment</code> <code>get_deployment_log</code> <code>get_app_logs</code> <code>get_app_activity</code> <code>get_service</code> <code>wait_for_deployment</code></td></tr>
 <tr><th>Deploy</th><td><code>deploy_app</code> <code>redeploy_app</code> <code>run_workflow</code> <code>retry_deployment</code> <code>rollback_deployment</code> <code>restart_app</code> <code>start_app</code> <code>stop_app</code></td></tr>
 <tr><th>Provision</th><td><code>create_project</code> <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code></td></tr>
 </table>
@@ -320,6 +320,7 @@ AGENTS = """
 <h2 id="prompts">Good first prompts</h2>
 <ul>
 <li><em>"How is everything?"</em> — <code>fleet_status</code></li>
+<li><em>"Is the server okay? Is there room for a big build?"</em> — <code>server_status</code></li>
 <li><em>"Why did the last deploy of invoicer fail?"</em> — <code>get_app</code>, <code>get_deployment_log</code></li>
 <li>With a deploy token: <em>"Retry it and tell me when it's done."</em> — <code>retry_deployment</code>, <code>wait_for_deployment</code></li>
 <li>With a provision token: <em>"Create a staging copy of the API with its own Postgres."</em></li>

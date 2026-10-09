@@ -55,6 +55,7 @@ def pages():
         "/deployments/" + failed.group(1): "deployment-failed.html",
         "/services/storefront-postgres": "service.html",
         "/settings/tokens": "tokens.html",
+        "/server": "server.html",
     }
 
 

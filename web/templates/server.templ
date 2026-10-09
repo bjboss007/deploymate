@@ -1,0 +1,197 @@
+package templates
+
+// ServerView is everything the Server page shows, already formatted
+// (assembled in httpserver.buildServerView).
+type ServerView struct {
+	Supported bool
+	Level     string // ok | warn | crit
+	Headline  string
+	Findings  []ServerFinding
+	Gauges    []ServerGauge
+	Disks     []ServerDisk
+	Machine   []ServerKV
+	Platform  []ServerKV
+	TopApps   []ServerApp
+	Docker    *DiskStats
+	Sampled   string
+}
+
+// ServerFinding is one thing the verdict wants you to know.
+type ServerFinding struct {
+	Level   string
+	Message string
+}
+
+// ServerGauge is one headline reading (CPU, memory, swap, network…).
+// Pct < 0 means "no bar".
+type ServerGauge struct {
+	Label string
+	Value string
+	Sub   string
+	Pct   float64
+	Level string
+}
+
+// ServerDisk is one filesystem.
+type ServerDisk struct {
+	Label string
+	Path  string
+	Used  string
+	Total string
+	Free  string
+	Pct   float64
+	Level string
+}
+
+// ServerKV is one label/value line.
+type ServerKV struct {
+	Label string
+	Value string
+	Level string // "" | warn | crit
+}
+
+// ServerApp is one app's current footprint.
+type ServerApp struct {
+	Name string
+	Slug string
+	Mem  string
+	CPU  string
+}
+
+templ ServerPage(vc ViewCtx, v ServerView) {
+	@Layout(vc, "Server", "", []Crumb{{Label: "Server"}}) {
+		<div class="page-head">
+			<div>
+				<h1>Server</h1>
+				<p class="muted-text">The machine DeployMate runs on. Updates every 15 seconds.</p>
+			</div>
+		</div>
+		@ServerBody(v)
+	}
+}
+
+templ ServerBody(v ServerView) {
+	<div id="server-body" hx-get="/server" hx-trigger="every 15s" hx-swap="outerHTML">
+		<div class={ "verdict verdict-" + v.Level }>
+			<span class={ "status-dot dot-" + v.Level }></span>
+			<div>
+				<div class="verdict-head">{ v.Headline }</div>
+				if len(v.Findings) > 1 {
+					<ul class="verdict-list">
+						for _, f := range v.Findings {
+							<li class={ "lvl-" + f.Level }>{ f.Message }</li>
+						}
+					</ul>
+				}
+			</div>
+		</div>
+		if !v.Supported {
+			<div class="panel">
+				<p class="muted-text">CPU, memory, disk and temperature are read from Linux. This machine does not provide them, so only the Docker details below are shown.</p>
+			</div>
+		} else {
+			<div class="stat-strip">
+				for _, g := range v.Gauges {
+					<div class="stat-card">
+						<div class="stat-value">{ g.Value }</div>
+						<div class="stat-label">{ g.Label }</div>
+						if g.Pct >= 0 {
+							<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ pctNum(g.Pct) } aria-label={ g.Label }>
+								<div class={ "meter-fill meter-" + g.Level } style={ meterWidth(g.Pct) }></div>
+							</div>
+						}
+						if g.Sub != "" {
+							<div class="stat-sub">{ g.Sub }</div>
+						}
+					</div>
+				}
+			</div>
+			<div class="panel">
+				<div class="panel-title">Storage</div>
+				if len(v.Disks) == 0 {
+					<p class="muted-text">No filesystem could be read.</p>
+				}
+				for _, d := range v.Disks {
+					<div class="disk-row">
+						<div class="disk-head">
+							<span>{ d.Label } <span class="muted-text mono">{ d.Path }</span></span>
+							<span class="mono">{ d.Used } of { d.Total } used · { d.Free } free</span>
+						</div>
+						<div class="meter" role="meter" aria-valuemin="0" aria-valuemax="100" aria-valuenow={ pctNum(d.Pct) } aria-label={ d.Label }>
+							<div class={ "meter-fill meter-" + d.Level } style={ meterWidth(d.Pct) }></div>
+						</div>
+					</div>
+				}
+			</div>
+		}
+		if v.Docker != nil {
+			<div class="panel">
+				<div class="panel-title">What Docker is holding</div>
+				if v.Docker.Error != "" {
+					<p class="warn-note">{ v.Docker.Error }</p>
+				} else {
+					<div class="stat-strip">
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(v.Docker.ImagesBytes) }</div>
+							<div class="stat-label">{ v.Docker.ImageCount } images</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(v.Docker.VolumesBytes) }</div>
+							<div class="stat-label">{ v.Docker.VolumeCount } volumes (your data)</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(v.Docker.BuildCacheBytes) }</div>
+							<div class="stat-label">build cache</div>
+						</div>
+						<div class="stat-card">
+							<div class="stat-value">{ fmtBytes(v.Docker.ReclaimableBytes) }</div>
+							<div class="stat-label">reclaimable</div>
+						</div>
+					</div>
+					<p class="muted-text">Per-volume and per-image detail is on the <a href="/stats">build statistics</a> page.</p>
+				}
+			</div>
+		}
+		<div class="two-col">
+			<div class="panel">
+				<div class="panel-title">Busiest apps</div>
+				if len(v.TopApps) == 0 {
+					<p class="muted-text">No running app has been sampled yet.</p>
+				} else {
+					<table class="deploy-table">
+						<thead>
+							<tr>
+								<th>App</th>
+								<th>Memory</th>
+								<th>CPU</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, a := range v.TopApps {
+								<tr>
+									<td><a class="deploy-link" href={ "/apps/" + a.Slug }>{ a.Name }</a></td>
+									<td class="mono">{ a.Mem }</td>
+									<td class="mono">{ a.CPU }</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				}
+			</div>
+			<div class="panel">
+				<div class="panel-title">Machine and platform</div>
+				<dl class="kv">
+					for _, kv := range v.Machine {
+						<dt>{ kv.Label }</dt>
+						<dd class={ "lvl-" + kv.Level }>{ kv.Value }</dd>
+					}
+					for _, kv := range v.Platform {
+						<dt>{ kv.Label }</dt>
+						<dd class={ "lvl-" + kv.Level }>{ kv.Value }</dd>
+					}
+				</dl>
+			</div>
+		</div>
+		<p class="muted-text">Read at { v.Sampled }.</p>
+	</div>
+}

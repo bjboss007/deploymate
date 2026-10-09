@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-09 (Server page, step 1 of 3)** — New `/server` page, `GET /api/v1/server` and `server_status` MCP
+tool: `internal/hostinfo` (reads /proc and /sys, injectable root), `Evaluate` verdict with thresholds,
+page auto-refreshing via HTMX, Docker breakdown, busiest apps, demo host + website tour tab. Spec and the
+next two steps (history sparklines; host alerts + Clean up action) in `docs/specs/server-health.md`.
+Only exercised on Mac so far (page shows the demo host); needs a look on the real Ubuntu server after
+the next binary update.
+
 **2026-10-08 (v0.1.0 released)** — Tag `v0.1.0` published (4 archives + checksums.txt, public). The site's
 install command is now `curl -fsSL https://deploymate.link/install | sudo bash` (nginx 302s to
 `deploy/install.sh` on GitHub); README keeps the raw GitHub URL so it works without the site. Takes effect on

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/a-h/templ"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -177,4 +178,18 @@ func versionLabel(d store.Deployment) string {
 		return shortDeployID(d.CommitSHA)
 	}
 	return d.Kind
+}
+
+// pctNum renders a percentage as a bare number (for aria-valuenow).
+func pctNum(v float64) string { return strconv.FormatFloat(v, 'f', 0, 64) }
+
+// meterWidth is the inline width of a meter bar, clamped to 0-100%.
+func meterWidth(pct float64) templ.SafeCSS {
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	return templ.SafeCSS("width:" + strconv.FormatFloat(pct, 'f', 1, 64) + "%")
 }

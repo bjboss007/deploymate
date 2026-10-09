@@ -102,6 +102,10 @@ One Go binary, one server, Docker as the compute substrate.
   MCP server over stdio so an AI agent can monitor, deploy and provision
   (the token's scope decides which; secrets are never readable and nothing can
   be deleted) — see docs/specs/mcp-and-api.md
+- **Server health** — `/server` shows the machine itself: CPU, memory, swap, disk space,
+  network, temperature, battery, whether Docker and Traefik are up, what Docker is holding
+  and the busiest apps, with one plain sentence when something needs you. Also `server_status`
+  for agents.
 - **Monitoring** — CPU/memory charts (5s sampling), live container logs over
   SSE (last output kept for stopped containers), and 30s uptime probes per
   domain with history

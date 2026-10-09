@@ -241,6 +241,17 @@ func (s *seeder) app(p store.Project, sp appSpec) appRef {
 		s.check(err)
 		s.check(s.st.UpdateDomainTLS(dom.ID, "active", ts(s.now.Add(61*24*time.Hour))))
 	}
+	if sp.status == "running" {
+		// One resource sample, so the Server page has "busiest apps" to show.
+		var n uint64
+		for _, c := range sp.slug {
+			n += uint64(c)
+		}
+		n %= 23
+		s.check(s.st.InsertMetric(a.ID, store.Metric{
+			TS: store.Now(), CPUPercent: float64(n%7)*3.1 + 1.2, MemBytes: (96 + n*41) << 20,
+		}))
+	}
 	return appRef{id: a.ID, slug: a.Slug}
 }
 

@@ -3,6 +3,7 @@
 package httpserver
 
 import (
+	"github.com/habibmuhammad/deploymate/internal/hostinfo"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -41,8 +42,11 @@ type Server struct {
 	githubAPI   string          // GitHub REST base URL for prebuilt-deploy actions; "" = the real API
 	usageMu     sync.Mutex
 	usageCache  map[string]usageEntry // service id -> who was connected, briefly cached
-	apiRate     *apiLimiter // per-token request limits for /api/v1
-	previewRR   sync.Map              // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
+	apiRate     *apiLimiter           // per-token request limits for /api/v1
+	host        HostSource            // the machine's vitals for the Server page
+	version     string
+	demoHost    bool
+	previewRR   sync.Map // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
 // New builds a Server.
@@ -53,6 +57,7 @@ func New(st *store.Store, rt runtime.Runtime, prov *services.Provisioner, events
 		deliveries: webhooks.NewDeliveryCache(),
 		dns:        dnsManager,
 		backups:    backupMgr,
+		host:       &hostinfo.Collector{Paths: []hostinfo.DiskPath{{Label: "Data", Path: dataDir}, {Label: "System", Path: "/"}}},
 	}
 }
 
@@ -110,6 +115,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/whoami", s.handleAPIWhoami)
 		// Read tier: monitoring.
 		r.Get("/fleet", s.handleAPIFleet)
+		r.Get("/server", s.handleAPIServer)
 		r.Get("/projects", s.handleAPIProjects)
 		r.Get("/projects/{slug}", s.handleAPIProject)
 		r.Get("/apps/{slug}", s.handleAPIApp)
@@ -164,6 +170,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/settings/tokens/{id}/revoke", am.CheckCSRF(s.handleTokenRevoke))
 		r.Get("/alerts", s.handleAlertsPage)
 		r.Get("/stats", s.handleStatsPage)
+		r.Get("/server", s.handleServerPage)
 		r.Post("/alerts", am.CheckCSRF(s.handleAlertCreate))
 		r.Post("/alerts/{id}/delete", am.CheckCSRF(s.handleAlertDelete))
 		r.Get("/projects/{slug}", s.handleProjectDetail)
