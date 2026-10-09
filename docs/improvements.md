@@ -10,8 +10,8 @@ change.
   encrypted credentials, Settings → GitHub page, app-level webhook endpoint with signature check) done
   2026-10-09 and tested against a fake GitHub; **never run against real GitHub yet** (needs the owner's click).
   Phases 2-4 done 2026-10-09 (installation tokens and picker; the app webhook deploys on push with the per-folder
-  filter; prebuilt apps use the app's token and `workflow_run` through the app webhook, no PAT). Phase 1 and the
-  clone verified on real GitHub. Still open: a guide on the website, real-GitHub runs of push→deploy and prebuilt
+  filter; prebuilt apps use the app's token and `workflow_run` through the app webhook, no PAT). Phase 1, the
+  clone and push→deploy verified on real GitHub (2026-10-09). Still open: a guide on the website, real-GitHub runs of push→deploy and prebuilt
   (artifact download, dispatch), narrowing installation tokens to the one repository, and storing the repository
   id so a rename or transfer keeps working. The manual deploy-key/webhook flow stays alongside it.
 

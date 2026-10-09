@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-09 (v0.4.2 live; push-to-deploy through the GitHub app confirmed on real GitHub)** — Owner updated the server to
+v0.4.2 and a push to a repository connected via Connect GitHub deployed on its own (app webhook → queued → build).
+Verified live now: manifest flow, code exchange, JWT/installations, repository picker, clone with an installation
+token, push webhook, Postgres-18 fix. Still unverified live: prebuilt apps through the app (artifact download,
+workflow dispatch), `workflow_run` via the app webhook. Remaining work: website guide for Connect GitHub.
+
 **2026-10-09 (Connect GitHub, phase 4 of 4)** — Prebuilt apps work through the GitHub app: `gitauth.Resolver.APIToken`
 (installation token for app sources, pasted PAT otherwise) used by the dashboard (test connection, deploy latest, run
 workflow) and the worker (artifact download); Deploy mode panel shown without a token field; `workflow_run` on
