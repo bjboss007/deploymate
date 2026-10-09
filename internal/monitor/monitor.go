@@ -73,6 +73,7 @@ type Monitor struct {
 	lastResize     map[string]time.Time
 	lastDiskAlert  time.Time
 	host           HostSource // nil = no host sampling
+	tlsExternal    bool       // DEPLOYMATE_LE_MODE=off: certificates are not DeployMate's concern
 	hostWatch      *hostWatch
 }
 
@@ -95,6 +96,15 @@ func New(st *store.Store, rt runtime.Runtime, a *alerts.Dispatcher) *Monitor {
 		restartAlertAt: make(map[string]time.Time),
 		lastResize:     make(map[string]time.Time),
 	}
+}
+
+// SetTLSExternal marks certificates as handled outside DeployMate (a tunnel or
+// proxy in front): no handshake checks and no certificate alerts. Called once
+// at startup before Run.
+func (m *Monitor) SetTLSExternal(v bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tlsExternal = v
 }
 
 // SetHealer wires the app heal callback used to recreate bindingless
@@ -358,6 +368,16 @@ const (
 
 // checkTLS records the domain's real certificate state (docs: domains page).
 func (m *Monitor) checkTLS(ctx context.Context, d store.Domain) {
+	if m.tlsExternal {
+		// Behind a tunnel or proxy the certificate a handshake here sees is Traefik's
+		// default one, which says nothing about what visitors get. Record that once.
+		if d.TLSStatus != tlscheck.External {
+			if err := m.store.UpdateDomainTLS(d.ID, tlscheck.External, ""); err != nil {
+				slog.Error("monitor: update domain tls", "domain", d.Hostname, "err", err)
+			}
+		}
+		return
+	}
 	every := tlsSteadyEvery
 	if d.TLSStatus != tlscheck.Active {
 		every = tlsPendingEvery

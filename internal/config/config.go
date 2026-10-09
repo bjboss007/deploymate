@@ -22,8 +22,9 @@ type Config struct {
 	// at startup if no users exist yet.
 	SetupEmail    string
 	SetupPassword string
-	// LEMode selects the Let's Encrypt resolver: "staging" (default) or
-	// "production".
+	// LEMode selects the Let's Encrypt resolver: "staging" (default),
+	// "production", or "off" for a server behind a tunnel or proxy that serves
+	// the real certificate (DeployMate then asks for none).
 	LEMode string
 	// RailpackPath is the railpack CLI to invoke for runtime builds.
 	// Defaults to "railpack" (resolved via PATH); set it explicitly in dev

@@ -24,11 +24,12 @@ change.
   answering `ignored: no changes in the build folder`. Unknown file lists (no commits, ≥20 commits, GitLab
   `total_commits_count` > listed) deploy as before. Follow-up: manual **Deploy** still always builds.
 
-- [ ] **"Behind a tunnel" mode: don't try to issue certificates** — 2026-10-07: on the owner's server
-  (Cloudflare Tunnel, no public :80) Traefik's ACME HTTP challenge can never succeed, so it logs
-  "Unable to obtain ACME certificate" repeatedly. Harmless (Cloudflare serves the real cert; staging
-  resolver), but noisy, and the Domains page's "Secure" comes from the edge. Offer a setting that omits
-  `certresolver`, and say so in the Domains panel.
+- [x] **"Behind a tunnel" mode: don't try to issue certificates** — done 2026-10-09: `DEPLOYMATE_LE_MODE=off`
+  (env, like production/staging) writes router labels without a `certresolver` (TLS still terminates on Traefik's
+  default certificate, which the tunnel connects to with No TLS Verify), the monitor skips handshake checks and
+  records domains as `external` ("Served via your tunnel or proxy"), no certificate alerts. Verified against Traefik
+  v3.7.14 that no ACME order is made for a router without the label. Still open: a Settings toggle instead of
+  editing the systemd unit; existing apps pick it up at their next deploy.
 - [x] **Upgrade the pinned Traefik (v3.3) to a release that supports Docker Engine 29** — done 2026-10-09: pinned
   `traefik:v3.7.14` in `deploy/traefik-run.sh` (the fix landed in 3.6.1). The label contract (TLS router +
   certresolver, two replicas on one service, healthcheck failover) behaved identically on v3.3, v3.6.25 and

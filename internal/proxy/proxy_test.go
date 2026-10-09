@@ -68,6 +68,21 @@ func TestResolverForLEMode(t *testing.T) {
 	}
 }
 
+// Behind a tunnel or proxy (mode "off") there is no resolver: the router still
+// terminates TLS on Traefik's default certificate, but never asks for one.
+func TestNoCertResolverWhenOff(t *testing.T) {
+	if got := ResolverForLEMode("off"); got != "" {
+		t.Fatalf("off -> %q, want no resolver", got)
+	}
+	labels := AppLabels(AppLabelsOpts{Slug: "site", Domains: []string{"deploymate.link"}, Port: 80, LEResolver: ""})
+	if _, has := labels["traefik.http.routers.site.tls.certresolver"]; has {
+		t.Error("a certresolver label was written with no resolver")
+	}
+	if labels["traefik.http.routers.site.tls"] != "true" || labels["traefik.http.routers.site.entrypoints"] != "websecure" {
+		t.Errorf("TLS termination labels missing: %v", labels)
+	}
+}
+
 // TestAppLabelsReplicasShareService is the replica LB contract: two slots
 // of the same deploy own distinct routers but point at ONE service whose
 // labels are byte-identical — Traefik merges them into one backend. The

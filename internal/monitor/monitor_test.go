@@ -208,6 +208,23 @@ func TestCheckTLSRecordsAndThrottles(t *testing.T) {
 	}
 }
 
+// Behind a tunnel (DEPLOYMATE_LE_MODE=off) the monitor makes no handshake and
+// records the domain as externally served, never as an untrusted certificate.
+func TestCheckTLSExternalMode(t *testing.T) {
+	m, st, app := newTestMonitor(t)
+	m.SetTLSExternal(true)
+	d, _ := st.CreateDomain(store.Domain{AppID: app.ID, Hostname: "app.example.com", TLSStatus: "pending"})
+	m.tlsFn = func(context.Context, string) tlscheck.Result {
+		t.Error("a handshake was made in external mode")
+		return tlscheck.Result{Status: tlscheck.Untrusted}
+	}
+	m.checkTLS(context.Background(), d)
+	ds, _ := st.ListDomains(app.ID)
+	if ds[0].TLSStatus != tlscheck.External {
+		t.Errorf("status = %q, want external", ds[0].TLSStatus)
+	}
+}
+
 // A domain's certificate going bad raises exactly one alert on the way in,
 // none while it stays bad, and a healthy or pending change raises none.
 func TestCheckTLSAlertsOnTransitionsOnly(t *testing.T) {

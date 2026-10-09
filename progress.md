@@ -12,7 +12,12 @@
 if different, restore the previous image if the new one doesn't stay up); `bootstrap.sh` uses it and no longer adds the
 Docker min-API override; `deploymate update` runs it after a healthy update (`--skip-traefik`). Label contract
 re-tested on v3.3/v3.6.25/v3.7.14 (identical); script tested for upgrade/no-op/rollback/no-config. Not yet seen on a real
-Docker 29 daemon. Next in the agreed order: "behind a tunnel" mode, then server-side dashboard routing.
+Docker 29 daemon. Next in the agreed order: server-side dashboard routing.
+
+**2026-10-09 (tunnel mode, backlog round 2 of 3)** — `DEPLOYMATE_LE_MODE=off`: no `certresolver` label, no TLS handshake
+checks (`tlscheck.External`, monitor `SetTLSExternal`), domains show "Served via your tunnel or proxy", no cert
+alerts. Tunnel guide updated (systemctl edit snippet). Owner action on the real server: add the Environment line,
+restart, redeploy `site`; the Traefik "Unable to obtain ACME certificate" noise should stop.
 
 **2026-10-09 (v0.2.0 live, Server page verified)** — Tagged `v0.2.0`; the owner ran `sudo deploymate update` on the real
 Ubuntu server (first real use of the updater) and confirmed the Server page's numbers match the machine. Still

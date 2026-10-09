@@ -152,6 +152,7 @@ func serve() error {
 	// Metrics, health, uptime, restart, and disk sampling.
 	mon := monitor.New(st, rt, dispatcher)
 	mon.SetHealer(server.HealApp)
+	mon.SetTLSExternal(cfg.LEMode == "off")
 	mon.SetHost(&hostinfo.Collector{Paths: []hostinfo.DiskPath{{Label: "Data", Path: cfg.DataDir}, {Label: "System", Path: "/"}}})
 	// DEPLOYMATE_DISABLE_MONITOR=1 keeps the monitor from probing and "healing"
 	// containers: the seeded demo fleet has none, and must keep its seeded state.

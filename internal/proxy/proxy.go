@@ -69,7 +69,12 @@ func AppLabels(o AppLabelsOpts) map[string]string {
 		"traefik.http.routers." + router + ".rule":       "Host(`" + strings.Join(o.Domains, "`, `") + "`)",
 		"traefik.http.routers." + router + ".entrypoints": "websecure",
 		"traefik.http.routers." + router + ".tls":         "true",
-		"traefik.http.routers." + router + ".tls.certresolver": o.LEResolver,
+	}
+	// No resolver (DEPLOYMATE_LE_MODE=off): Traefik still terminates TLS on its
+	// default certificate, which is what a tunnel or proxy in front connects to,
+	// but never asks Let's Encrypt for one.
+	if o.LEResolver != "" {
+		labels["traefik.http.routers."+router+".tls.certresolver"] = o.LEResolver
 	}
 	if o.Priority > 0 {
 		// The router with the higher priority wins for the same Host rule —
@@ -89,8 +94,12 @@ func AppLabels(o AppLabelsOpts) map[string]string {
 	return labels
 }
 
-// ResolverForLEMode maps the config value to a Traefik certresolver name.
+// ResolverForLEMode maps the config value to a Traefik certresolver name; ""
+// (mode "off", for servers behind a tunnel or proxy) means no resolver.
 func ResolverForLEMode(mode string) string {
+	if mode == "off" {
+		return ""
+	}
 	if mode == "production" {
 		return "letsencrypt"
 	}

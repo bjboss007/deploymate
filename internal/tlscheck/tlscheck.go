@@ -20,6 +20,7 @@ const (
 	Active    = "active"    // valid and trusted
 	Expiring  = "expiring"  // valid, but expires within ExpiringWithin
 	Untrusted = "untrusted" // served for this name, but the chain is not trusted (e.g. Let's Encrypt staging)
+	External  = "external"  // DeployMate asks for no certificates (DEPLOYMATE_LE_MODE=off): a tunnel or proxy in front serves the real one
 	Failed    = "failed"    // expired or otherwise invalid
 )
 

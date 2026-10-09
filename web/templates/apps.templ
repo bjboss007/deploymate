@@ -809,7 +809,9 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 					<button class="btn btn-primary" type="submit">Add domain</button>
 																			</form>
 				<p class="muted panel-hint">
-					if leMode == "production" {
+					if leMode == "off" {
+						Point the domain at this server, or at your tunnel. A new domain starts working after the app's <strong>next deploy</strong>, when its routing is created. DeployMate asks for no certificates here (<code>DEPLOYMATE_LE_MODE=off</code>): your tunnel or proxy serves the one visitors see.
+					} else if leMode == "production" {
 						Point the domain's DNS at this server first. A new domain starts working after the app's <strong>next deploy</strong>, when its routing is created. Certificates come from Let's Encrypt production.
 					} else {
 						Point the domain's DNS at this server first. A new domain starts working after the app's <strong>next deploy</strong>, when its routing is created. Certificates come from the Let's Encrypt staging resolver (safe for testing); set DEPLOYMATE_LE_MODE=production for real ones.
@@ -1029,6 +1031,8 @@ func tlsLabel(dm store.Domain) string {
 		return "Issuer not trusted"
 	case "failed":
 		return "Certificate problem"
+	case "external":
+		return "Served via your tunnel or proxy"
 	}
 	return "Waiting for certificate"
 }
@@ -1055,6 +1059,8 @@ func tlsHint(dm store.Domain) string {
 		return "A certificate is served for this name but its issuer isn't trusted — normal with Let's Encrypt staging, a problem in production."
 	case "failed":
 		return "The served certificate is expired or invalid. Check the domain's DNS and the proxy's logs."
+	case "external":
+		return "DeployMate is set not to ask for certificates (DEPLOYMATE_LE_MODE=off). Visitors get the certificate your tunnel or proxy serves, which DeployMate cannot see."
 	}
 	return "No certificate has been issued for this name yet. It appears after DNS points here and the proxy has requested one; checked every 2 minutes."
 }

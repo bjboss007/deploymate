@@ -184,7 +184,7 @@ off a dev machine.
 | `DEPLOYMATE_ADDR` | `127.0.0.1:8080` | listen address |
 | `DEPLOYMATE_DATA_DIR` | `./data` | SQLite, keys, builds, repos |
 | `DEPLOYMATE_SETUP_EMAIL` / `_PASSWORD` | — | create the owner user at startup |
-| `DEPLOYMATE_LE_MODE` | `staging` | `production` for real Let's Encrypt certs |
+| `DEPLOYMATE_LE_MODE` | `staging` | `production` for real Let's Encrypt certs; `off` behind a tunnel or proxy that serves the certificate (DeployMate asks for none) |
 | `DEPLOYMATE_RAILPACK` | `railpack` | path to the railpack CLI |
 | `DEPLOYMATE_PREVIEW_HOST` | — | e.g. `dm.example.com`: every app gets a public `{slug}.{host}` subdomain routed by Host header (see docs/specs/cloudflare-tunnel.md) |
 | `DEPLOYMATE_CLOUDFLARE_API_TOKEN` | — | auto-DNS: Cloudflare API token (scope `Zone.DNS:Edit`) that creates each new app's preview CNAME; requires the two vars below |

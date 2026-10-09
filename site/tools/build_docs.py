@@ -370,7 +370,9 @@ TUNNEL = """
 
 <h2 id="notes">Things to know</h2>
 <ul>
-<li><strong>Certificate warnings in Traefik's log are expected.</strong> Traefik tries to obtain its own Let's Encrypt certificate, which needs port 80 reachable from the internet; through a tunnel it can't, so it logs a failure and keeps going. Visitors still get a valid certificate from Cloudflare.</li>
+<li><strong>Stop asking for certificates.</strong> Through a tunnel, Let's Encrypt can never reach your server to issue one, so by default Traefik keeps trying and logs a failure every few minutes (harmless: visitors still get Cloudflare's valid certificate). To stop the attempts, tell DeployMate it is behind a tunnel:
+[[leoff]]
+Redeploy an app for its routing to pick this up. The domain list then says <em>Served via your tunnel or proxy</em> instead of a certificate state, and no certificate alerts fire. Leave it unset (or set <code>staging</code> or <code>production</code>) on a server that is reachable from the internet.</li>
 <li><strong>One hostname per domain.</strong> Each domain you attach to an app needs its own public hostname on the tunnel.</li>
 <li><strong>It adds a dependency.</strong> If Cloudflare or the connector is down, so is access. The server and its apps keep running, and you can still reach it on your local network.</li>
 <li><strong>It isn't the only way.</strong> A router port-forward, a VPS in front, or another tunnel product also works. DeployMate only needs requests for your domains to arrive at the server's ports 80/443.</li>
@@ -378,6 +380,7 @@ TUNNEL = """
 """
 
 TUNNEL_BLOCKS = {
+    "leoff": "sudo systemctl edit deploymate\n# in the editor, add:\n#   [Service]\n#   Environment=DEPLOYMATE_LE_MODE=off\nsudo systemctl restart deploymate",
     "sshconfig": "Host dm-server\n  HostName ssh.example.com\n  User your-user\n  ProxyCommand cloudflared access ssh --hostname %h",
 }
 
