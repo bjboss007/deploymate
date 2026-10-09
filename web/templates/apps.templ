@@ -719,7 +719,11 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 						</div>
 					</div>
 					if git.GitHub && git.DeployMode == "artifact" {
-						<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes — tick <strong>Workflow runs</strong> in the repo's webhook settings (the push event can stay on; it is ignored for prebuilt apps).</p>
+						if git.Method == "github_app" {
+							<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes, through your GitHub app: no webhook to set up.</p>
+						} else {
+							<p class="muted panel-hint">Prebuilt: a GitHub Actions workflow builds the JAR; DeployMate downloads and runs it. Pushes to { git.DefaultBranch } deploy once the workflow finishes — tick <strong>Workflow runs</strong> in the repo's webhook settings (the push event can stay on; it is ignored for prebuilt apps).</p>
+						}
 					} else {
 						if git.MemoryNote != "" {
 							<p class="notice notice-warn">{ git.MemoryNote }</p>
@@ -747,19 +751,25 @@ templ AppPage(vc ViewCtx, project store.Project, app store.App, deployments []st
 								<label>Artifact name
 									<input class="branch-input" type="text" name="artifact_name" value={ git.ArtifactName }/>
 								</label>
-								<label>GitHub token (write-only)
+								if git.Method != "github_app" {
+									<label>GitHub token (write-only)
+										if git.HasToken {
+											<input type="password" name="api_token" autocomplete="off" placeholder="saved — leave blank to keep"/>
+										} else {
+											<input type="password" name="api_token" autocomplete="off" placeholder="github_pat_…"/>
+										}
+									</label>
 									if git.HasToken {
-										<input type="password" name="api_token" autocomplete="off" placeholder="saved — leave blank to keep"/>
-									} else {
-										<input type="password" name="api_token" autocomplete="off" placeholder="github_pat_…"/>
+										<label><span><input type="checkbox" name="clear_token"/> Remove saved token</span></label>
 									}
-								</label>
-								if git.HasToken {
-									<label><span><input type="checkbox" name="clear_token"/> Remove saved token</span></label>
 								}
 								<button class="btn btn-primary" type="submit">Save</button>
 							</form>
+							if git.Method == "github_app" {
+								<p class="muted panel-hint">Prebuilt mode keeps big builds off this server: your repo's GitHub Actions workflow builds the JAR, and DeployMate downloads and runs it. No token to paste: DeployMate uses your GitHub app, which can read this repository's Actions runs and artifacts and start its workflow. Build mode (default) is unchanged.</p>
+							} else {
 							<p class="muted panel-hint">Prebuilt mode keeps big builds off this server: your repo's GitHub Actions workflow builds the JAR, and DeployMate downloads and runs it. Use a <strong>fine-grained</strong> token limited to <strong>only this repository</strong> with <strong>Actions: read-only</strong> (for an organization's repo, set the organization as resource owner; an owner may need to approve it). The token is stored encrypted and never shown again. Build mode (default) is unchanged.</p>
+							}
 							if git.DeployMode == "artifact" {
 								<div class="panel-title">Workflow file</div>
 								<p class="muted panel-hint">Commit this as <span class="mono">{ git.WorkflowPath }</span> in the repo (Gradle shown; for a multi-module build use your app module's task, e.g. <span class="mono">:app:bootJar</span>). It uploads exactly one JAR as a one-day artifact.</p>

@@ -60,40 +60,46 @@ func (s *Server) ciSkipReason(app store.App, gs store.GitSource, wr webhooks.Wor
 }
 
 // handleWorkflowRun processes a (verified) GitHub workflow_run delivery for a
-// source: every linked artifact-mode app whose gates pass gets a queued
-// `ci` deployment for the run. Everything else is acknowledged and ignored
-// with a short fixed reason.
+// per-repository source.
 func (s *Server) handleWorkflowRun(w http.ResponseWriter, gs store.GitSource, body []byte, delivery string) {
 	wr, err := webhooks.ParseGitHubWorkflowRun(body)
 	if err != nil {
 		http.Error(w, "unparseable payload", http.StatusBadRequest)
 		return
 	}
+	status, text := s.processWorkflowRun(gs, wr, delivery)
+	if status != http.StatusOK {
+		http.Error(w, text, status)
+		return
+	}
+	_, _ = w.Write([]byte(text))
+}
+
+// processWorkflowRun: every linked artifact-mode app of the source whose gates
+// pass gets a queued `ci` deployment for the run. Everything else is
+// acknowledged and ignored with a short fixed reason. Shared by the
+// per-repository webhook and the GitHub App's.
+func (s *Server) processWorkflowRun(gs store.GitSource, wr webhooks.WorkflowRun, delivery string) (status int, text string) {
 	// A run produces requested → in_progress → completed deliveries; only a
 	// successful completion can deploy.
 	if wr.Action != "completed" {
-		_, _ = w.Write([]byte("ignored: workflow run is not completed"))
-		return
+		return http.StatusOK, "ignored: workflow run is not completed"
 	}
 	if wr.Conclusion != "success" {
-		_, _ = w.Write([]byte("ignored: workflow run did not succeed"))
-		return
+		return http.StatusOK, "ignored: workflow run did not succeed"
 	}
 	// The hook belongs to one repository; a payload about another is wrong.
 	if repo, ok := githubci.ParseRepoURL(gs.RepoURL); ok && !strings.EqualFold(repo, wr.Repo) {
-		_, _ = w.Write([]byte("ignored: run belongs to a different repository"))
-		return
+		return http.StatusOK, "ignored: run belongs to a different repository"
 	}
 	if s.deliveries.Seen(gs.Provider, gs.ID, delivery) {
-		_, _ = w.Write([]byte("duplicate delivery ignored"))
-		return
+		return http.StatusOK, "duplicate delivery ignored"
 	}
 
 	apps, err := s.store.ListAppsByGitSource(gs.ID)
 	if err != nil {
 		slog.Error("webhook: list apps for source", "err", err)
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+		return http.StatusInternalServerError, "internal error"
 	}
 	msg := wr.HeadMessage
 	if len(msg) > maxCommitMessage {
@@ -121,10 +127,9 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, gs store.GitSource, bo
 	}
 	switch {
 	case queued > 0:
-		_, _ = w.Write([]byte("queued"))
+		return http.StatusOK, "queued"
 	case firstReason != "":
-		_, _ = w.Write([]byte("ignored: " + firstReason))
-	default:
-		_, _ = w.Write([]byte("ignored: no app on this source deploys from CI runs"))
+		return http.StatusOK, "ignored: " + firstReason
 	}
+	return http.StatusOK, "ignored: no app on this source deploys from CI runs"
 }

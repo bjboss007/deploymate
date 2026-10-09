@@ -290,10 +290,42 @@ func (s *Server) handleGitHubAppWebhook(w http.ResponseWriter, r *http.Request) 
 		s.repoMu.Unlock()
 		_, _ = w.Write([]byte("ok"))
 	case "workflow_run":
-		_, _ = w.Write([]byte("ignored: prebuilt deploys through the GitHub app are not supported yet"))
+		wr, err := webhooks.ParseGitHubWorkflowRun(body)
+		if err != nil {
+			http.Error(w, "unparseable payload", http.StatusBadRequest)
+			return
+		}
+		_, _ = w.Write([]byte(s.handleAppWorkflowRun(wr, r.Header.Get("X-GitHub-Delivery"))))
 	default:
 		_, _ = w.Write([]byte("ignored: not a push event"))
 	}
+}
+
+// handleAppWorkflowRun routes a finished CI run to the prebuilt apps connected to its
+// repository; each source applies the same gates as the per-repository webhook.
+func (s *Server) handleAppWorkflowRun(wr webhooks.WorkflowRun, delivery string) string {
+	if wr.Action != "completed" || wr.Conclusion != "success" {
+		return "ignored: workflow run is not a successful completion"
+	}
+	sources, err := s.store.ListGitSourcesByRepo(wr.Repo)
+	if err != nil {
+		slog.Error("github webhook: list sources", "err", err)
+		return "error"
+	}
+	if len(sources) == 0 {
+		return "ignored: no app uses this repository"
+	}
+	first := ""
+	for _, gs := range sources {
+		status, text := s.processWorkflowRun(gs, wr, delivery)
+		if status == http.StatusOK && text == "queued" {
+			return "queued"
+		}
+		if first == "" {
+			first = text
+		}
+	}
+	return first
 }
 
 // handleAppPush queues deployments for the apps connected to the pushed

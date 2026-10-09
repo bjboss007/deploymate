@@ -283,7 +283,7 @@ func (s *Server) apiGit(app store.App) map[string]any {
 	}
 	return map[string]any{
 		"repository": gs.RepoURL, "provider": gs.Provider, "branch": gs.DefaultBranch,
-		"workflow": app.WorkflowPath, "artifact": app.ArtifactName, "has_github_token": gs.APITokenEnc != "",
+		"workflow": app.WorkflowPath, "artifact": app.ArtifactName, "has_github_token": gs.APITokenEnc != "" || gs.CloneMethod == store.CloneGitHubApp,
 	}
 }
 

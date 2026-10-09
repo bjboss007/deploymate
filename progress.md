@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-09 (Connect GitHub, phase 4 of 4)** — Prebuilt apps work through the GitHub app: `gitauth.Resolver.APIToken`
+(installation token for app sources, pasted PAT otherwise) used by the dashboard (test connection, deploy latest, run
+workflow) and the worker (artifact download); Deploy mode panel shown without a token field; `workflow_run` on
+`/hooks/github-app` → shared `processWorkflowRun` (same gates). Tested against the fake GitHub; real-GitHub runs of
+push→deploy and prebuilt are the owner's to confirm. Remaining: website guide, then a release (v0.5.0).
+
 **2026-10-09 (v0.4.1: Postgres 18 fix, found while testing Connect GitHub)** — Owner connected GitHub for real (phase 1
 verified live: manifest, code exchange, JWT, installations; repository picker listed their repos; the clone with the
 installation token worked). The test deploy then failed on a service: a bare `postgres` in deploymate.yml is

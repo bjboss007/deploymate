@@ -9,10 +9,11 @@ change.
 - [ ] **Connect GitHub (GitHub App)** — 2026-10-09, `docs/specs/github-app.md`. Phase 1 (connect: manifest flow,
   encrypted credentials, Settings → GitHub page, app-level webhook endpoint with signature check) done
   2026-10-09 and tested against a fake GitHub; **never run against real GitHub yet** (needs the owner's click).
-  Phases 2 (installation tokens, repository picker, clone with a token) and 3 (the app webhook deploys linked apps on
-  push, with the per-folder filter) done 2026-10-09. Next: phase 4 prebuilt apps without a PAT (their panel is hidden
-  for these repositories), a guide on the website at release time, and a real run against GitHub. Follow-up: store
-  the repository id so a rename or transfer keeps working. The manual deploy-key/webhook flow stays alongside it.
+  Phases 2-4 done 2026-10-09 (installation tokens and picker; the app webhook deploys on push with the per-folder
+  filter; prebuilt apps use the app's token and `workflow_run` through the app webhook, no PAT). Phase 1 and the
+  clone verified on real GitHub. Still open: a guide on the website, real-GitHub runs of push→deploy and prebuilt
+  (artifact download, dispatch), narrowing installation tokens to the one repository, and storing the repository
+  id so a rename or transfer keeps working. The manual deploy-key/webhook flow stays alongside it.
 
 - [ ] **Server page follow-ups** — 2026-10-09: (a) Clean up does not reach the `dm-buildkit` container's own
   cache (railpack builds) — add a prune through the buildkit daemon; (b) host alerts see "Traefik not

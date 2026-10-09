@@ -90,10 +90,23 @@ Not verified yet: creating an app on a real account (needs the owner's click —
 - Not handled: a repository renamed or transferred keeps its old `repo_full_name` until re-connected (we do not
   store GitHub's repository id); `repository` events are not subscribed.
 
-## Phase 4 — Prebuilt apps and fallbacks
+## Phase 4 — Prebuilt apps through the app (done 2026-10-09)
 
-Use the installation token for "Run workflow now" and the artifact download instead of a pasted PAT, offer
-converting an existing deploy-key app, docs, site guide.
+- `gitauth.Resolver.APIToken(source)`: the installation token for a `github_app` source (never a stored
+  PAT), the pasted fine-grained token for a deploy-key source, or `ErrNoToken`. The dashboard
+  (`githubClient(ctx, source)` → test connection, deploy latest run, run workflow, retry's artifact check) and the
+  build worker (`runArtifactDeploy`) use it.
+- The Deploy mode panel is shown for these repositories with no token field (a token posted anyway is
+  discarded); "Test connection" skips the "token is wider than this repository" check and says access is
+  through the app; texts no longer ask for a webhook with Workflow runs ticked.
+- `workflow_run` on `/hooks/github-app` → `processWorkflowRun` per matching source: the same gates as the
+  per-repository webhook (completed + success, the app's workflow file, tracked branch, push or manual dispatch
+  only, not a fork, de-duplicated, never older than what is deployed); build-mode apps on the repository are
+  untouched. `processWorkflowRun` is shared with the per-repository webhook.
+- Limit: the installation token covers every repository of the installation (GitHub allows narrowing a token to
+  named repositories; not done). Permissions needed are already in the manifest: `actions: write`,
+  `contents: read`.
+- Unverified against real GitHub: artifact download and workflow dispatch with an installation token.
 
 ## Security notes
 

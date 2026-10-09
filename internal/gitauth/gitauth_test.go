@@ -129,3 +129,25 @@ func TestMissingOrUninstalledAppGivesPlainErrors(t *testing.T) {
 		t.Errorf("a GitHub outage must not be reported as an uninstall: %v", err)
 	}
 }
+
+func TestAPITokenIsTheInstallationTokenOrThePastedOne(t *testing.T) {
+	e := newEnv(t, true)
+	ctx := context.Background()
+	// A source connected through GitHub: the app's installation token.
+	if tok, err := e.r.APIToken(ctx, store.GitSource{CloneMethod: store.CloneGitHubApp, InstallationID: 9}); err != nil || tok != "ghs_abc" {
+		t.Errorf("app source: %q %v", tok, err)
+	}
+	// A deploy-key source: the token the owner pasted, decrypted.
+	enc, _ := crypto.Encrypt(e.key, "github_pat_pasted")
+	if tok, err := e.r.APIToken(ctx, store.GitSource{CloneMethod: "deploy_key", APITokenEnc: enc}); err != nil || tok != "github_pat_pasted" {
+		t.Errorf("pasted token: %q %v", tok, err)
+	}
+	// None saved.
+	if _, err := e.r.APIToken(ctx, store.GitSource{CloneMethod: "deploy_key"}); !errors.Is(err, ErrNoToken) {
+		t.Errorf("no token: %v", err)
+	}
+	// An app source never falls back to a stored PAT.
+	if _, err := newEnv(t, false).r.APIToken(ctx, store.GitSource{CloneMethod: store.CloneGitHubApp, InstallationID: 9, APITokenEnc: enc}); !errors.Is(err, ErrNotConnected) {
+		t.Errorf("a disconnected app source must fail, not use a PAT: %v", err)
+	}
+}

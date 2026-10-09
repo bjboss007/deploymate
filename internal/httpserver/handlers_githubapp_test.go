@@ -1,6 +1,7 @@
 package httpserver
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
@@ -28,6 +29,7 @@ type fakeGitHub struct {
 	key        *rsa.PrivateKey
 	pemKey     string
 	tokenCalls int
+	actions    []string // "METHOD path auth" of every Actions call, in order
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -78,6 +80,20 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			w.Write([]byte(`{"total_count":1,"repositories":[{"id":3,"full_name":"acme/web","private":false,"default_branch":"develop","clone_url":"https://github.com/acme/web.git"}]}`))
 		default:
 			w.WriteHeader(401)
+		}
+	})
+	mux.HandleFunc("/repos/habib/site/actions/", func(w http.ResponseWriter, r *http.Request) {
+		f.actions = append(f.actions, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
+		switch {
+		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/dispatches"):
+			w.WriteHeader(204)
+		case strings.HasSuffix(r.URL.Path, "/runs"):
+			w.Write([]byte(`{"workflow_runs":[{"id":555,"run_number":7,"event":"push","head_branch":"main","head_sha":"abc123",
+				"head_commit":{"message":"build it"},"head_repository":{"full_name":"habib/site"}}]}`))
+		case strings.HasSuffix(r.URL.Path, "/artifacts"):
+			w.Write([]byte(`{"artifacts":[{"id":9,"name":"deploymate-app","expired":false}]}`))
+		default:
+			w.WriteHeader(404)
 		}
 	})
 	mux.HandleFunc("/repos/", func(w http.ResponseWriter, r *http.Request) { // branches
@@ -663,5 +679,125 @@ func TestInstallationChangesRefreshTheRepositoryList(t *testing.T) {
 	}
 	if got := e.deliver("issues", "i3", `{}`); got != "ignored: not a push event" {
 		t.Errorf("other events: %q", got)
+	}
+}
+
+// ---- prebuilt apps through the GitHub app (phase 4) -------------------------
+
+func (e *ghEnv) prebuilt(t *testing.T, slug string) store.App {
+	t.Helper()
+	app := e.newApp(t, slug)
+	e.connectRepo(slug, "9:habib/site", "")
+	if err := e.st.UpdateAppDeployMode(app.ID, store.DeployModeArtifact, store.DefaultWorkflowPath, store.DefaultArtifactName); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := e.st.GetAppByID(app.ID)
+	return got
+}
+
+func TestPrebuiltModeNeedsNoPastedTokenForAGitHubAppRepository(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.newApp(t, "jar")
+	e.connectRepo("jar", "9:habib/site", "")
+
+	page := e.req(http.MethodGet, "/apps/jar", "dm.example.com", nil).Body.String()
+	if !strings.Contains(page, "Deploy mode") || strings.Contains(page, "GitHub token (write-only)") || strings.Contains(page, "github_pat_") {
+		t.Error("the prebuilt panel must be shown, without a token field, for a GitHub app repository")
+	}
+	rec := e.req(http.MethodPost, "/apps/jar/deploy-mode", "dm.example.com", url.Values{"mode": {"artifact"}, "api_token": {"github_pat_should_be_ignored"}})
+	if !strings.Contains(rec.Header().Get("Location"), "Prebuilt+mode") {
+		t.Fatalf("switching to prebuilt: %s", rec.Header().Get("Location"))
+	}
+	got, _ := e.st.GetAppByID(app.ID)
+	if got.DeployMode != store.DeployModeArtifact {
+		t.Errorf("mode = %q", got.DeployMode)
+	}
+	gs, _ := e.st.GetGitSource(got.GitSourceID)
+	if gs.APITokenEnc != "" {
+		t.Error("a pasted token must not be stored for a GitHub app repository")
+	}
+}
+
+func TestDeployLatestRunAndRunWorkflowUseTheInstallationToken(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.prebuilt(t, "jar")
+
+	id, msg := e.s.deployLatestRun(context.Background(), app)
+	if id == "" {
+		t.Fatalf("deploy latest run: %q", msg)
+	}
+	d, _ := e.st.GetDeployment(id)
+	if d.CIRun != 555 || d.CIRunNumber != 7 || d.CommitSHA != "abc123" || d.Trigger != "dashboard" {
+		t.Errorf("deployment: %+v", d)
+	}
+	text, started := e.s.runWorkflowCore(context.Background(), app)
+	if !started {
+		t.Fatalf("run workflow: %q", text)
+	}
+	if len(e.gh.actions) < 3 {
+		t.Fatalf("expected runs, artifacts and a dispatch, got %v", e.gh.actions)
+	}
+	for _, call := range e.gh.actions {
+		if !strings.HasSuffix(call, " Bearer ghs_nine") {
+			t.Errorf("an Actions call was not made with the installation token: %q", call)
+		}
+	}
+	last := e.gh.actions[len(e.gh.actions)-1]
+	if !strings.HasPrefix(last, "POST /repos/habib/site/actions/workflows/deploymate.yml/dispatches") {
+		t.Errorf("last call = %q", last)
+	}
+}
+
+func TestAFinishedCIRunDeploysThePrebuiltAppThroughTheAppWebhook(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.prebuilt(t, "jar")
+	build := e.newApp(t, "built") // a build-mode app on the same repository is not touched
+	e.connectRepo("built", "9:habib/site", "")
+
+	run := func(action, conclusion, branch, event, headRepo string, id, number int) string {
+		b, _ := json.Marshal(map[string]any{
+			"action": action, "repository": map[string]string{"full_name": "habib/site"},
+			"workflow_run": map[string]any{
+				"id": id, "run_number": number, "path": store.DefaultWorkflowPath, "event": event, "conclusion": conclusion,
+				"head_branch": branch, "head_sha": "feed", "head_commit": map[string]string{"message": "ci"},
+				"head_repository": map[string]string{"full_name": headRepo},
+			},
+		})
+		return e.deliver("workflow_run", "wr"+strconv.Itoa(id), string(b))
+	}
+	if got := run("completed", "success", "main", "push", "habib/site", 100, 1); got != "queued" {
+		t.Fatalf("a successful push run: %q", got)
+	}
+	ds := e.deployments(t, app.ID)
+	if len(ds) != 1 || ds[0].Trigger != "ci" || ds[0].CIRun != 100 || ds[0].CommitSHA != "feed" {
+		t.Fatalf("deployments: %+v", ds)
+	}
+	if n := len(e.deployments(t, build.ID)); n != 0 {
+		t.Error("a build-mode app deployed from a CI run")
+	}
+	// The gates of the per-repository webhook apply unchanged.
+	for name, c := range map[string]struct{ got, want string }{
+		"not completed":  {run("requested", "", "main", "push", "habib/site", 101, 2), "ignored: workflow run is not a successful completion"},
+		"failed":         {run("completed", "failure", "main", "push", "habib/site", 102, 3), "ignored: workflow run is not a successful completion"},
+		"another branch": {run("completed", "success", "dev", "push", "habib/site", 103, 4), "ignored: not the deploy branch"},
+		"a pull request": {run("completed", "success", "main", "pull_request", "habib/site", 104, 5), "ignored: only push and manual runs deploy"},
+		"a fork":         {run("completed", "success", "main", "push", "evil/site", 105, 6), "ignored: the run is from a fork"},
+		"an older run":   {run("completed", "success", "main", "push", "habib/site", 106, 1), "ignored: a newer run is already deployed"},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s: %q, want %q", name, c.got, c.want)
+		}
+	}
+	if n := len(e.deployments(t, app.ID)); n != 1 {
+		t.Errorf("%d deployments, want exactly the one from the successful run", n)
+	}
+	// An unknown repository is acknowledged, not queued.
+	other, _ := json.Marshal(map[string]any{"action": "completed", "repository": map[string]string{"full_name": "nobody/else"},
+		"workflow_run": map[string]any{"id": 9, "conclusion": "success"}})
+	if got := e.deliver("workflow_run", "wr-other", string(other)); got != "ignored: no app uses this repository" {
+		t.Errorf("another repository: %q", got)
 	}
 }

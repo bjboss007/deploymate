@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/habibmuhammad/deploymate/internal/builder"
-	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/gitauth"
 	"github.com/habibmuhammad/deploymate/internal/githubci"
 	"github.com/habibmuhammad/deploymate/internal/stack"
 	"github.com/habibmuhammad/deploymate/internal/store"
@@ -38,12 +38,12 @@ func (w *Worker) runArtifactDeploy(ctx context.Context, app store.App, d store.D
 	if !ok {
 		return fmt.Errorf("cannot read owner/repo from the repository URL %q", gs.RepoURL)
 	}
-	if gs.APITokenEnc == "" {
-		return errors.New("no GitHub token is set for this repository — add a fine-grained token (Actions: read) on the app page")
+	token, err := w.gitAuth().APIToken(ctx, gs)
+	if errors.Is(err, gitauth.ErrNoToken) {
+		return errors.New("no GitHub token is set for this repository — add a fine-grained token (Actions: read) on the app page, or connect the repository through GitHub")
 	}
-	token, err := crypto.Decrypt(w.encKey, gs.APITokenEnc)
 	if err != nil {
-		return fmt.Errorf("decrypt GitHub token: %w", err)
+		return err
 	}
 	gh := githubci.New(w.githubAPI, token)
 	say := func(line string) {

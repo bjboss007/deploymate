@@ -546,10 +546,10 @@ func (s *Server) retryCore(ctx context.Context, d store.Deployment, app store.Ap
 	if d.CIRun != 0 && app.DeployMode == store.DeployModeArtifact && app.GitSourceID != "" {
 		if gs, gerr := s.store.GetGitSource(app.GitSourceID); gerr == nil {
 			if repo, ok := githubci.ParseRepoURL(gs.RepoURL); ok {
-				if gh, ok := s.githubClient(gs); ok {
-					cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				cctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+				defer cancel()
+				if gh, _ := s.githubClient(cctx, gs); gh != nil {
 					arts, aerr := gh.ListRunArtifacts(cctx, repo, d.CIRun)
-					cancel()
 					if aerr == nil && !hasLiveArtifact(arts, app.ArtifactName) {
 						return "", "", fmt.Sprintf("CI run #%d has no artifact any more (GitHub deletes them after the workflow's retention-days). Use Run workflow now on the app page to build a fresh one.", d.CIRunNumber), nil
 					}

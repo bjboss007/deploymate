@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/gitauth"
 	"github.com/habibmuhammad/deploymate/internal/githubci"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/internal/webhooks"
@@ -52,17 +53,22 @@ func (s *Server) prebuiltSource(w http.ResponseWriter, r *http.Request, app stor
 	return gs, repo, true
 }
 
-// githubClient builds a client from the source's stored token; "" when none.
-func (s *Server) githubClient(gs store.GitSource) (*githubci.Client, bool) {
-	if gs.APITokenEnc == "" {
-		return nil, false
+// githubClient builds a client for GitHub calls about the source's repository:
+// with the GitHub app's installation token for a source connected through GitHub,
+// otherwise the pasted token. When there is none it returns nil and the sentence
+// to show the person.
+func (s *Server) githubClient(ctx context.Context, gs store.GitSource) (*githubci.Client, string) {
+	tok, err := s.gitAuth().APIToken(ctx, gs)
+	switch {
+	case err == nil:
+		return githubci.New(s.githubAPI, tok), ""
+	case errors.Is(err, gitauth.ErrNoToken):
+		return nil, "Save a GitHub token first."
+	case errors.Is(err, gitauth.ErrNotConnected):
+		return nil, gitauth.ErrNotConnected.Error() + "."
 	}
-	token, err := crypto.Decrypt(s.encKey, gs.APITokenEnc)
-	if err != nil {
-		slog.Error("prebuilt: decrypt token", "source", gs.ID, "err", err)
-		return nil, false
-	}
-	return githubci.New(s.githubAPI, token), true
+	slog.Error("prebuilt: GitHub credentials", "source", gs.ID, "err", err)
+	return nil, "DeployMate could not get access to this repository from GitHub: " + err.Error()
 }
 
 // ghFlash turns a GitHub API failure into a sentence the owner can act on.
@@ -125,7 +131,13 @@ func (s *Server) handleDeployMode(w http.ResponseWriter, r *http.Request) {
 		back("That does not look like a GitHub token.")
 		return
 	}
-	hasToken := gs.APITokenEnc != ""
+	// A repository connected through GitHub needs no pasted token (and ignores one):
+	// DeployMate asks GitHub for a short-lived token of its app each time.
+	viaApp := gs.CloneMethod == store.CloneGitHubApp
+	hasToken := gs.APITokenEnc != "" || viaApp
+	if viaApp {
+		token = ""
+	}
 	switch {
 	case token != "":
 		enc, err := crypto.Encrypt(s.encKey, token)
@@ -140,7 +152,7 @@ func (s *Server) handleDeployMode(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		hasToken = true
-	case r.FormValue("clear_token") == "on":
+	case r.FormValue("clear_token") == "on" && !viaApp:
 		if err := s.store.SetGitSourceAPIToken(gs.ID, ""); err != nil {
 			slog.Error("prebuilt: clear token", "err", err)
 			http.Error(w, "internal error", http.StatusInternalServerError)
@@ -180,13 +192,13 @@ func (s *Server) handleGitTest(w http.ResponseWriter, r *http.Request) {
 	back := func(msg string) {
 		http.Redirect(w, r, "/apps/"+app.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
 	}
-	gh, ok := s.githubClient(gs)
-	if !ok {
-		back("Save a GitHub token first.")
-		return
-	}
 	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
 	defer cancel()
+	gh, why := s.githubClient(ctx, gs)
+	if gh == nil {
+		back(why)
+		return
+	}
 
 	info, err := gh.GetRepo(ctx, repo)
 	if err != nil {
@@ -205,7 +217,9 @@ func (s *Server) handleGitTest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	msg := fmt.Sprintf("Connected to %s. Workflow %s found; %d successful run(s) on %s.", info.FullName, app.WorkflowPath, len(runs), gs.DefaultBranch)
-	if n, more, err := gh.OtherPrivateRepos(ctx, repo); err != nil {
+	if gs.CloneMethod == store.CloneGitHubApp {
+		msg += " Access is through your GitHub app."
+	} else if n, more, err := gh.OtherPrivateRepos(ctx, repo); err != nil {
 		msg += " (Could not check how widely the token is scoped.)"
 	} else if n > 0 {
 		plus := ""
@@ -236,12 +250,12 @@ func (s *Server) deployLatestRun(ctx context.Context, app store.App) (id, msg st
 	if !ok || gs.Provider != "github" {
 		return "", "Prebuilt deploys need a GitHub repository."
 	}
-	gh, ok := s.githubClient(gs)
-	if !ok {
-		return "", "Save a GitHub token first."
-	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	gh, why := s.githubClient(ctx, gs)
+	if gh == nil {
+		return "", why
+	}
 	runs, err := gh.ListSuccessfulRuns(ctx, repo, app.WorkflowPath, gs.DefaultBranch, 10)
 	if err != nil {
 		return "", ghFlash(err, repo)
@@ -331,12 +345,12 @@ func (s *Server) runWorkflowCore(ctx context.Context, app store.App) (msg string
 	if gs.Provider != "github" || !ok {
 		return "Prebuilt deploys need a GitHub repository.", false
 	}
-	gh, ok := s.githubClient(gs)
-	if !ok {
-		return "Save a GitHub token first.", false
-	}
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
+	gh, why := s.githubClient(ctx, gs)
+	if gh == nil {
+		return why, false
+	}
 	if err := gh.DispatchWorkflow(ctx, repo, app.WorkflowPath, gs.DefaultBranch); err != nil {
 		var ae *githubci.APIError
 		if errors.As(err, &ae) {

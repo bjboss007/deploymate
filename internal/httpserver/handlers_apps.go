@@ -327,6 +327,12 @@ func (s *Server) handleAppPage(w http.ResponseWriter, r *http.Request) {
 		if gs, err := s.store.GetGitSource(app.GitSourceID); err == nil && gs.CloneMethod == store.CloneGitHubApp {
 			// Connected through the GitHub App: no deploy key or webhook of its own.
 			git = &templates.GitInfo{Method: "github_app", RepoName: gs.RepoFullName, RepoURL: gs.RepoURL, Provider: gs.Provider, DefaultBranch: gs.DefaultBranch}
+			wf := githubci.WorkflowOpts{Branch: gs.DefaultBranch, JavaMajor: builder.JavaMajor(app.Runtime), ArtifactName: app.ArtifactName}
+			git.GitHub, git.DeployMode, git.HasToken = true, app.DeployMode, true
+			git.WorkflowPath, git.ArtifactName = app.WorkflowPath, app.ArtifactName
+			git.WorkflowGradle = githubci.Workflow(wf)
+			wf.Tool = githubci.ToolMaven
+			git.WorkflowMaven = githubci.Workflow(wf)
 			if app.DeployMode != store.DeployModeArtifact {
 				git.MemoryNote = s.jvmMemoryNote(r.Context(), app)
 			}

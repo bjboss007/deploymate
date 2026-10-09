@@ -59,3 +59,25 @@ func (r *Resolver) For(ctx context.Context, gs store.GitSource) (gitpkg.Auth, er
 	}
 	return gitpkg.Auth{Token: tok}, nil
 }
+
+// ErrNoToken means a deploy-key source has no GitHub API token saved.
+var ErrNoToken = errors.New("no GitHub token is set for this repository")
+
+// APIToken returns the token for GitHub REST calls about the source's repository
+// (Actions runs, artifacts, dispatching a workflow): an installation token for a
+// source connected through GitHub, otherwise the fine-grained token the owner
+// pasted, or ErrNoToken.
+func (r *Resolver) APIToken(ctx context.Context, gs store.GitSource) (string, error) {
+	if gs.CloneMethod == store.CloneGitHubApp {
+		a, err := r.For(ctx, gs)
+		return a.Token, err
+	}
+	if gs.APITokenEnc == "" {
+		return "", ErrNoToken
+	}
+	tok, err := crypto.Decrypt(r.EncKey, gs.APITokenEnc)
+	if err != nil {
+		return "", fmt.Errorf("decrypt GitHub token: %w", err)
+	}
+	return tok, nil
+}
