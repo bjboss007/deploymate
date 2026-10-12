@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-12 (server security: phase D, Redis + container hardening)** — New Redis services get a password
+(`Template.Cmd`, escaped `REDIS_URL`, PONG-based readiness, `REDISCLI_AUTH` usage probe); existing ones show
+"This Redis has no password" + **Add a password** (`POST /services/{slug}/secure`: store password, re-create the
+container keeping the volume, redeploy the apps that receive it). Every container now gets `no-new-privileges`,
+`cap-drop NET_RAW/MKNOD/SETFCAP`, pids limit 4096 — checked on real Docker (Postgres 16, MySQL 8.4, Redis 7, nginx).
+Per-project networks and the Docker socket proxy are deferred on purpose (see `docs/specs/server-security.md`). **Owner
+action after updating:** open each Redis service and press Add a password; the Security page lists what is left.
+
 **2026-10-12 (server security, phase A of A/D/B/C/E)** — Planned with the owner from their real server's ufw/ports/sshd
 output (`docs/specs/server-security.md`; their SSH hostname already has a Cloudflare Access policy; fail2ban is
 useless behind a tunnel, so the plan has a tunnel profile). Built phase A: `internal/security` (read-only audit),

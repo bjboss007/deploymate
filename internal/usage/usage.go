@@ -34,7 +34,11 @@ func Clients(ctx context.Context, rt Execer, svcType, container string, creds ma
 		}
 		return ParsePostgres(out), true
 	case "redis":
-		out, err := rt.Exec(ctx, container, []string{"redis-cli", "client", "list"})
+		var env []string
+		if pw := creds["password"]; pw != "" {
+			env = []string{"REDISCLI_AUTH=" + pw} // the environment keeps it off the command line
+		}
+		out, err := rt.ExecEnv(ctx, container, []string{"redis-cli", "client", "list"}, env)
 		if err != nil {
 			return nil, false
 		}

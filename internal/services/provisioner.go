@@ -273,6 +273,7 @@ func (p *Provisioner) Provision(ctx context.Context, svc store.Service) error {
 		Name:    name,
 		Image:   image,
 		Env:     tpl.Env(creds),
+		Cmd:     cmdFor(tpl, creds),
 		Labels:  ContainerLabels(svc.Slug, svc.Type),
 		Network: p.network,
 		Binds:   []string{svc.VolumeName + ":" + tpl.Mount},
@@ -378,3 +379,13 @@ func decryptCreds(encKey [32]byte, enc map[string]string) map[string]string {
 	}
 	return out
 }
+
+func cmdFor(tpl Template, creds map[string]string) []string {
+	if tpl.Cmd == nil {
+		return nil
+	}
+	return tpl.Cmd(creds)
+}
+
+// GenerateRedisPassword returns a new Redis password.
+func GenerateRedisPassword() string { return GenPassword() }

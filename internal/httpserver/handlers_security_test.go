@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
+	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -72,5 +74,85 @@ func TestSecurityPageRendersTheChecks(t *testing.T) {
 	e.s.Handler().ServeHTTP(rec2, httptest.NewRequest(http.MethodGet, "/security", nil))
 	if rec2.Code == http.StatusOK {
 		t.Error("the security page must need a session")
+	}
+}
+
+// ---- securing an existing Redis ------------------------------------------------
+
+func TestAddingAPasswordToAnExistingRedisRestartsItAndRedeploysItsApps(t *testing.T) {
+	e := newWebhookEnv(t)
+	rt := &fakeRuntime{}
+	e.s.rt = rt
+	e.s.prov = services.NewProvisioner(e.st, rt, e.s.encKey, "test-net")
+	owner, _ := e.st.CreateUser(store.User{Email: "o@test.dev", PasswordHash: "x", Role: "owner"})
+	e.st.CreateSession(store.Session{UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)})
+	proj, _ := e.st.CreateProject(store.Project{UserID: owner.ID, Name: "P", Slug: "p"})
+
+	svc, _ := e.st.CreateService(store.Service{ProjectID: proj.ID, Type: "redis", Name: "cache", Slug: "cache", Image: "redis:7", Status: "running", Environment: store.EnvProduction, Port: 6379})
+	empty, _ := crypto.Encrypt(e.s.encKey, "")
+	e.st.SetServiceCredentials(svc.ID, map[string]string{"password": empty})
+
+	mkApp := func(slug, env string) store.App {
+		a, err := e.st.CreateApp(store.App{ProjectID: proj.ID, Name: slug, Slug: slug, Port: 8080, Status: "running", Environment: env})
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, _ := e.st.CreateDeployment(store.Deployment{AppID: a.ID, Kind: "deploy", Status: "running", ImageTag: "img:" + slug})
+		e.st.SetAppCurrentDeployment(a.ID, d.ID)
+		a, _ = e.st.GetAppByID(a.ID)
+		return a
+	}
+	uses := mkApp("uses", store.EnvProduction)
+	otherEnv := mkApp("staging-app", store.EnvStaging)
+
+	post := func() *httptest.ResponseRecorder {
+		req := httptest.NewRequest(http.MethodPost, "/services/cache/secure", strings.NewReader("csrf_token=csrf"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec
+	}
+	// The page offers it while there is no password.
+	getPage := func() string {
+		req := httptest.NewRequest(http.MethodGet, "/services/cache", nil)
+		req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+		rec := httptest.NewRecorder()
+		e.s.Handler().ServeHTTP(rec, req)
+		return rec.Body.String()
+	}
+	if !strings.Contains(getPage(), "This Redis has no password") {
+		t.Fatal("the service page should offer to add a password")
+	}
+
+	rec := post()
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "Redeploying+1") {
+		t.Fatalf("secure: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	enc, _ := e.st.GetServiceCredentials(svc.ID)
+	pw := e.s.decryptCreds(enc)["password"]
+	if len(pw) < 32 {
+		t.Fatalf("a password was not stored: %q", pw)
+	}
+	if len(rt.lastSpec.Cmd) != 3 || rt.lastSpec.Cmd[2] != pw {
+		t.Errorf("Redis was not recreated with the new password: %v", rt.lastSpec.Cmd)
+	}
+	if ds, _ := e.st.ListDeployments(uses.ID, 5); len(ds) != 2 || ds[0].Kind != "redeploy" || ds[0].Status != "queued" {
+		t.Errorf("the app that uses Redis must be redeployed: %+v", ds)
+	}
+	if ds, _ := e.st.ListDeployments(otherEnv.ID, 5); len(ds) != 1 {
+		t.Errorf("an app in another environment does not receive this service: %+v", ds)
+	}
+	if strings.Contains(getPage(), "This Redis has no password") {
+		t.Error("the offer must disappear once there is a password")
+	}
+	// A second press changes nothing.
+	again := post()
+	if !strings.Contains(again.Header().Get("Location"), "already+has+a+password") {
+		t.Errorf("second press: %s", again.Header().Get("Location"))
+	}
+	enc2, _ := e.st.GetServiceCredentials(svc.ID)
+	if e.s.decryptCreds(enc2)["password"] != pw {
+		t.Error("the password was changed by a second press")
 	}
 }

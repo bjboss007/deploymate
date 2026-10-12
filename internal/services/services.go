@@ -17,6 +17,9 @@ type Template struct {
 	// ConnURL builds the connection URL from credentials and the hostname
 	// apps use to reach the service (its container name).
 	ConnURL func(creds map[string]string, host string) string
+	// Cmd overrides the image's command from plaintext credentials; nil (or a nil
+	// result) keeps the image's own.
+	Cmd func(creds map[string]string) []string
 	// ReadyCmd probes readiness from inside the container; it must exit 0
 	// when the service accepts connections.
 	ReadyCmd func(creds map[string]string) []string

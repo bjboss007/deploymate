@@ -129,6 +129,11 @@ func (d *Docker) RemoveImage(ctx context.Context, tag string) (bool, error) {
 	return len(removed) > 0, nil
 }
 
+// containerPidsLimit bounds processes and threads per container.
+const containerPidsLimit int64 = 4096
+
+var pidsLimit = containerPidsLimit
+
 func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 	// Network via HostConfig.NetworkMode ONLY — exactly what the docker CLI
 	// sends for `--network X -p ...`. Passing NetworkingConfig alongside it
@@ -137,6 +142,17 @@ func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 		RestartPolicy: container.RestartPolicy{Name: "unless-stopped"},
 		NetworkMode:   container.NetworkMode(spec.Network),
 		Binds:         spec.Binds,
+		// Hardening for everything DeployMate runs (apps run other people's code, services are
+		// reachable by every container on the network). Verified to leave Postgres, MySQL, Redis,
+		// nginx and a plain HTTP server working.
+		//   no-new-privileges: a process cannot gain privileges through setuid binaries.
+		//   NET_RAW: no raw sockets, which closes ARP/ICMP spoofing between containers on the bridge
+		//     (the cost: no ping from inside a container).
+		//   MKNOD, SETFCAP: nothing a normal app needs.
+		//   pids limit: a fork bomb cannot take the host down (threads count; this is generous).
+		SecurityOpt: []string{"no-new-privileges"},
+		CapDrop:     []string{"NET_RAW", "MKNOD", "SETFCAP"},
+		Resources:   container.Resources{PidsLimit: &pidsLimit},
 	}
 	if spec.HostPort > 0 && spec.Port > 0 {
 		hostCfg.PortBindings = nat.PortMap{

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -88,7 +89,7 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 			users = append(users, templates.ServiceUser{App: a, Excluded: excl[a.ID][svc.ID], Usage: usage[a.ID][svc.ID]})
 		}
 	}
-	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc), users))
+	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc), users, s.redisNeedsPassword(svc)))
 }
 
 // handleServiceStart provisions (first run) or resumes a service via the
@@ -182,4 +183,69 @@ func (s *Server) serviceFromRequest(w http.ResponseWriter, r *http.Request) (sto
 		return svc, false
 	}
 	return svc, true
+}
+
+// redisNeedsPassword is true for a Redis service created before new ones got a password.
+func (s *Server) redisNeedsPassword(svc store.Service) bool {
+	if svc.Type != "redis" {
+		return false
+	}
+	enc, err := s.store.GetServiceCredentials(svc.ID)
+	if err != nil {
+		return false
+	}
+	return s.decryptCreds(enc)["password"] == ""
+}
+
+// handleServiceSecure gives an existing, password-less Redis a password. It stores the
+// password first, re-creates the container with it (the data volume is kept), then
+// redeploys the apps in the same project and environment that receive this service, because
+// they hold the old connection URL in their environment.
+func (s *Server) handleServiceSecure(w http.ResponseWriter, r *http.Request) {
+	svc, ok := s.serviceFromRequest(w, r)
+	if !ok {
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+	}
+	if svc.Type != "redis" {
+		back("Only Redis services can be given a password this way.")
+		return
+	}
+	if !s.redisNeedsPassword(svc) {
+		back("This Redis already has a password.")
+		return
+	}
+	pwEnc, err := crypto.Encrypt(s.encKey, services.GenerateRedisPassword())
+	if err != nil {
+		slog.Error("services: encrypt redis password", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if err := s.store.SetServiceCredentials(svc.ID, map[string]string{"password": pwEnc}); err != nil {
+		slog.Error("services: store redis password", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
+	defer cancel()
+	if err := s.prov.Provision(ctx, svc); err != nil {
+		back("The password was saved but Redis did not restart: " + err.Error() + " Press Start to try again; apps will use the new password once they are redeployed.")
+		return
+	}
+	redeployed := 0
+	if apps, err := s.store.ListApps(svc.ProjectID); err == nil {
+		excl := s.exclusionsFor(apps)
+		for _, a := range apps {
+			if a.Environment != svc.Environment || a.Status != "running" || excl[a.ID][svc.ID] {
+				continue
+			}
+			if id, refusal, err := s.redeployCore(a); err == nil && refusal == "" && id != "" {
+				redeployed++
+			}
+		}
+	}
+	_ = s.store.RecordEvent("", store.EventServiceRestarted, "service "+svc.Name+" now requires a password; redeploying "+strconv.Itoa(redeployed)+" app(s)")
+	back("Redis now requires a password. Redeploying " + strconv.Itoa(redeployed) + " app(s) so they pick it up.")
 }

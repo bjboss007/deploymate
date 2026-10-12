@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"io"
 	"path/filepath"
 	"strings"
@@ -638,5 +639,64 @@ func TestWaitReadyTimeoutQuotesTheLogs(t *testing.T) {
 	err := p.waitReady(context.Background(), "dm-svc-x", Postgres, map[string]string{"user": "dm", "db": "app"})
 	if err == nil || !strings.Contains(err.Error(), "within 60s") || !strings.Contains(err.Error(), "still recovering") {
 		t.Errorf("timeout error = %v", err)
+	}
+}
+
+func TestRedisTemplateRequiresAPasswordOnlyWhenOneIsSet(t *testing.T) {
+	with := map[string]string{"password": "p@ss/w:rd"}
+	if got := strings.Join(Redis.Cmd(with), " "); got != "redis-server --requirepass p@ss/w:rd" {
+		t.Errorf("cmd = %q", got)
+	}
+	if got := Redis.ConnURL(with, "dm-svc-r"); got != "redis://:p%40ss%2Fw%3Ard@dm-svc-r:6379/0" {
+		t.Errorf("url = %q (the password must be URL-escaped)", got)
+	}
+	probe := Redis.ReadyCmd(with)
+	if probe[0] != "sh" || strings.Contains(strings.Join(probe[:3], " "), "p@ss") || probe[len(probe)-1] != "p@ss/w:rd" {
+		t.Errorf("readiness probe %q must pass the password as an argument, not inside the script", probe)
+	}
+	// A service created before passwords existed keeps its old behaviour exactly.
+	without := map[string]string{"password": ""}
+	if Redis.Cmd(without) != nil {
+		t.Error("a legacy Redis must keep the image's own command")
+	}
+	if got := Redis.ConnURL(without, "dm-svc-r"); got != "redis://dm-svc-r:6379/0" {
+		t.Errorf("legacy url = %q", got)
+	}
+	if got := strings.Join(Redis.ReadyCmd(without), " "); got != "redis-cli ping" {
+		t.Errorf("legacy probe = %q", got)
+	}
+}
+
+func TestNewRedisServicesGetAPasswordAndLegacyOnesDoNot(t *testing.T) {
+	p, st, rt := newTestProvisioner(t)
+	proj := testProject(t, st)
+
+	newSvc, err := st.CreateService(store.Service{ProjectID: proj.ID, Type: "redis", Name: "cache", Slug: "cache", Image: "redis:7", Environment: "production", Port: 6379})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Provision(context.Background(), newSvc); err != nil {
+		t.Fatal(err)
+	}
+	spec := rt.created[len(rt.created)-1]
+	if len(spec.Cmd) != 3 || spec.Cmd[0] != "redis-server" || spec.Cmd[1] != "--requirepass" || len(spec.Cmd[2]) < 32 {
+		t.Errorf("a new Redis must start with a generated password: %v", spec.Cmd)
+	}
+	enc, _ := st.GetServiceCredentials(newSvc.ID)
+	if got := decryptCreds([32]byte{7}, enc)["password"]; got != spec.Cmd[2] {
+		t.Error("the stored password must be the one Redis was started with")
+	}
+
+	// A service stored before this change has an empty password and is left as it was.
+	old, _ := st.CreateService(store.Service{ProjectID: proj.ID, Type: "redis", Name: "old", Slug: "old", Image: "redis:7", Environment: "production", Port: 6379})
+	empty, _ := crypto.Encrypt([32]byte{7}, "")
+	if err := st.SetServiceCredentials(old.ID, map[string]string{"password": empty}); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Provision(context.Background(), old); err != nil {
+		t.Fatal(err)
+	}
+	if got := rt.created[len(rt.created)-1]; len(got.Cmd) != 0 {
+		t.Errorf("an existing password-less Redis must not change on a restart: %v", got.Cmd)
 	}
 }

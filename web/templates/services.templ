@@ -35,7 +35,7 @@ type BackupObject struct {
 // ServicePage is the service's front panel: state, a spec plate, the
 // connection readout the service exists to hand out, and — for postgres —
 // the backups section.
-templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []ServiceUser) {
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []ServiceUser, needsPassword bool) {
 	@Layout(vc, sv.Name, "", []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: sv.Name}}) {
 		<div class="page-head">
 			<div>
@@ -77,6 +77,17 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 			<div class="panel panel-warn">
 				<div class="panel-title">Orphaned — no longer in the manifest</div>
 				<p class="muted">A deploy created this { sv.Type } service from deploymate.yml, but the manifest no longer declares it for the { sv.Environment } environment. DeployMate never deletes infrastructure on its own. Keep claims it as manually managed; Delete removes the container and row — its data volume is kept.</p>
+			</div>
+		}
+
+		if needsPassword {
+			<div class="panel panel-warn">
+				<div class="panel-title">This Redis has no password</div>
+				<p class="muted">Every container on this server can reach it, so any app could read or change this data. Adding a password restarts Redis (its data is kept) and redeploys the apps that use it, so they pick up the new connection URL. Expect a few seconds of errors from those apps while it happens.</p>
+				<form method="post" action={ "/services/" + sv.Slug + "/secure" } onsubmit="return confirm('Add a password to this Redis? Redis restarts and the apps that use it are redeployed.')">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-primary" type="submit">Add a password</button>
+				</form>
 			</div>
 		}
 

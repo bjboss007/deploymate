@@ -254,6 +254,7 @@ CONCEPTS = """
 
 <h2 id="services">Services and environments</h2>
 <p>A <strong>project</strong> groups apps with their databases and caches. Each app and each service belongs to an <strong>environment</strong> (dev, staging or production). An app receives the connection URLs of the services in <em>its own project and environment</em>, and only those. That is what keeps a staging app away from the production database.</p>
+<p>Every database and cache has its own generated password, and DeployMate hands it to your apps in the connection URL. Redis services created before DeployMate 0.5 had none; their page shows <strong>Add a password</strong>, which restarts Redis (its data is kept) and redeploys the apps that use it. All containers run with <code>no-new-privileges</code> and without raw-socket access.</p>
 <p>Instead of clicking, put a <code>deploymate.yml</code> in your repository:</p>
 [[manifest]]
 <p>Each deploy creates what's missing and reuses what's there. A <code>deploymate.staging.yml</code> (or <code>.dev</code>, <code>.production</code>) <em>replaces</em> the list for that environment. In prebuilt mode the generated workflow ships these files inside the artifact, so the same manifest works there too.</p>

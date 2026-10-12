@@ -84,18 +84,29 @@ var Redis = Template{
 	Port:   6379,
 	Mount:  "/data",
 	URLEnv: "REDIS_URL",
-	CredsGen: map[string]func() string{
-		// Redis needs no credentials in the MVP; keep the entry for uniform
-		// cred handling.
-		"password": func() string { return "" },
-	},
-	Env: func(c map[string]string) []string {
-		return nil
+	// New Redis services get a password: every container on DeployMate's network can reach
+	// every Redis, so without one any app could read and change another app's data. Services
+	// created before this stored an empty password and keep working without one until the
+	// owner secures them (SecureRedis).
+	CredsGen: map[string]func() string{"password": GenPassword},
+	Env:      func(c map[string]string) []string { return nil },
+	Cmd: func(c map[string]string) []string {
+		if c["password"] == "" {
+			return nil
+		}
+		return []string{"redis-server", "--requirepass", c["password"]}
 	},
 	ConnURL: func(c map[string]string, host string) string {
-		return fmt.Sprintf("redis://%s:%d/0", host, 6379)
+		if c["password"] == "" {
+			return fmt.Sprintf("redis://%s:%d/0", host, 6379)
+		}
+		return fmt.Sprintf("redis://:%s@%s:%d/0", url.QueryEscape(c["password"]), host, 6379)
 	},
 	ReadyCmd: func(c map[string]string) []string {
-		return []string{"redis-cli", "ping"}
+		if c["password"] == "" {
+			return []string{"redis-cli", "ping"}
+		}
+		// redis-cli exits 0 even when the server answers NOAUTH, so look for the reply itself.
+		return []string{"sh", "-c", "REDISCLI_AUTH=\"$1\" redis-cli ping | grep -q PONG", "sh", c["password"]}
 	},
 }

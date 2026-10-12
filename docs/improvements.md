@@ -7,9 +7,9 @@ change.
 ## Near-term (high value, low risk)
 
 - [ ] **Server security** — 2026-10-12, `docs/specs/server-security.md`. Phase A (read-only Security audit: page,
-  API, MCP) done. Next, in this order: D containers (**Redis has no password and all containers share one network**;
-  no-new-privileges; per-project networks; Docker socket proxy last), B `deploymate harden` (opt-in), C dashboard
-  headers/login alerts/optional 2FA, E docs. Owner to-dos: turn off GNOME Remote Desktop, `ssh-copy-id` their key.
+  API, MCP) done; D's Redis passwords (new services; an "Add a password" button for existing ones) and container
+  hardening done 2026-10-12. Still open, in this order: D2 per-project Docker networks, then B `deploymate harden`
+  (opt-in), C dashboard headers/login alerts/optional 2FA, D3 Traefik behind a Docker socket proxy, E docs. Owner to-dos: turn off GNOME Remote Desktop, `ssh-copy-id` their key.
 
 - [ ] **Connect GitHub (GitHub App)** — 2026-10-09, `docs/specs/github-app.md`. Phase 1 (connect: manifest flow,
   encrypted credentials, Settings → GitHub page, app-level webhook endpoint with signature check) done
