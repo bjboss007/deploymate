@@ -11,9 +11,9 @@ change.
   2026-10-09 and tested against a fake GitHub; **never run against real GitHub yet** (needs the owner's click).
   Phases 2-4 done 2026-10-09 (installation tokens and picker; the app webhook deploys on push with the per-folder
   filter; prebuilt apps use the app's token and `workflow_run` through the app webhook, no PAT). Phase 1, the
-  clone and push→deploy verified on real GitHub (2026-10-09). Still open: a guide on the website, real-GitHub runs of push→deploy and prebuilt
-  (artifact download, dispatch), narrowing installation tokens to the one repository, and storing the repository
-  id so a rename or transfer keeps working. The manual deploy-key/webhook flow stays alongside it.
+  clone and push→deploy verified on real GitHub (2026-10-09). Website guide done 2026-10-09. Follow-ups done 2026-10-12: repository id stored (rename/transfer keep working) and
+  every installation token limited to one repository and the job's permissions. Still open: a real-GitHub run of
+  prebuilt apps (artifact download, dispatch) and of the narrowed token requests. The manual deploy-key/webhook flow stays alongside it.
 
 - [ ] **Server page follow-ups** — 2026-10-09: (a) Clean up does not reach the `dm-buildkit` container's own
   cache (railpack builds) — add a prune through the buildkit daemon; (b) host alerts see "Traefik not

@@ -125,3 +125,14 @@ func TestPushFileLists(t *testing.T) {
 		t.Error("a truncated gitlab commit list must be treated as unknown")
 	}
 }
+
+func TestPayloadsCarryTheRepositoryID(t *testing.T) {
+	p, err := ParseGitHubPush([]byte(`{"ref":"refs/heads/main","after":"a1","repository":{"id":123456,"full_name":"o/r"}}`))
+	if err != nil || p.RepoID != 123456 || p.RepoFullName != "o/r" {
+		t.Errorf("push: %+v %v", p, err)
+	}
+	w, err := ParseGitHubWorkflowRun([]byte(`{"action":"completed","repository":{"id":99,"full_name":"o/r"},"workflow_run":{"id":5}}`))
+	if err != nil || w.RepoID != 99 || w.Repo != "o/r" {
+		t.Errorf("workflow_run: %+v %v", w, err)
+	}
+}

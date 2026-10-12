@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/githubapp"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
@@ -29,7 +30,8 @@ type fakeGitHub struct {
 	key        *rsa.PrivateKey
 	pemKey     string
 	tokenCalls int
-	actions    []string // "METHOD path auth" of every Actions call, in order
+	actions    []string         // "METHOD path auth" of every Actions call, in order
+	tokenReqs  []map[string]any // the JSON body of every installation-token request (nil = none)
 }
 
 func newFakeGitHub(t *testing.T) *fakeGitHub {
@@ -60,6 +62,9 @@ func newFakeGitHub(t *testing.T) *fakeGitHub {
 			return
 		}
 		f.tokenCalls++
+		var reqBody map[string]any
+		json.NewDecoder(r.Body).Decode(&reqBody)
+		f.tokenReqs = append(f.tokenReqs, reqBody)
 		switch {
 		case strings.Contains(r.URL.Path, "/9/"):
 			w.Write([]byte(`{"token":"ghs_nine","expires_at":"` + time.Now().Add(time.Hour).UTC().Format(time.RFC3339) + `"}`))
@@ -514,10 +519,21 @@ func (e *ghEnv) deliver(event, delivery, body string) string {
 	return strings.TrimSpace(rec.Body.String())
 }
 
+// ghRepoID is the numeric id the fake GitHub gives a repository name (real payloads always carry one).
+func ghRepoID(name string) int {
+	switch strings.ToLower(name) {
+	case "habib/site":
+		return 1
+	case "acme/web":
+		return 3
+	}
+	return 77
+}
+
 func push(repo, ref, after string, files ...string) string {
 	b, _ := json.Marshal(map[string]any{
 		"ref": ref, "after": after, "head_commit": map[string]string{"message": "ship it"},
-		"repository": map[string]string{"full_name": repo},
+		"repository": map[string]any{"id": ghRepoID(repo), "full_name": repo},
 		"commits":    []map[string]any{{"modified": files}},
 	})
 	return string(b)
@@ -759,7 +775,7 @@ func TestAFinishedCIRunDeploysThePrebuiltAppThroughTheAppWebhook(t *testing.T) {
 
 	run := func(action, conclusion, branch, event, headRepo string, id, number int) string {
 		b, _ := json.Marshal(map[string]any{
-			"action": action, "repository": map[string]string{"full_name": "habib/site"},
+			"action": action, "repository": map[string]any{"id": 1, "full_name": "habib/site"},
 			"workflow_run": map[string]any{
 				"id": id, "run_number": number, "path": store.DefaultWorkflowPath, "event": event, "conclusion": conclusion,
 				"head_branch": branch, "head_sha": "feed", "head_commit": map[string]string{"message": "ci"},
@@ -795,9 +811,151 @@ func TestAFinishedCIRunDeploysThePrebuiltAppThroughTheAppWebhook(t *testing.T) {
 		t.Errorf("%d deployments, want exactly the one from the successful run", n)
 	}
 	// An unknown repository is acknowledged, not queued.
-	other, _ := json.Marshal(map[string]any{"action": "completed", "repository": map[string]string{"full_name": "nobody/else"},
+	other, _ := json.Marshal(map[string]any{"action": "completed", "repository": map[string]any{"id": 4242, "full_name": "nobody/else"},
 		"workflow_run": map[string]any{"id": 9, "conclusion": "success"}})
 	if got := e.deliver("workflow_run", "wr-other", string(other)); got != "ignored: no app uses this repository" {
 		t.Errorf("another repository: %q", got)
+	}
+}
+
+// ---- repository ids and narrowed tokens ---------------------------------------
+
+func TestConnectingStoresTheRepositoryIDAndTokensAreNarrow(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.newApp(t, "web")
+	e.connectRepo("web", "9:habib/site", "")
+	got, _ := e.st.GetAppByID(app.ID)
+	gs, _ := e.st.GetGitSource(got.GitSourceID)
+	if gs.RepoID != 1 {
+		t.Fatalf("RepoID = %d, want GitHub's id (1)", gs.RepoID)
+	}
+
+	// Listing and checking the branch asked for a token that can only read contents.
+	for i, req := range e.gh.tokenReqs {
+		perms, _ := req["permissions"].(map[string]any)
+		if perms["contents"] != "read" || len(perms) != 1 {
+			t.Errorf("token request %d during connect has permissions %v, want only contents: read", i, req)
+		}
+	}
+
+	// A clone gets a token for this one repository, contents read only; the API token is
+	// for this repository too, with Actions only.
+	e.gh.tokenReqs = nil
+	if _, err := e.s.gitAuth().For(context.Background(), gs); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.s.gitAuth().APIToken(context.Background(), gs); err != nil {
+		t.Fatal(err)
+	}
+	if len(e.gh.tokenReqs) != 2 {
+		t.Fatalf("expected a clone token and an API token, got %v", e.gh.tokenReqs)
+	}
+	want := []string{"contents", "actions"}
+	for i, req := range e.gh.tokenReqs {
+		ids, _ := req["repository_ids"].([]any)
+		perms, _ := req["permissions"].(map[string]any)
+		if len(ids) != 1 || ids[0].(float64) != 1 || len(perms) != 1 || perms[want[i]] == nil {
+			t.Errorf("request %d = %v, want repository_ids [1] and only %s", i, req, want[i])
+		}
+	}
+}
+
+func TestAPushToARenamedRepositoryStillDeploysAndFollowsTheName(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.newApp(t, "web")
+	e.connectRepo("web", "9:habib/site", "")
+
+	body := func(id int, name, delivery string) string {
+		b, _ := json.Marshal(map[string]any{
+			"ref": "refs/heads/main", "after": "aa11", "head_commit": map[string]string{"message": "m"},
+			"repository": map[string]any{"id": id, "full_name": name}, "commits": []map[string]any{{"modified": []string{"x.go"}}},
+		})
+		return string(b)
+	}
+	if got := e.deliver("push", "r1", body(1, "habib/renamed", "r1")); got != "queued" {
+		t.Fatalf("push after a rename: %q", got)
+	}
+	got, _ := e.st.GetAppByID(app.ID)
+	gs, _ := e.st.GetGitSource(got.GitSourceID)
+	if gs.RepoFullName != "habib/renamed" || gs.RepoURL != "https://github.com/habib/renamed.git" || gs.RepoID != 1 {
+		t.Errorf("source after a rename: %+v", gs)
+	}
+	evs, _ := e.st.ListEvents(app.ID, 20)
+	said := false
+	for _, ev := range evs {
+		said = said || strings.Contains(ev.Data, "habib/renamed (was habib/site)")
+	}
+	if !said {
+		t.Error("the app's activity should say the repository was renamed")
+	}
+	// The next push, and a CI run, carry the new name and still match.
+	if got := e.deliver("push", "r2", body(1, "habib/renamed", "r2")); got != "queued" {
+		t.Errorf("second push: %q", got)
+	}
+	// A DIFFERENT repository that now uses the old name is not this repository.
+	if got := e.deliver("push", "r3", body(99, "habib/site", "r3")); got != "ignored: no app uses this repository" {
+		t.Errorf("a new repository with the old name: %q", got)
+	}
+	if n := len(e.deployments(t, app.ID)); n != 2 {
+		t.Errorf("%d deployments, want 2", n)
+	}
+}
+
+func TestACIRunAfterARenameIsNotRejectedAsAnotherRepository(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.prebuilt(t, "jar")
+	b, _ := json.Marshal(map[string]any{
+		"action": "completed", "repository": map[string]any{"id": 1, "full_name": "habib/renamed"},
+		"workflow_run": map[string]any{"id": 700, "run_number": 3, "path": store.DefaultWorkflowPath, "event": "push",
+			"conclusion": "success", "head_branch": "main", "head_sha": "cc", "head_commit": map[string]string{"message": "ci"},
+			"head_repository": map[string]string{"full_name": "habib/renamed"}},
+	})
+	if got := e.deliver("workflow_run", "wr-rename", string(b)); got != "queued" {
+		t.Fatalf("first CI run after a rename: %q", got)
+	}
+	if n := len(e.deployments(t, app.ID)); n != 1 {
+		t.Errorf("%d deployments", n)
+	}
+}
+
+func TestSourcesMadeBeforeIdsLearnTheirID(t *testing.T) {
+	e := newGHEnv(t)
+	e.connect(t, "dm.example.com")
+	app := e.newApp(t, "old")
+	secret, _ := crypto.Encrypt(e.s.encKey, "x")
+	gs, err := e.st.CreateGitSource(store.GitSource{Provider: "github", RepoURL: "https://github.com/habib/site.git", CloneMethod: store.CloneGitHubApp,
+		WebhookSecretEnc: secret, DefaultBranch: "main", InstallationID: 9, RepoFullName: "habib/site"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.st.UpdateAppGitSource(app.ID, gs.ID)
+
+	// A push carrying the repository id adopts it by name, once, and deploys.
+	b, _ := json.Marshal(map[string]any{"ref": "refs/heads/main", "after": "bb22", "repository": map[string]any{"id": 1, "full_name": "habib/site"},
+		"commits": []map[string]any{{"modified": []string{"x.go"}}}})
+	if got := e.deliver("push", "l1", string(b)); got != "queued" {
+		t.Fatalf("legacy source push: %q", got)
+	}
+	if got, _ := e.st.GetGitSource(gs.ID); got.RepoID != 1 {
+		t.Errorf("RepoID after the first push = %d, want 1", got.RepoID)
+	}
+
+	// The repository picker's listing also teaches a legacy source its id, and follows a rename.
+	app2 := e.newApp(t, "old2")
+	gs2, _ := e.st.CreateGitSource(store.GitSource{Provider: "github", RepoURL: "https://github.com/acme/web.git", CloneMethod: store.CloneGitHubApp,
+		WebhookSecretEnc: secret, DefaultBranch: "develop", InstallationID: 10, RepoFullName: "acme/web"})
+	e.st.UpdateAppGitSource(app2.ID, gs2.ID)
+	gs3, _ := e.st.CreateGitSource(store.GitSource{Provider: "github", RepoURL: "https://github.com/habib/was-called-this.git", CloneMethod: store.CloneGitHubApp,
+		WebhookSecretEnc: secret, DefaultBranch: "main", InstallationID: 9, RepoFullName: "habib/was-called-this", RepoID: 1})
+	e.newApp(t, "empty") // an app with no repository shows the picker, which lists (and reconciles)
+	e.req(http.MethodGet, "/apps/empty", "dm.example.com", nil)
+	if got, _ := e.st.GetGitSource(gs2.ID); got.RepoID != 3 {
+		t.Errorf("acme/web learned id %d, want 3", got.RepoID)
+	}
+	if got, _ := e.st.GetGitSource(gs3.ID); got.RepoFullName != "habib/site" || got.RepoURL != "https://github.com/habib/site.git" {
+		t.Errorf("a renamed repository was not followed: %+v", got)
 	}
 }

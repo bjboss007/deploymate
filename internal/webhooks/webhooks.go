@@ -49,6 +49,7 @@ type Push struct {
 	// RepoFullName ("owner/name") and Deleted come from a GitHub push payload:
 	// a pushed-then-deleted branch has nothing to deploy.
 	RepoFullName string
+	RepoID       int64
 	Deleted      bool
 }
 
@@ -101,6 +102,7 @@ func ParseGitHubPush(body []byte) (Push, error) {
 		Commits    []commitFiles `json:"commits"`
 		Deleted    bool          `json:"deleted"`
 		Repository struct {
+			ID       int64  `json:"id"`
 			FullName string `json:"full_name"`
 		} `json:"repository"`
 	}
@@ -109,7 +111,7 @@ func ParseGitHubPush(body []byte) (Push, error) {
 	}
 	files, known := collectFiles(p.Commits)
 	return Push{Ref: p.Ref, CommitSHA: p.After, CommitMessage: p.Head.Message, Files: files, FilesKnown: known,
-		RepoFullName: p.Repository.FullName, Deleted: p.Deleted || isZeroSHA(p.After)}, nil
+		RepoFullName: p.Repository.FullName, RepoID: p.Repository.ID, Deleted: p.Deleted || isZeroSHA(p.After)}, nil
 }
 
 // WorkflowRun is the data prebuilt deploys read from a GitHub `workflow_run`
@@ -129,6 +131,7 @@ type WorkflowRun struct {
 	HeadMessage string
 	HeadRepo    string // workflow_run.head_repository.full_name (the code's repo)
 	Repo        string // repository.full_name (where the workflow lives)
+	RepoID      int64  // repository.id
 }
 
 // ParseGitHubWorkflowRun extracts a workflow_run payload.
@@ -136,6 +139,7 @@ func ParseGitHubWorkflowRun(body []byte) (WorkflowRun, error) {
 	var p struct {
 		Action     string `json:"action"`
 		Repository struct {
+			ID       int64  `json:"id"`
 			FullName string `json:"full_name"`
 		} `json:"repository"`
 		Run *struct {
@@ -168,7 +172,7 @@ func ParseGitHubWorkflowRun(body []byte) (WorkflowRun, error) {
 		Action: p.Action, RunID: r.ID, RunNumber: r.RunNumber, RunAttempt: r.RunAttempt,
 		Name: r.Name, Path: r.Path, Event: r.Event, Status: r.Status, Conclusion: r.Conclusion,
 		HeadBranch: r.HeadBranch, HeadSHA: r.HeadSHA, HeadMessage: r.HeadCommit.Message,
-		HeadRepo: r.HeadRepository.FullName, Repo: p.Repository.FullName,
+		HeadRepo: r.HeadRepository.FullName, Repo: p.Repository.FullName, RepoID: p.Repository.ID,
 	}, nil
 }
 

@@ -25,6 +25,8 @@ type GitSource struct {
 	// created through Connect GitHub (CloneMethod "github_app"); 0 and "" otherwise.
 	InstallationID int64
 	RepoFullName   string
+	// RepoID is GitHub's numeric repository id (0 = not known yet).
+	RepoID int64
 }
 
 // CloneGitHubApp is the clone method of a source that uses the GitHub App.
@@ -35,10 +37,10 @@ func (s *Store) CreateGitSource(gs GitSource) (GitSource, error) {
 	gs.ID = NewID()
 	gs.CreatedAt = Now()
 	_, err := s.db.Exec(
-		`INSERT INTO git_sources (id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO git_sources (id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name, repo_id)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		gs.ID, gs.Provider, gs.RepoURL, gs.CloneMethod, gs.PrivateKeyEnc, gs.PATEnc,
-		gs.WebhookSecretEnc, gs.DefaultBranch, gs.CreatedAt, gs.APITokenEnc, gs.InstallationID, gs.RepoFullName,
+		gs.WebhookSecretEnc, gs.DefaultBranch, gs.CreatedAt, gs.APITokenEnc, gs.InstallationID, gs.RepoFullName, gs.RepoID,
 	)
 	return gs, err
 }
@@ -47,11 +49,11 @@ func (s *Store) CreateGitSource(gs GitSource) (GitSource, error) {
 func (s *Store) GetGitSource(id string) (GitSource, error) {
 	var gs GitSource
 	err := s.db.QueryRow(
-		`SELECT id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name
+		`SELECT id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name, repo_id
 		 FROM git_sources WHERE id = ?`,
 		id,
 	).Scan(&gs.ID, &gs.Provider, &gs.RepoURL, &gs.CloneMethod, &gs.PrivateKeyEnc, &gs.PATEnc,
-		&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc, &gs.InstallationID, &gs.RepoFullName)
+		&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc, &gs.InstallationID, &gs.RepoFullName, &gs.RepoID)
 	if errors.Is(err, sql.ErrNoRows) {
 		return gs, ErrNotFound
 	}
@@ -81,13 +83,11 @@ func (s *Store) UpdateAppGitSource(appID, gitSourceID string) error {
 	return err
 }
 
-// ListGitSourcesByRepo returns the sources created through Connect GitHub for a
-// repository ("owner/name", any case): the apps a GitHub event about it concerns.
-func (s *Store) ListGitSourcesByRepo(fullName string) ([]GitSource, error) {
-	rows, err := s.db.Query(
-		`SELECT id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name
-		 FROM git_sources WHERE clone_method = ? AND repo_full_name = ? ORDER BY created_at`,
-		CloneGitHubApp, strings.ToLower(fullName))
+const gitSourceCols = `id, provider, repo_url, clone_method, private_key_enc, pat_enc, webhook_secret_enc, default_branch, created_at, api_token_enc, installation_id, repo_full_name, repo_id`
+
+func (s *Store) listGitSources(where string, args ...any) ([]GitSource, error) {
+	rows, err := s.db.Query(`SELECT `+gitSourceCols+` FROM git_sources WHERE clone_method = ? AND `+where+` ORDER BY created_at`,
+		append([]any{CloneGitHubApp}, args...)...)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +96,34 @@ func (s *Store) ListGitSourcesByRepo(fullName string) ([]GitSource, error) {
 	for rows.Next() {
 		var gs GitSource
 		if err := rows.Scan(&gs.ID, &gs.Provider, &gs.RepoURL, &gs.CloneMethod, &gs.PrivateKeyEnc, &gs.PATEnc,
-			&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc, &gs.InstallationID, &gs.RepoFullName); err != nil {
+			&gs.WebhookSecretEnc, &gs.DefaultBranch, &gs.CreatedAt, &gs.APITokenEnc, &gs.InstallationID, &gs.RepoFullName, &gs.RepoID); err != nil {
 			return nil, err
 		}
 		out = append(out, gs)
 	}
 	return out, rows.Err()
+}
+
+// ListGitHubAppSources returns every source created through Connect GitHub.
+func (s *Store) ListGitHubAppSources() ([]GitSource, error) { return s.listGitSources("1 = 1") }
+
+// ListGitSourcesByRepoID returns the Connect GitHub sources for a GitHub repository id.
+func (s *Store) ListGitSourcesByRepoID(id int64) ([]GitSource, error) {
+	return s.listGitSources("repo_id = ?", id)
+}
+
+// ListUnidentifiedGitSourcesByName returns the Connect GitHub sources whose repository id is
+// not known yet, by repository name ("owner/name", any case): the ones made before ids were
+// stored, matched by the only thing they have. Sources that know their id are never matched
+// by name, because a name can be reused by a different repository after a rename.
+func (s *Store) ListUnidentifiedGitSourcesByName(fullName string) ([]GitSource, error) {
+	return s.listGitSources("repo_id = 0 AND repo_full_name = ?", strings.ToLower(fullName))
+}
+
+// UpdateGitSourceRepo records what GitHub says the repository is now: its id, name and clone
+// address (a rename or a transfer changes the last two, never the first).
+func (s *Store) UpdateGitSourceRepo(id string, repoID int64, fullName, repoURL string) error {
+	_, err := s.db.Exec(`UPDATE git_sources SET repo_id = ?, repo_full_name = ?, repo_url = ? WHERE id = ?`,
+		repoID, strings.ToLower(fullName), repoURL, id)
+	return err
 }

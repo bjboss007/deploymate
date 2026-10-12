@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/githubapp"
@@ -29,8 +30,29 @@ func New(st *store.Store, encKey [32]byte, api string) *Resolver {
 	return &Resolver{Store: st, EncKey: encKey, Tokens: githubapp.NewTokens(githubapp.New(api))}
 }
 
+// scopeFor limits a token to the source's one repository and to the permissions of the
+// job: cloning needs only to read contents, GitHub API calls about CI need Actions.
+func scopeFor(gs store.GitSource, perms map[string]string) githubapp.Scope {
+	sc := githubapp.Scope{RepoID: gs.RepoID, Permissions: perms}
+	if gs.RepoID == 0 {
+		if _, name, ok := strings.Cut(gs.RepoFullName, "/"); ok {
+			sc.RepoName = name
+		}
+	}
+	return sc
+}
+
+var (
+	cloneRead = map[string]string{"contents": "read"}
+	actionsRW = map[string]string{"actions": "write"}
+)
+
 // For returns the credential for a source.
 func (r *Resolver) For(ctx context.Context, gs store.GitSource) (gitpkg.Auth, error) {
+	return r.forSource(ctx, gs, cloneRead)
+}
+
+func (r *Resolver) forSource(ctx context.Context, gs store.GitSource, perms map[string]string) (gitpkg.Auth, error) {
 	if gs.CloneMethod != store.CloneGitHubApp {
 		key, err := crypto.Decrypt(r.EncKey, gs.PrivateKeyEnc)
 		if err != nil {
@@ -49,10 +71,11 @@ func (r *Resolver) For(ctx context.Context, gs store.GitSource) (gitpkg.Auth, er
 	if err != nil {
 		return gitpkg.Auth{}, fmt.Errorf("decrypt GitHub App key: %w", err)
 	}
-	tok, err := r.Tokens.Get(ctx, app.AppID, pemKey, gs.InstallationID)
+	tok, err := r.Tokens.Get(ctx, app.AppID, pemKey, gs.InstallationID, scopeFor(gs, perms))
 	if err != nil {
 		var ae *githubapp.APIError
-		if errors.As(err, &ae) && (ae.Status == 401 || ae.Status == 404) {
+		// 422: GitHub will not issue a token for a repository the installation no longer includes.
+		if errors.As(err, &ae) && (ae.Status == 401 || ae.Status == 404 || ae.Status == 422) {
 			return gitpkg.Auth{}, errors.New("GitHub no longer lets DeployMate's app reach this repository: the app was uninstalled from it or deleted on GitHub")
 		}
 		return gitpkg.Auth{}, fmt.Errorf("ask GitHub for an access token: %w", err)
@@ -69,7 +92,7 @@ var ErrNoToken = errors.New("no GitHub token is set for this repository")
 // pasted, or ErrNoToken.
 func (r *Resolver) APIToken(ctx context.Context, gs store.GitSource) (string, error) {
 	if gs.CloneMethod == store.CloneGitHubApp {
-		a, err := r.For(ctx, gs)
+		a, err := r.forSource(ctx, gs, actionsRW)
 		return a.Token, err
 	}
 	if gs.APITokenEnc == "" {

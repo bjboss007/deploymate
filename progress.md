@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-12 (Connect GitHub follow-ups)** — (1) GitHub's repository id is stored (`git_sources.repo_id`, migration 0025):
+pushes/CI runs are matched by id, so a rename or transfer keeps deploying and the source follows the new name/clone
+address; old sources learn their id by name once. (2) `githubapp.Scope`: every installation token is limited to one
+repository and the job's permissions (clone `contents:read`, CI API `actions:write`, listing `contents:read`).
+Tested against the fake GitHub incl. rename, name reuse, legacy sources, narrowed request bodies. **Needs a real-GitHub
+check** (the new token request body and listing repos with a contents-only token): a regression there would show as an
+empty repository picker or a clone failure after updating. Not released yet.
+
 **2026-10-09 (website guide: Connect GitHub)** — New docs page `site/docs/connect-github.html` (generated from `CONNECT` in
 `site/tools/build_docs.py`): connect, install, pick a repository, push, prebuilt apps, what the app can and can't do,
 behind a login/tunnel (incl. enabling the webhook of an app created from a private address), troubleshooting. Linked from

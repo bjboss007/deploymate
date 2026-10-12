@@ -4,6 +4,7 @@
 package githubapp
 
 import (
+	"bytes"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -136,9 +137,25 @@ func New(api string) *Client {
 }
 
 func (c *Client) do(ctx context.Context, method, path, bearer string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, method, c.API+path, nil)
+	return c.doJSON(ctx, method, path, bearer, nil, out)
+}
+
+// doJSON is do with a JSON request body (nil = none).
+func (c *Client) doJSON(ctx context.Context, method, path, bearer string, in, out any) error {
+	var reqBody io.Reader
+	if in != nil {
+		b, err := json.Marshal(in)
+		if err != nil {
+			return err
+		}
+		reqBody = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.API+path, reqBody)
 	if err != nil {
 		return err
+	}
+	if in != nil {
+		req.Header.Set("Content-Type", "application/json")
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")

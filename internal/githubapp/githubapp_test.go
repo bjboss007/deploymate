@@ -193,18 +193,18 @@ func TestTokensAreReusedUntilCloseToExpiry(t *testing.T) {
 	now := time.Now()
 	ts.now = func() time.Time { return now }
 
-	a, _ := ts.Get(context.Background(), 1, pemKey, 5)
-	b, _ := ts.Get(context.Background(), 1, pemKey, 5)
+	a, _ := ts.Get(context.Background(), 1, pemKey, 5, Scope{})
+	b, _ := ts.Get(context.Background(), 1, pemKey, 5, Scope{})
 	if a != b || calls != 1 {
 		t.Fatalf("reuse: %q %q calls=%d", a, b, calls)
 	}
 	now = exp.Add(-4 * time.Minute) // inside the refresh margin
-	c, _ := ts.Get(context.Background(), 1, pemKey, 5)
+	c, _ := ts.Get(context.Background(), 1, pemKey, 5, Scope{})
 	if c == a || calls != 2 {
 		t.Errorf("a token about to expire must be replaced (calls=%d)", calls)
 	}
 	// A different app id never gets another app's cached token.
-	if _, _ = ts.Get(context.Background(), 2, pemKey, 5); calls != 3 {
+	if _, _ = ts.Get(context.Background(), 2, pemKey, 5, Scope{}); calls != 3 {
 		t.Errorf("another app must not reuse the cache (calls=%d)", calls)
 	}
 }
@@ -245,5 +245,54 @@ func TestBranchExistsAndRepoListing(t *testing.T) {
 	repos, err := c.ListInstallationRepos(context.Background(), "t")
 	if err != nil || len(repos) != 1 || repos[0].DefaultBranch != "main" {
 		t.Errorf("repos: %+v %v", repos, err)
+	}
+}
+
+func TestTokensAreRequestedForOneRepositoryAndOnlyTheNeededPermissions(t *testing.T) {
+	_, pemKey := newKey(t)
+	var bodies []map[string]any
+	n := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var in map[string]any
+		json.NewDecoder(r.Body).Decode(&in)
+		bodies = append(bodies, in)
+		n++
+		json.NewEncoder(w).Encode(map[string]any{"token": "tok" + string(rune('0'+n)), "expires_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339)})
+	}))
+	defer srv.Close()
+	ts := NewTokens(New(srv.URL))
+	ctx := context.Background()
+
+	clone, _ := ts.Get(ctx, 1, pemKey, 5, Scope{RepoID: 42, Permissions: map[string]string{"contents": "read"}})
+	api, _ := ts.Get(ctx, 1, pemKey, 5, Scope{RepoID: 42, Permissions: map[string]string{"actions": "write"}})
+	other, _ := ts.Get(ctx, 1, pemKey, 5, Scope{RepoID: 43, Permissions: map[string]string{"contents": "read"}})
+	if clone == api || clone == other || n != 3 {
+		t.Fatalf("different scopes must be different tokens: %q %q %q (requests %d)", clone, api, other, n)
+	}
+	if again, _ := ts.Get(ctx, 1, pemKey, 5, Scope{RepoID: 42, Permissions: map[string]string{"contents": "read"}}); again != clone || n != 3 {
+		t.Error("the same scope must reuse its token")
+	}
+	ids, _ := bodies[0]["repository_ids"].([]any)
+	perms, _ := bodies[0]["permissions"].(map[string]any)
+	if len(ids) != 1 || ids[0].(float64) != 42 || perms["contents"] != "read" || len(perms) != 1 {
+		t.Errorf("clone token request: %v", bodies[0])
+	}
+	// A source whose id is not known yet is limited by name.
+	ts.Get(ctx, 1, pemKey, 6, Scope{RepoName: "site", Permissions: map[string]string{"contents": "read"}})
+	names, _ := bodies[3]["repositories"].([]any)
+	if len(names) != 1 || names[0] != "site" || bodies[3]["repository_ids"] != nil {
+		t.Errorf("legacy token request: %v", bodies[3])
+	}
+	// No scope at all asks for no restrictions (an empty body).
+	ts.Get(ctx, 1, pemKey, 7, Scope{})
+	if bodies[4] != nil {
+		t.Errorf("an unscoped token must be requested without a body, got %v", bodies[4])
+	}
+	// Forgetting an installation drops all of its scopes.
+	ts.Forget(5)
+	before := n
+	ts.Get(ctx, 1, pemKey, 5, Scope{RepoID: 42, Permissions: map[string]string{"contents": "read"}})
+	if n != before+1 {
+		t.Error("Forget must clear every scope of the installation")
 	}
 }

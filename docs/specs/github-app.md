@@ -108,6 +108,23 @@ Not verified yet: creating an app on a real account (needs the owner's click —
   `contents: read`.
 - Unverified against real GitHub: artifact download and workflow dispatch with an installation token.
 
+## Follow-ups (done 2026-10-12)
+
+- **Repository id.** `git_sources.repo_id` (migration 0025) holds GitHub's numeric id, stored when a repository is
+  connected. The app webhook finds sources by `repository.id` (push and workflow_run payloads), not by name, so
+  a rename or transfer keeps the apps deploying; the source's name and clone address follow the new name on the
+  next push or CI run (and when the repository picker lists repositories), with a line in each app's activity.
+  Sources made before this column (id 0) are matched by name once and learn their id; a source that knows its id
+  is never matched by name, because a different repository can reuse the old name (tested).
+- **Narrow tokens.** `githubapp.Scope{RepoID, RepoName, Permissions}`: every installation token DeployMate asks
+  for is limited to one repository (`repository_ids`; by `repositories` name for a source without an id) and to
+  the permissions of the job: cloning = `contents: read`; GitHub API calls about CI = `actions: write`; listing
+  repositories and checking a branch (necessarily installation-wide) = `contents: read` only. Tokens of different
+  scopes are cached separately. GitHub answers 422 for a repository the installation no longer includes, reported
+  like an uninstall.
+- Unverified against real GitHub: the `repository_ids` / `permissions` token request body, and whether a
+  `contents: read` token lists `/installation/repositories` (documented as working with any installation token).
+
 ## Security notes
 
 - The private key is the powerful secret (it mints installation tokens); it is encrypted at rest, never

@@ -60,8 +60,8 @@
 
 <h2 id="access">What the app can and can't do</h2>
 <table>
-<tr><th>Read your code</th><td>Permission <em>Contents: read</em>, only for the repositories you installed it on. DeployMate clones with a short-lived token (about an hour) that GitHub issues on demand, which is never written to disk.</td></tr>
-<tr><th>Read CI runs, download artifacts, start a workflow</th><td>Permission <em>Actions: read and write</em>. Used by prebuilt apps only.</td></tr>
+<tr><th>Read your code</th><td>Permission <em>Contents: read</em>, only for the repositories you installed it on. DeployMate clones with a short-lived token (about an hour) that GitHub issues on demand, limited to the one repository being cloned and to reading its contents. It is never written to disk.</td></tr>
+<tr><th>Read CI runs, download artifacts, start a workflow</th><td>Permission <em>Actions: read and write</em>. Used by prebuilt apps only, with a token limited to that one repository and to Actions.</td></tr>
 <tr><th>Hear about pushes and finished runs</th><td>Subscribed to the <em>push</em> and <em>workflow run</em> events, sent to your DeployMate's webhook address and checked against a secret before anything runs.</td></tr>
 <tr><th>Change your code</th><td><strong>No.</strong> It has no write access to contents, issues, pull requests or settings.</td></tr>
 <tr><th>See other accounts or repositories</th><td>No. Only what you installed it on.</td></tr>
@@ -77,6 +77,7 @@
 <tr><th>The setup page says GitHub didn't accept it</th><td>The one-time code from GitHub was used or is older than an hour. Press <strong>Connect GitHub</strong> again.</td></tr>
 <tr><th>The repository list is empty</th><td>The app isn't installed on any repository yet: press <strong>Install on GitHub</strong> and select some. A repository you add on GitHub shows up within a minute.</td></tr>
 <tr><th>A deploy fails with “no longer lets DeployMate's app reach this repository”</th><td>The app was removed from that repository (or deleted on GitHub). Install it again, or connect the app to a different repository.</td></tr>
+<tr><th>You renamed or moved the repository</th><td>Nothing to do: DeployMate recognises the repository by GitHub's own id, so pushes keep deploying and the app picks up the new name on the next push.</td></tr>
 <tr><th>A push doesn't deploy</th><td>On GitHub open <em>Settings → Developer settings → GitHub Apps → your app → Advanced</em>. <strong>Recent Deliveries</strong> shows what DeployMate answered: <code>queued</code> worked; <code>ignored: not the deploy branch</code> means you pushed another branch; <code>ignored: no app uses this repository</code> means no app is connected to it; <code>ignored: no changes in the build folder</code> means the push didn't touch the app's folder; <code>bad signature</code> means DeployMate and GitHub disagree about the secret, so disconnect and connect again. A login page, 302 or 403 means something in front of the dashboard is blocking GitHub.</td></tr>
 <tr><th>The webhook says it is switched off</th><td>See <em>Behind a login or a tunnel</em> above.</td></tr>
 </table>

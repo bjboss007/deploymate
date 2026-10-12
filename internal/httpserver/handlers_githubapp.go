@@ -307,7 +307,7 @@ func (s *Server) handleAppWorkflowRun(wr webhooks.WorkflowRun, delivery string) 
 	if wr.Action != "completed" || wr.Conclusion != "success" {
 		return "ignored: workflow run is not a successful completion"
 	}
-	sources, err := s.store.ListGitSourcesByRepo(wr.Repo)
+	sources, err := s.sourcesForRepo(wr.RepoID, wr.Repo, "")
 	if err != nil {
 		slog.Error("github webhook: list sources", "err", err)
 		return "error"
@@ -334,7 +334,7 @@ func (s *Server) handleAppPush(push webhooks.Push, delivery string) string {
 	if push.Deleted {
 		return "ignored: branch deleted"
 	}
-	sources, err := s.store.ListGitSourcesByRepo(push.RepoFullName)
+	sources, err := s.sourcesForRepo(push.RepoID, push.RepoFullName, "")
 	if err != nil {
 		slog.Error("github webhook: list sources", "err", err)
 		return "error"
@@ -431,11 +431,12 @@ func (s *Server) listGitHubRepos(ctx context.Context, app store.GitHubApp) ([]te
 		return nil, "Could not ask GitHub for your repositories right now."
 	}
 	var out []templates.GitHubRepoOption
+	var seen []githubapp.Repo
 	for _, in := range ins {
 		if in.SuspendedAt != "" {
 			continue
 		}
-		tok, err := s.gitAuth().Tokens.Get(ctx, app.AppID, pemKey, in.ID)
+		tok, err := s.gitAuth().Tokens.Get(ctx, app.AppID, pemKey, in.ID, listScope)
 		if err != nil {
 			slog.Warn("github: installation token", "installation", in.ID, "err", err)
 			continue
@@ -445,6 +446,7 @@ func (s *Server) listGitHubRepos(ctx context.Context, app store.GitHubApp) ([]te
 			slog.Warn("github: list repositories", "installation", in.ID, "err", err)
 			continue
 		}
+		seen = append(seen, repos...)
 		for _, r := range repos {
 			if r.Archived {
 				continue
@@ -453,7 +455,98 @@ func (s *Server) listGitHubRepos(ctx context.Context, app store.GitHubApp) ([]te
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i].Label) < strings.ToLower(out[j].Label) })
+	s.reconcileSources(seen)
 	return out, ""
+}
+
+// listScope is the token used to list an installation's repositories and check a branch:
+// it can read contents and nothing else (the app's write permission on Actions is not needed
+// to look). Every token DeployMate asks for is limited like this; see githubapp.Scope.
+var listScope = githubapp.Scope{Permissions: map[string]string{"contents": "read"}}
+
+// reconcileSources brings sources up to date with what GitHub says the repositories are
+// now: a source that knows its repository id follows a rename or transfer (new name and
+// clone address); one made before ids were stored learns its id by name. Best effort.
+func (s *Server) reconcileSources(repos []githubapp.Repo) {
+	sources, err := s.store.ListGitHubAppSources()
+	if err != nil || len(sources) == 0 {
+		return
+	}
+	byID := map[int64]githubapp.Repo{}
+	byName := map[string]githubapp.Repo{}
+	for _, r := range repos {
+		byID[r.ID] = r
+		byName[strings.ToLower(r.FullName)] = r
+	}
+	for _, gs := range sources {
+		if gs.RepoID != 0 {
+			if r, ok := byID[gs.RepoID]; ok {
+				s.followRepo(gs, r.ID, r.FullName, r.CloneURL)
+			}
+			continue
+		}
+		if r, ok := byName[strings.ToLower(gs.RepoFullName)]; ok {
+			s.followRepo(gs, r.ID, r.FullName, r.CloneURL)
+		}
+	}
+}
+
+// followRepo records the repository's id, name and clone address when they differ from what
+// the source has, and says so in the activity of the apps that use it.
+func (s *Server) followRepo(gs store.GitSource, id int64, fullName, cloneURL string) store.GitSource {
+	if !strings.HasPrefix(cloneURL, "https://") {
+		cloneURL = "https://github.com/" + fullName + ".git"
+	}
+	if gs.RepoID == id && strings.EqualFold(gs.RepoFullName, fullName) && gs.RepoURL == cloneURL {
+		return gs
+	}
+	if err := s.store.UpdateGitSourceRepo(gs.ID, id, fullName, cloneURL); err != nil {
+		slog.Error("github: update source repository", "source", gs.ID, "err", err)
+		return gs
+	}
+	old := gs
+	gs.RepoID, gs.RepoFullName, gs.RepoURL = id, strings.ToLower(fullName), cloneURL
+	gs = s.noteRename(old, gs)
+	return gs
+}
+
+// noteRename says so in the activity of the apps that use the source.
+func (s *Server) noteRename(gs, now store.GitSource) store.GitSource {
+	if gs.RepoID != 0 && !strings.EqualFold(gs.RepoFullName, now.RepoFullName) {
+		slog.Info("github: repository renamed or transferred", "from", gs.RepoFullName, "to", now.RepoFullName)
+		if apps, err := s.store.ListAppsByGitSource(gs.ID); err == nil {
+			for _, a := range apps {
+				_ = s.store.RecordEvent(a.ID, store.EventGitConnected, "repository is now "+now.RepoFullName+" (was "+gs.RepoFullName+")")
+			}
+		}
+	}
+	return now
+}
+
+// sourcesForRepo finds the Connect GitHub sources a verified event about a repository
+// concerns. The repository id decides, so a renamed or transferred repository keeps its apps;
+// sources made before ids were stored are matched by name once and learn their id. A rename
+// is followed (name and clone address updated) on the spot.
+func (s *Server) sourcesForRepo(repoID int64, fullName, cloneURL string) ([]store.GitSource, error) {
+	var out []store.GitSource
+	if repoID > 0 {
+		byID, err := s.store.ListGitSourcesByRepoID(repoID)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, byID...)
+	}
+	legacy, err := s.store.ListUnidentifiedGitSourcesByName(fullName)
+	if err != nil {
+		return nil, err
+	}
+	out = append(out, legacy...)
+	if repoID > 0 {
+		for i := range out {
+			out[i] = s.followRepo(out[i], repoID, fullName, cloneURL)
+		}
+	}
+	return out, nil
 }
 
 // connectGitHubRepoCore connects an app to a repository through the GitHub App.
@@ -481,7 +574,7 @@ func (s *Server) connectGitHubRepoCore(ctx context.Context, app store.App, choic
 	}
 	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	tok, err := s.gitAuth().Tokens.Get(ctx, ghApp.AppID, pemKey, installID)
+	tok, err := s.gitAuth().Tokens.Get(ctx, ghApp.AppID, pemKey, installID, listScope)
 	if err != nil {
 		slog.Warn("github: installation token", "err", err)
 		return gs, "GitHub would not let DeployMate's app in. Check that the app is still installed there.", nil
@@ -526,7 +619,7 @@ func (s *Server) connectGitHubRepoCore(ctx context.Context, app store.App, choic
 	}
 	gs, err = s.store.CreateGitSource(store.GitSource{
 		Provider: "github", RepoURL: repo.CloneURL, CloneMethod: store.CloneGitHubApp, WebhookSecretEnc: secretEnc,
-		DefaultBranch: branch, InstallationID: installID, RepoFullName: strings.ToLower(repo.FullName),
+		DefaultBranch: branch, InstallationID: installID, RepoFullName: strings.ToLower(repo.FullName), RepoID: repo.ID,
 	})
 	if err != nil {
 		return gs, "", err
