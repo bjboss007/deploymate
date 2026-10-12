@@ -873,7 +873,11 @@ func (s *Server) AppEnv(app store.App) []string {
 					continue
 				}
 				creds := s.decryptCreds(credsEnc)
-				base[tpl.URLEnv] = tpl.ConnURL(creds, services.ContainerName(svc.Slug))
+				host := services.ContainerName(svc.Slug)
+				base[tpl.URLEnv] = tpl.ConnURL(creds, host)
+				for k, v := range tpl.Components(creds, host) {
+					base[k] = v
+				}
 			}
 		}
 	}

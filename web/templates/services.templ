@@ -35,7 +35,7 @@ type BackupObject struct {
 // ServicePage is the service's front panel: state, a spec plate, the
 // connection readout the service exists to hand out, and — for postgres —
 // the backups section.
-templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []ServiceUser, needsPassword bool) {
+templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel, urlEnvKey, connURL string, bk BackupView, users []ServiceUser, redisState string) {
 	@Layout(vc, sv.Name, "", []Crumb{{Label: project.Name, Href: "/projects/" + project.Slug}, {Label: sv.Name}}) {
 		<div class="page-head">
 			<div>
@@ -80,13 +80,24 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 			</div>
 		}
 
-		if needsPassword {
+		if redisState == "open" {
 			<div class="panel panel-warn">
 				<div class="panel-title">This Redis has no password</div>
-				<p class="muted">Every container on this server can reach it, so any app could read or change this data. Adding a password restarts Redis (its data is kept) and redeploys the apps that use it, so they pick up the new connection URL. Expect a few seconds of errors from those apps while it happens.</p>
+				<p class="muted">Every container on this server can reach it, so any app could read or change this data. Adding a password restarts Redis (its data is kept) and redeploys the apps that use it. Apps then receive the password in <code>REDIS_URL</code> and as <code>REDIS_HOST</code>, <code>REDIS_PORT</code> and <code>REDIS_PASSWORD</code>, for frameworks that take them apart. Expect a few seconds of errors from those apps while it happens, and you can remove the password again if an app can't use one.</p>
 				<form method="post" action={ "/services/" + sv.Slug + "/secure" } onsubmit="return confirm('Add a password to this Redis? Redis restarts and the apps that use it are redeployed.')">
 					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 					<button class="btn btn-primary" type="submit">Add a password</button>
+				</form>
+			</div>
+		}
+
+		if redisState == "protected" {
+			<div class="panel">
+				<div class="panel-title">Password protected</div>
+				<p class="muted">Apps receive the password in <code>REDIS_URL</code> and as <code>REDIS_HOST</code>, <code>REDIS_PORT</code> and <code>REDIS_PASSWORD</code>. If an app can't use a password, remove it: Redis restarts (its data is kept) and the apps that use it are redeployed, but any container on this server can then read this Redis.</p>
+				<form method="post" action={ "/services/" + sv.Slug + "/unsecure" } onsubmit="return confirm('Remove the password? Any container on this server will be able to use this Redis. Redis restarts and the apps that use it are redeployed.')">
+					<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+					<button class="btn btn-ghost" type="submit">Remove password</button>
 				</form>
 			</div>
 		}

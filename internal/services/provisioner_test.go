@@ -700,3 +700,28 @@ func TestNewRedisServicesGetAPasswordAndLegacyOnesDoNot(t *testing.T) {
 		t.Errorf("an existing password-less Redis must not change on a restart: %v", got.Cmd)
 	}
 }
+
+func TestComponentVariablesFollowTheURLVariable(t *testing.T) {
+	pg := Postgres.Components(map[string]string{"user": "dm", "password": "pw", "db": "app"}, "dm-svc-pg")
+	want := map[string]string{"DATABASE_HOST": "dm-svc-pg", "DATABASE_PORT": "5432", "DATABASE_USER": "dm", "DATABASE_PASSWORD": "pw", "DATABASE_NAME": "app"}
+	if len(pg) != len(want) {
+		t.Errorf("postgres: %v", pg)
+	}
+	for k, v := range want {
+		if pg[k] != v {
+			t.Errorf("postgres %s = %q, want %q", k, pg[k], v)
+		}
+	}
+	my := MySQL.Components(map[string]string{"user": "dm", "password": "pw", "db": "app"}, "dm-svc-my")
+	if my["MYSQL_HOST"] != "dm-svc-my" || my["MYSQL_PORT"] != "3306" || my["MYSQL_PASSWORD"] != "pw" || my["MYSQL_NAME"] != "app" {
+		t.Errorf("mysql: %v", my)
+	}
+	rd := Redis.Components(map[string]string{"password": "s3"}, "dm-svc-r")
+	if rd["REDIS_HOST"] != "dm-svc-r" || rd["REDIS_PORT"] != "6379" || rd["REDIS_PASSWORD"] != "s3" || len(rd) != 3 {
+		t.Errorf("redis with a password: %v", rd)
+	}
+	// No password, no REDIS_PASSWORD: an empty value would make some clients send AUTH "".
+	if open := Redis.Components(map[string]string{"password": ""}, "dm-svc-r"); len(open) != 2 || open["REDIS_PASSWORD"] != "" {
+		t.Errorf("redis without a password: %v", open)
+	}
+}

@@ -89,7 +89,7 @@ func (s *Server) handleServicePage(w http.ResponseWriter, r *http.Request) {
 			users = append(users, templates.ServiceUser{App: a, Excluded: excl[a.ID][svc.ID], Usage: usage[a.ID][svc.ID]})
 		}
 	}
-	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc), users, s.redisNeedsPassword(svc)))
+	render(w, r, http.StatusOK, templates.ServicePage(s.viewCtx(r), project, svc, tpl.Label, tpl.URLEnv, connURL, s.serviceBackupView(r, svc), users, s.redisPasswordState(svc)))
 }
 
 // handleServiceStart provisions (first run) or resumes a service via the
@@ -185,23 +185,38 @@ func (s *Server) serviceFromRequest(w http.ResponseWriter, r *http.Request) (sto
 	return svc, true
 }
 
-// redisNeedsPassword is true for a Redis service created before new ones got a password.
-func (s *Server) redisNeedsPassword(svc store.Service) bool {
+// redisPasswordState is "open" for a Redis without a password, "protected" for one with a
+// password, and "" for any other service.
+func (s *Server) redisPasswordState(svc store.Service) string {
 	if svc.Type != "redis" {
-		return false
+		return ""
 	}
 	enc, err := s.store.GetServiceCredentials(svc.ID)
 	if err != nil {
-		return false
+		return ""
 	}
-	return s.decryptCreds(enc)["password"] == ""
+	if s.decryptCreds(enc)["password"] == "" {
+		return "open"
+	}
+	return "protected"
 }
 
-// handleServiceSecure gives an existing, password-less Redis a password. It stores the
-// password first, re-creates the container with it (the data volume is kept), then
-// redeploys the apps in the same project and environment that receive this service, because
-// they hold the old connection URL in their environment.
+// handleServiceSecure gives an existing, password-less Redis a password.
 func (s *Server) handleServiceSecure(w http.ResponseWriter, r *http.Request) {
+	s.changeRedisPassword(w, r, true)
+}
+
+// handleServiceUnsecure takes the password off again: the way back for an app that cannot
+// use one.
+func (s *Server) handleServiceUnsecure(w http.ResponseWriter, r *http.Request) {
+	s.changeRedisPassword(w, r, false)
+}
+
+// changeRedisPassword stores the new state (a generated password, or none) first, re-creates
+// the container with it (the data volume is kept), then redeploys the apps in the same project
+// and environment that receive this service, because they hold the old connection URL in their
+// environment.
+func (s *Server) changeRedisPassword(w http.ResponseWriter, r *http.Request, enable bool) {
 	svc, ok := s.serviceFromRequest(w, r)
 	if !ok {
 		return
@@ -209,15 +224,23 @@ func (s *Server) handleServiceSecure(w http.ResponseWriter, r *http.Request) {
 	back := func(msg string) {
 		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
 	}
-	if svc.Type != "redis" {
-		back("Only Redis services can be given a password this way.")
+	state := s.redisPasswordState(svc)
+	switch {
+	case state == "":
+		back("Only Redis services have a password to add or remove here.")
 		return
-	}
-	if !s.redisNeedsPassword(svc) {
+	case enable && state == "protected":
 		back("This Redis already has a password.")
 		return
+	case !enable && state == "open":
+		back("This Redis has no password.")
+		return
 	}
-	pwEnc, err := crypto.Encrypt(s.encKey, services.GenerateRedisPassword())
+	pw := ""
+	if enable {
+		pw = services.GenerateRedisPassword()
+	}
+	pwEnc, err := crypto.Encrypt(s.encKey, pw)
 	if err != nil {
 		slog.Error("services: encrypt redis password", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
@@ -231,7 +254,7 @@ func (s *Server) handleServiceSecure(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
 	if err := s.prov.Provision(ctx, svc); err != nil {
-		back("The password was saved but Redis did not restart: " + err.Error() + " Press Start to try again; apps will use the new password once they are redeployed.")
+		back("The change was saved but Redis did not restart: " + err.Error() + " Press Start to try again; apps pick the change up once they are redeployed.")
 		return
 	}
 	redeployed := 0
@@ -246,6 +269,10 @@ func (s *Server) handleServiceSecure(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	_ = s.store.RecordEvent("", store.EventServiceRestarted, "service "+svc.Name+" now requires a password; redeploying "+strconv.Itoa(redeployed)+" app(s)")
-	back("Redis now requires a password. Redeploying " + strconv.Itoa(redeployed) + " app(s) so they pick it up.")
+	verb, flash := "now requires a password", "Redis now requires a password."
+	if !enable {
+		verb, flash = "no longer requires a password", "The password is removed: any container on this server can use this Redis again."
+	}
+	_ = s.store.RecordEvent("", store.EventServiceRestarted, "service "+svc.Name+" "+verb+"; redeploying "+strconv.Itoa(redeployed)+" app(s)")
+	back(flash + " Redeploying " + strconv.Itoa(redeployed) + " app(s) so they pick it up.")
 }

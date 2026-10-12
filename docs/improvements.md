@@ -545,7 +545,7 @@ change.
   - Still parked under the no-registry / no-builder constraints: registry
     credentials + image deploy hook, remote builder (`BUILDKIT_HOST`),
     per-app build env (`GRADLE_OPTS`/`NODE_OPTIONS`).
-- [ ] **Service env as components, not just URLs** — found 2026-10-02 trying
+- [x] **Service env as components, not just URLs** — done 2026-10-12 (`Template.Components`, injected by `AppEnv`): `DATABASE_HOST/PORT/USER/PASSWORD/NAME`, `MYSQL_*`, `REDIS_HOST/PORT/PASSWORD` (no `REDIS_PASSWORD` when the Redis has none), so `DB_USER=${DATABASE_USER}` aliasing works. Still open: a `JDBC_DATABASE_URL`. Found 2026-10-02 trying
   to run the real `trade-stack-backend` (Spring Boot): DeployMate injects only
   `DATABASE_URL` (`postgres://user:pass@host:5432/db`), `MYSQL_URL`,
   `REDIS_URL`. JVM apps want a JDBC URL + separate user/password

@@ -35,7 +35,9 @@ login audit or alerts; 30-day sessions; no 2FA.
     stored an empty password and are **not touched** (running apps hold the old URL in their environment): their
     page shows "This Redis has no password" with **Add a password**, which stores a password, re-creates the
     container (data volume kept) and redeploys the apps of the same project and environment that receive it.
-    The audit flags password-less Redis until then.
+    The audit flags password-less Redis until then. **Remove password** on a protected Redis is the way back for an
+    app that cannot use one (same flow in reverse). Apps also receive `REDIS_HOST/PORT/PASSWORD` (and
+    `DATABASE_*`, `MYSQL_*`) next to the URL, for frameworks that take them apart.
   - *Container hardening.* Every container DeployMate creates gets `no-new-privileges`, `cap-drop NET_RAW, MKNOD,
     SETFCAP` and a 4096 pids limit (`runtime.Docker.Create`). Verified on real Docker with Postgres 16, MySQL 8.4,
     Redis 7, nginx (Postgres 18's image could not be downloaded here; it uses the same entrypoint). Cost: no

@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-12 (Redis: components + undo)** — Apps now also receive the connection details as separate variables
+(`REDIS_HOST/PORT/PASSWORD`, `DATABASE_HOST/PORT/USER/PASSWORD/NAME`, `MYSQL_*`; `Template.Components`, no
+`REDIS_PASSWORD` for a password-less Redis), and a protected Redis has **Remove password** (`POST
+/services/{slug}/unsecure`, the same restart + redeploy flow in reverse) so "Add a password" is no longer one-way.
+Asked for by the owner: what if the app doesn't use a Redis password. Not released yet.
+
 **2026-10-12 (server security: phase D, Redis + container hardening)** — New Redis services get a password
 (`Template.Cmd`, escaped `REDIS_URL`, PONG-based readiness, `REDISCLI_AUTH` usage probe); existing ones show
 "This Redis has no password" + **Add a password** (`POST /services/{slug}/secure`: store password, re-create the
