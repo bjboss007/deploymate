@@ -76,3 +76,16 @@ func TestClients(t *testing.T) {
 		t.Error("unprobed types are unknown")
 	}
 }
+
+// A Redis with a password is asked who is connected through the environment, so the
+// password never appears on the command line.
+func TestRedisClientsWithAPasswordUseTheEnvironment(t *testing.T) {
+	f := &fakeExec{out: "id=1 addr=10.1.1.1:5000\n"}
+	ips, ok := Clients(context.Background(), f, "redis", "r", map[string]string{"password": "s3cret"})
+	if !ok || !ips["10.1.1.1"] {
+		t.Fatalf("redis with a password: %v %v", ips, ok)
+	}
+	if strings.Contains(strings.Join(f.cmd, " "), "s3cret") || strings.Join(f.env, ",") != "REDISCLI_AUTH=s3cret" {
+		t.Errorf("the password must travel as REDISCLI_AUTH only: cmd=%v env=%v", f.cmd, f.env)
+	}
+}
