@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-12 (server security, phase A of A/D/B/C/E)** — Planned with the owner from their real server's ufw/ports/sshd
+output (`docs/specs/server-security.md`; their SSH hostname already has a Cloudflare Access policy; fail2ban is
+useless behind a tunnel, so the plan has a tunnel profile). Built phase A: `internal/security` (read-only audit),
+`/security` page, `GET /api/v1/security`, MCP `security_status`, `runtime.Info` security fields. **Next: phase D** —
+Redis password + `no-new-privileges` + per-project networks (the real exposure: Redis has no password and all
+containers share `deploymate-net`).
+
 **2026-10-12 (Connect GitHub follow-ups)** — (1) GitHub's repository id is stored (`git_sources.repo_id`, migration 0025):
 pushes/CI runs are matched by id, so a rename or transfer keeps deploying and the source follows the new name/clone
 address; old sources learn their id by name once. (2) `githubapp.Scope`: every installation token is limited to one

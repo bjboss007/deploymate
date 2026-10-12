@@ -104,7 +104,7 @@ func ServerPage(vc ViewCtx, v ServerView) templ.Component {
 				}()
 			}
 			ctx = templ.InitializeContext(ctx)
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-head\"><div><h1>Server</h1><p class=\"muted-text\">The machine DeployMate runs on. Updates every 15 seconds.</p></div></div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"page-head\"><div><h1>Server</h1><p class=\"muted-text\">The machine DeployMate runs on. Updates every 15 seconds. <a href=\"/security\">Security checks →</a></p></div></div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

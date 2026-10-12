@@ -66,6 +66,13 @@ type Info struct {
 	CPULimit   float64
 	// Labels are the container's docker labels (immutable after create).
 	Labels map[string]string
+	// Security-relevant settings, for the Security audit.
+	// PublicBindings are host port bindings on a non-loopback address ("0.0.0.0:8080"):
+	// Docker publishes those straight past the host firewall.
+	PublicBindings  []string
+	Privileged      bool
+	NoNewPrivileges bool
+	DockerSocket    bool // /var/run/docker.sock is mounted into the container
 }
 
 // Runtime is the compute interface.

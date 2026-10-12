@@ -93,6 +93,12 @@ var readTools = []tool{
 		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/server", nil, nil },
 	},
 	{
+		Name: "security_status", Scope: store.ScopeRead,
+		Description: "Security audit of the server, read-only: firewall, open ports, SSH settings, fail2ban, pending security updates, who controls Docker, containers that publish ports or run privileged, Redis without a password. Each finding has a level (ok, info, warning, critical), what was found and the exact fix. Use it when asked whether the server is safe; fixes need a human on the server.",
+		Schema:      schema(map[string]any{}),
+		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/security", nil, nil },
+	},
+	{
 		Name: "list_projects", Scope: store.ScopeRead,
 		Description: "List projects with how many apps and services each has.",
 		Schema:      schema(map[string]any{}),

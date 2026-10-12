@@ -144,6 +144,7 @@ func serve() error {
 	server.SetGitHubAPI(cfg.GitHubAPIURL)
 	server.SetVersion(version)
 	server.SetPublicHost(cfg.DashboardHost)
+	server.SetSecurityContext(cfg.Addr, cfg.LEMode == "off")
 	routeDashboard(cfg)
 	if os.Getenv("DEPLOYMATE_DEMO_HOST") == "1" {
 		server.SetDemoHost(demo.Host{}) // the website's demo instance has no real machine to show

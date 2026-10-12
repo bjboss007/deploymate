@@ -237,7 +237,35 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		}
 	}
 	sort.Strings(ips)
+	var public []string
+	for port, bs := range ctr.HostConfig.PortBindings {
+		for _, b := range bs {
+			if b.HostIP != "127.0.0.1" && b.HostIP != "::1" {
+				ip := b.HostIP
+				if ip == "" {
+					ip = "0.0.0.0"
+				}
+				public = append(public, ip+":"+b.HostPort+" ("+string(port)+")")
+			}
+		}
+	}
+	sort.Strings(public)
+	noNew, sock := false, false
+	for _, o := range ctr.HostConfig.SecurityOpt {
+		if o == "no-new-privileges" || o == "no-new-privileges:true" {
+			noNew = true
+		}
+	}
+	for _, m := range ctr.Mounts {
+		if m.Source == "/var/run/docker.sock" || m.Source == "/run/docker.sock" || m.Destination == "/var/run/docker.sock" {
+			sock = true
+		}
+	}
 	return Info{
+		PublicBindings:  public,
+		Privileged:      ctr.HostConfig.Privileged,
+		NoNewPrivileges: noNew,
+		DockerSocket:    sock,
 		ID:             ctr.ID,
 		Name:           name,
 		Image:          ctr.Image,

@@ -1,0 +1,50 @@
+package templates
+
+// SecurityView is the Security page, already formatted (httpserver.buildSecurityView).
+type SecurityView struct {
+	Level    string // ok | warn | crit
+	Headline string
+	Checks   []SecurityCheck
+}
+
+// SecurityCheck is one finding.
+type SecurityCheck struct {
+	Title  string
+	Level  string // ok | info | warn | crit
+	Label  string // "OK", "Note", "Fix soon", "Fix now"
+	Detail string
+	Fix    string
+}
+
+templ SecurityPage(vc ViewCtx, v SecurityView) {
+	@Layout(vc, "Security", "", []Crumb{{Label: "Server", Href: "/server"}, {Label: "Security"}}) {
+		<div class="page-head">
+			<div>
+				<h1>Security</h1>
+				<p class="muted-text">What an attacker could reach on this server, and how to close it. These checks only read; nothing here changes the machine.</p>
+			</div>
+		</div>
+		<div class={ "verdict verdict-" + v.Level }>
+			<span class={ "status-dot dot-" + v.Level }></span>
+			<div>
+				<div class="verdict-head">{ v.Headline }</div>
+			</div>
+		</div>
+		<div class="panel">
+			for _, c := range v.Checks {
+				<div class="sec-row">
+					<div class="sec-head">
+						<span class={ "status-dot dot-" + c.Level }></span>
+						<span class="sec-title">{ c.Title }</span>
+						<span class={ "sec-label lvl-" + c.Level }>{ c.Label }</span>
+					</div>
+					<p class="sec-detail">{ c.Detail }</p>
+					if c.Fix != "" {
+						<pre class="sec-fix"><code>{ c.Fix }</code></pre>
+					}
+				</div>
+			}
+		</div>
+		<p class="muted-text">Run <code>sudo ufw status verbose</code> and <code>sudo sshd -T</code> on the server for what these checks cannot read without root.</p>
+	}
+}

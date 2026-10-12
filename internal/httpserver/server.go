@@ -47,6 +47,8 @@ type Server struct {
 	host        HostSource            // the machine's vitals for the Server page
 	version     string
 	demoHost    bool
+	listenAddr  string // DEPLOYMATE_ADDR, for the Security audit
+	tunnelMode  bool   // DEPLOYMATE_LE_MODE=off
 	publicHost  string // DEPLOYMATE_DASHBOARD_HOST: how the internet reaches this server
 	githubWeb   string // https://github.com override (tests)
 	authOnce    sync.Once
@@ -127,6 +129,7 @@ func (s *Server) Handler() http.Handler {
 		// Read tier: monitoring.
 		r.Get("/fleet", s.handleAPIFleet)
 		r.Get("/server", s.handleAPIServer)
+		r.Get("/security", s.handleAPISecurity)
 		r.Get("/projects", s.handleAPIProjects)
 		r.Get("/projects/{slug}", s.handleAPIProject)
 		r.Get("/apps/{slug}", s.handleAPIApp)
@@ -188,6 +191,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/alerts", s.handleAlertsPage)
 		r.Get("/stats", s.handleStatsPage)
 		r.Get("/server", s.handleServerPage)
+		r.Get("/security", s.handleSecurityPage)
 		r.Get("/server/history", s.handleServerHistory)
 		r.Post("/server/cleanup", s.handleServerCleanup)
 		r.Post("/alerts", am.CheckCSRF(s.handleAlertCreate))
