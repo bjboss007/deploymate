@@ -47,10 +47,26 @@ login audit or alerts; 30-day sessions; no 2FA.
     `traefik.docker.network` label on every container, replicas, swaps and previews), need a migration of
     running containers, and matter most when several untrusted projects share a server; the socket proxy can
     break all routing. Both need their own round and test on the real server.
-- **B. Host hardening, opt-in** (`deploymate harden`, dry run by default, idempotent, with a revert timer for
-  anything that can lock out): fail2ban + `ufw limit 22` (public servers), unattended-upgrades, SSH policy (no
-  root login; key-only only after a key is confirmed with a second connection), tunnel profile (close 22/80/443
-  inbound, keep SSH from the LAN), kernel network settings.
+- **B. Host hardening (built 2026-10-16)** — `sudo deploymate harden` (`internal/harden`, `cmd/deploymate/harden.go`).
+  Dry run by default; `--apply` changes things. Profile is auto-detected (`DEPLOYMATE_LE_MODE=off` = tunnel) or set
+  with `--profile`. Every change is recorded in `<data>/harden-state.json` with how to reverse it.
+  - *Both:* unattended-upgrades + `20auto-upgrades`; an sshd drop-in `00-deploymate.conf` (first value wins, so it
+    beats cloud-init's `50-`): `MaxAuthTries 4`, `PermitRootLogin no` (only when run through sudo as a normal user),
+    `PasswordAuthentication no` only when the user has an authorized key **and** sshd logged a key login for them in
+    the last 30 days. The config is checked with `sshd -t` before reload and restored if rejected.
+  - *Public:* `ufw limit 22/tcp` (added before the open rule is removed), allow 80/443, default deny incoming, enable;
+    fail2ban with an sshd jail.
+  - *Tunnel:* close 80/443; port 22 is closed to everyone but `--ssh-from <CIDR>` (left alone without it); no
+    fail2ban (every connection looks local). The tunnel path itself comes in over loopback, which ufw does not filter.
+  - *Safety:* firewall and SSH changes are "risky": before applying, `systemd-run` starts a timer
+    (`deploymate-harden-revert`, `--timeout` minutes, default 5) that runs `harden --revert`; the timer lives in
+    systemd, so it fires even if the SSH session dies. `--confirm` stops it (keep), `--undo` reverses everything.
+    If the timer cannot be started nothing is changed. Packages are never uninstalled by undo. Existing user rules
+    are never touched except the plain 22/80/443 allow rules being replaced as described.
+  - *Left out on purpose:* kernel sysctl tuning (small gain, non-zero risk), installing ufw (enabling a firewall on
+    a box that has none is the owner's call; harden says so and stops).
+  - *Tested:* unit tests with a fake host (ordering, key gate, rollback of a rejected sshd config, undo); the drop-in
+    validated by real OpenSSH 9 in Ubuntu 24.04. **Not tested on a real host:** ufw changes and the revert timer.
 - **C. DeployMate itself:** security headers (CSP, frame, content-type, HSTS behind HTTPS), shorter sessions and
   "sign out everywhere", login audit events and alerts (failed bursts, new address), optional TOTP, a fail2ban
   jail for dashboard sign-in (needs Traefik's access log; useless behind Cloudflare), optionally trusting

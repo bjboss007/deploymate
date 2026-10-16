@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-16 (server security phase B: `deploymate harden`)** — Opt-in host hardening, dry run by default
+(`internal/harden`, `cmd/deploymate/harden.go`, spec in `docs/specs/server-security.md`): updates, sshd drop-in
+(no root login, key-only only after a confirmed key login), ufw (public: limit 22; tunnel: close 80/443, 22 only
+from `--ssh-from`), fail2ban (public only), systemd revert timer + `--confirm` / `--undo`. Unit-tested with a fake
+host; **ufw and the revert timer still need a first run on a real server** (use the dry run first). Not released:
+batches with the shield icon (3b918e1). Same day: the owner's tunnel went down after a reboot (Cloudflare 1033,
+SSH "websocket: bad handshake") — it is a cloudflared outage, not SSH config; local access was the only way in.
+
 **2026-10-12 (Redis: components + undo)** — Apps now also receive the connection details as separate variables
 (`REDIS_HOST/PORT/PASSWORD`, `DATABASE_HOST/PORT/USER/PASSWORD/NAME`, `MYSQL_*`; `Template.Components`, no
 `REDIS_PASSWORD` for a password-less Redis), and a protected Redis has **Remove password** (`POST
