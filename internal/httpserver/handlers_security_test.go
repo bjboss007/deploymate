@@ -64,6 +64,9 @@ func TestSecurityPageRendersTheChecks(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
+	if !strings.Contains(body, `href="/security"`) {
+		t.Error("the top bar should link to the Security page")
+	}
 	for _, want := range []string{"Security", "Dashboard address", "listens on every network interface", "DEPLOYMATE_ADDR=127.0.0.1:8080", "Tunnel mode"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
