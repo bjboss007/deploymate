@@ -21,20 +21,27 @@ const (
 	installedUnit   = "/etc/systemd/system/deploymate.service"
 )
 
-// unitEnv reads `Environment=KEY=value` from the installed systemd unit, so an
-// update uses the data dir and address this server was actually set up with.
+// unitEnv reads `Environment=KEY=value` from the installed systemd unit and its drop-ins
+// (override.conf wins, as in systemd), so an update uses the data dir and address this server was
+// actually set up with.
 func unitEnv(key string) string {
-	raw, err := os.ReadFile(installedUnit)
-	if err != nil {
-		return ""
-	}
+	files := []string{installedUnit}
+	drop, _ := filepath.Glob(installedUnit + ".d/*.conf")
+	files = append(files, drop...)
 	prefix := "Environment=" + key + "="
-	for _, line := range strings.Split(string(raw), "\n") {
-		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
-			return strings.TrimPrefix(strings.TrimSpace(line), prefix)
+	val := ""
+	for _, f := range files {
+		raw, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		for _, line := range strings.Split(string(raw), "\n") {
+			if t := strings.ReplaceAll(strings.TrimSpace(line), `"`, ""); strings.HasPrefix(t, prefix) {
+				val = strings.TrimPrefix(t, prefix)
+			}
 		}
 	}
-	return ""
+	return val
 }
 
 // updateCmd: `sudo deploymate update [--check] [--version vX.Y.Z] [--from archive.tar.gz]`.
