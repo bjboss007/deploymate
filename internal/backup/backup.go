@@ -41,7 +41,7 @@ var (
 	ErrDisabled          = errors.New("backups are not enabled for this service")
 	ErrNoKey             = errors.New("no backup key recorded for this service")
 	ErrInFlight          = errors.New("a backup or restore is already running for this service")
-	ErrNotPostgres       = errors.New("backups are Postgres-only in this version")
+	ErrUnsupported       = errors.New("backups are not available for this service type")
 	ErrNoDestinations    = errors.New("no backup destinations are configured on this server")
 	ErrBadObject         = errors.New("not one of this service's backups")
 	ErrServiceNotRunning = errors.New("service container is not running")
@@ -107,8 +107,8 @@ func (m *Manager) SaveConfig(svc store.Service, cfg store.BackupConfig) error {
 	kind, data := store.EventBackupConfigChanged, "backup settings saved for "+svc.Name
 	enabling := cfg.Enabled && (!havePrior || !prior.Enabled)
 	if cfg.Enabled {
-		if svc.Type != "postgres" {
-			return fmt.Errorf("%w (%s support is not built yet)", ErrNotPostgres, svc.Type)
+		if _, ok := engineFor(svc.Type); !ok {
+			return fmt.Errorf("%w (%s)", ErrUnsupported, svc.Type)
 		}
 		if len(m.dests) == 0 {
 			return fmt.Errorf("%w (DEPLOYMATE_BACKUP_DEST_*)", ErrNoDestinations)

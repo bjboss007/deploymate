@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"regexp"
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
@@ -15,11 +14,6 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
-
-// identRe guards the db/user identifiers interpolated into restore SQL.
-// Both come from our own credential templates ("app"/"dm"), but a corrupted
-// credential must fail loudly, never become SQL.
-var identRe = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
 // runRestore replays one stored object into the service's database:
 // download → verify sha → decrypt → terminate connections → drop/recreate
@@ -115,33 +109,24 @@ func (m *Manager) runRestore(ctx context.Context, svc store.Service, cfg store.B
 		fail("credentials", err)
 		return
 	}
-	user, db := creds["user"], creds["db"]
-	if user == "" || db == "" || !identRe.MatchString(user) || !identRe.MatchString(db) {
-		fail("credentials", errors.New("service has no usable user/db credentials"))
+	eng, ok := engineFor(svc.Type)
+	if !ok {
+		fail("type", fmt.Errorf("%w (%s)", ErrUnsupported, svc.Type))
 		return
 	}
-	if err := m.rt.WriteFile(ctx, name, containerRestore, dump); err != nil {
-		fail("copy dump in", err)
+	if err := eng.check(creds); err != nil {
+		fail("credentials", err)
 		return
 	}
-	env := pgEnv(creds)
-	steps := [][]string{
-		// Terminate app-DB connections first — drop fails on live clients.
-		{"psql", "-U", user, "-d", "postgres", "-c",
-			fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid()", db)},
-		{"psql", "-U", user, "-d", "postgres", "-c", fmt.Sprintf("DROP DATABASE IF EXISTS %s", db)},
-		{"psql", "-U", user, "-d", "postgres", "-c", fmt.Sprintf("CREATE DATABASE %s OWNER %s", db, user)},
-		{"pg_restore", "-Fc", "-U", user, "-d", db, "--no-owner", containerRestore},
-		{"rm", "-f", containerRestore},
-	}
-	for _, step := range steps {
-		out, err := m.rt.ExecEnv(ctx, name, step, env)
-		if err != nil {
-			// Leave the temp dump in place on failure — a human can inspect
-			// it; the next restore overwrites it anyway.
-			fail("step "+step[0], fmt.Errorf("%w: %s", err, out))
-			return
+	if err := eng.restore(ctx, m.rt, name, creds, dump); err != nil {
+		// Leave a temp dump in place on failure — a human can inspect it; the next restore overwrites it.
+		step := "restore"
+		var se stepError
+		if errors.As(err, &se) {
+			step = se.step
 		}
+		fail(step, err)
+		return
 	}
 
 	_ = m.st.RecordEvent("", store.EventRestoreOK,

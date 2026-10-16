@@ -31,7 +31,7 @@ Owner decisions (Sep 2026):
    server `encKey`), generated at opt-in and downloadable once per
    need, so a wiped server doesn't wipe the key to its own off-box
    backups.
-5. **MVP scope: Postgres only** (`pg_dump -Fc` + `pg_restore`);
+5. **MVP scope: Postgres only** (`pg_dump -Fc` + `pg_restore`; MySQL, Redis and MongoDB followed — see "Other databases");
    MySQL/Redis use the same machinery with different commands.
 
 Configurability is a first-class requirement: a service's backup can
@@ -200,11 +200,27 @@ data dir, **local destination**):
 5. Stopped service → skip event; bad destination id → rejected at save.
 6. Cleanup: throwaway server, container, volume, destination dir.
 
+## Other databases (built 2026-10-16)
+
+The engine seam (`internal/backup/engine.go`) holds what differs per type: `check` (credentials), `dump`
+(bytes out) and `restore` (bytes in). Key, encryption, upload, retention, schedule and UI are shared.
+All four were round-tripped on real Docker (`DEPLOYMATE_DOCKER_TESTS=1 go test ./internal/backup -run
+RealDocker`: seed, dump, wipe, restore, count).
+
+| Type | Dump (inside the container) | Restore |
+|---|---|---|
+| postgres | `pg_dump -Fc` | terminate connections, drop and recreate the DB, `pg_restore` |
+| mysql | `mysqldump -uroot --single-transaction --routines --triggers --events` (root via `MYSQL_PWD`) | drop and recreate the DB, replay with `mysql`; the app user's grants survive |
+| redis | `redis-cli --rdb` (`REDISCLI_AUTH` when it has a password) | **stop** the container, put `/data/dump.rdb` in place, **start** it: a few seconds of downtime, because a live Redis rewrites its snapshot at shutdown. If the copy fails it is started again |
+| mongodb | `mongodump --archive --db app` (as the root user, `authSource=admin`) | `mongorestore --archive --drop --nsInclude app.*` |
+
+Restore always replaces the data (never merges), behind the same typed confirmation. MongoDB is a new service
+type (`mongo:7.0`, `MONGODB_URL`, `MONGODB_HOST/PORT/USER/PASSWORD/NAME`); the root user is also the app user,
+like Postgres. Not covered: dumps larger than memory (blobs are still in memory), Mongo databases other than
+`app`, Redis with AOF-only persistence.
+
 ## Out of scope (v1)
 
-- MySQL/Redis dumpers (same machinery; `mysqldump`, Redis `SAVE`/RDB
-  swap restore — a container-level restore, since RDB replaces while
-  nothing runs).
 - Manifest-declared backup config (`deploymate.yml`) — the "Infra
   manifest seeding" backlog item builds on this config surface.
 - WAL archiving / point-in-time recovery; catch-up of missed windows.

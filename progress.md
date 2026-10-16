@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-16 (backups for MySQL, Redis, MongoDB)** — `internal/backup/engine.go`: one engine per type (dump/restore),
+shared everything else; MongoDB is a new service type (`services.MongoDB`, `mongo:7.0`). Verified with a real-Docker
+round trip for all four (`DEPLOYMATE_DOCKER_TESTS=1`, committed test). Found and fixed on the way: `Docker.exec`
+returned the raw multiplexed stream (8-byte frame headers in every Exec result) — now demuxed with `stdcopy`.
+Redis restore stops/starts the container (documented, warned in the UI). Not released yet (commercialization
+context: the owner wants to sell managed servers; the unattended-install spec is the next piece after this).
+
 **2026-10-16 (server security phase C: dashboard)** — Security headers (CSP/frame/nosniff/HSTS; not on `/preview/`),
 7-day sessions + **Sign out everywhere** (Security page), sign-ins in the audit log, alert event `login_blocked`
 (`Server.SetNotifier`), and `CF-Connecting-IP` as the client address in tunnel mode (`Server.clientAddr`). **TOTP 2FA is

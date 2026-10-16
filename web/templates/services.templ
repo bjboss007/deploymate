@@ -173,7 +173,7 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 			}
 		</div>
 
-		if sv.Type == "postgres" {
+		if sv.Type == "postgres" || sv.Type == "mysql" || sv.Type == "redis" || sv.Type == "mongodb" {
 			@backupPanel(vc, sv, bk)
 		}
 
@@ -189,7 +189,7 @@ templ ServicePage(vc ViewCtx, project store.Project, sv store.Service, typeLabel
 }
 
 // backupPanel is the opt-in config + catalog for database backups
-// (docs/specs/database-backups.md). Postgres-only in the MVP — the
+// (docs/specs/database-backups.md). Postgres, MySQL, Redis and MongoDB — the
 // template gate above hides it for MySQL/Redis.
 templ backupPanel(vc ViewCtx, sv store.Service, bk BackupView) {
 	<div class="panel">
@@ -265,6 +265,9 @@ templ backupPanel(vc ViewCtx, sv store.Service, bk BackupView) {
 // snapshots listable and restorable.
 templ backupCatalog(vc ViewCtx, sv store.Service, bk BackupView) {
 	<div class="panel-sub">Stored backups</div>
+	if sv.Type == "redis" {
+		<p class="bk-note">Restoring a Redis backup restarts it for a few seconds.</p>
+	}
 	if len(bk.Objects) == 0 {
 		<p class="muted">No snapshots yet
 			if bk.Enabled {

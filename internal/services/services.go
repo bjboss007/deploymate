@@ -43,7 +43,7 @@ func (t Template) Components(creds map[string]string, host string) map[string]st
 		prefix + "_PORT": strconv.Itoa(t.Port),
 	}
 	switch t.Type {
-	case "postgres", "mysql":
+	case "postgres", "mysql", "mongodb":
 		out[prefix+"_USER"] = creds["user"]
 		out[prefix+"_PASSWORD"] = creds["password"]
 		out[prefix+"_NAME"] = creds["db"]
@@ -56,7 +56,7 @@ func (t Template) Components(creds map[string]string, host string) map[string]st
 }
 
 // All lists the provisionable service types.
-var All = []Template{Postgres, MySQL, Redis}
+var All = []Template{Postgres, MySQL, Redis, MongoDB}
 
 // ForType returns the template for a service type.
 func ForType(t string) (Template, bool) {

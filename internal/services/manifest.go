@@ -57,7 +57,7 @@ func ParseManifest(name string, data []byte) ([]ServiceDecl, error) {
 			return nil, fmt.Errorf("invalid service pin %q in %s (expected e.g. postgres:17 or redis:7-alpine)", entry, name)
 		}
 		if _, ok := ForType(typ); !ok {
-			return nil, fmt.Errorf("unknown service type %q in %s (supported: postgres, mysql, redis)", typ, name)
+			return nil, fmt.Errorf("unknown service type %q in %s (supported: postgres, mysql, redis, mongodb)", typ, name)
 		}
 		decl := ServiceDecl{Type: typ, Pin: pin}
 		if prev, dup := seen[typ]; dup {

@@ -55,7 +55,7 @@ function confirmRestore(form) {
   const m = (form.action || "").match(/\/services\/([^/]+)\/backups\/restore/);
   const slug = m ? m[1] : "";
   if (!slug) return false;
-  const answer = prompt('Type "' + slug + '" to confirm restoring this database from the backup. The database is dropped and recreated.');
+  const answer = prompt('Type "' + slug + '" to confirm restoring this database from the backup. Its current data is replaced and cannot be recovered.');
   if (answer === null) return false;
   if (answer.trim() !== slug) {
     alert("Restore cancelled — the name did not match.");

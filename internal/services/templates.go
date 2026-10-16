@@ -75,6 +75,38 @@ var MySQL = Template{
 	},
 }
 
+// MongoDB provisions mongo:7.0 (pinned: the floating latest tag jumps majors) with a generated
+// root user, which doubles as the app user like Postgres'. MONGO_INITDB_DATABASE only names the
+// database the init scripts use; MongoDB creates the app database on first write.
+var MongoDB = Template{
+	Type:   "mongodb",
+	Label:  "MongoDB",
+	Image:  "mongo:7.0",
+	Port:   27017,
+	Mount:  "/data/db",
+	URLEnv: "MONGODB_URL",
+	CredsGen: map[string]func() string{
+		"user":     func() string { return "dm" },
+		"password": GenPassword,
+		"db":       func() string { return "app" },
+	},
+	Env: func(c map[string]string) []string {
+		return []string{
+			"MONGO_INITDB_ROOT_USERNAME=" + c["user"],
+			"MONGO_INITDB_ROOT_PASSWORD=" + c["password"],
+			"MONGO_INITDB_DATABASE=" + c["db"],
+		}
+	},
+	ConnURL: func(c map[string]string, host string) string {
+		return fmt.Sprintf("mongodb://%s:%s@%s:%d/%s?authSource=admin",
+			url.QueryEscape(c["user"]), url.QueryEscape(c["password"]), host, 27017, c["db"])
+	},
+	ReadyCmd: func(c map[string]string) []string {
+		// The password goes in as $1, not into the command line text.
+		return []string{"sh", "-c", `mongosh --quiet -u "$1" -p "$2" --authenticationDatabase admin --eval "db.adminCommand('ping').ok" | grep -q 1`, "sh", c["user"], c["password"]}
+	},
+}
+
 // Redis provisions redis:7-alpine on the private network (no password —
 // unreachable from outside; apps on deploymate-net only).
 var Redis = Template{

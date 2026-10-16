@@ -90,7 +90,7 @@ func (s *Server) handleBackupNow(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch err := s.backups.BackupNow(svc); {
-	case errors.Is(err, backup.ErrDisabled), errors.Is(err, backup.ErrNoKey), errors.Is(err, backup.ErrNotPostgres):
+	case errors.Is(err, backup.ErrDisabled), errors.Is(err, backup.ErrNoKey), errors.Is(err, backup.ErrUnsupported):
 		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL(err.Error()), http.StatusSeeOther)
 	case errors.Is(err, backup.ErrInFlight):
 		http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("A backup or restore is already running for this service."), http.StatusSeeOther)

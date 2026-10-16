@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/docker/docker/pkg/stdcopy"
 	"io"
 	"os"
 	"path"
@@ -282,19 +283,19 @@ func (d *Docker) Inspect(ctx context.Context, name string) (Info, error) {
 		Privileged:      ctr.HostConfig.Privileged,
 		NoNewPrivileges: noNew,
 		DockerSocket:    sock,
-		ID:             ctr.ID,
-		Name:           name,
-		Image:          ctr.Image,
-		Running:        ctr.State.Running,
-		State:          ctr.State.Status,
-		Restarts:       ctr.RestartCount,
-		ExitCode:       ctr.State.ExitCode,
-		OOMKilled:      ctr.State.OOMKilled,
-		IPs:            ips,
-		PublishedPorts: ports,
-		MemLimitMB:     ctr.HostConfig.Memory >> 20,
-		CPULimit:       float64(ctr.HostConfig.NanoCPUs) / 1e9,
-		Labels:         labelsOf(ctr),
+		ID:              ctr.ID,
+		Name:            name,
+		Image:           ctr.Image,
+		Running:         ctr.State.Running,
+		State:           ctr.State.Status,
+		Restarts:        ctr.RestartCount,
+		ExitCode:        ctr.State.ExitCode,
+		OOMKilled:       ctr.State.OOMKilled,
+		IPs:             ips,
+		PublishedPorts:  ports,
+		MemLimitMB:      ctr.HostConfig.Memory >> 20,
+		CPULimit:        float64(ctr.HostConfig.NanoCPUs) / 1e9,
+		Labels:          labelsOf(ctr),
 	}, nil
 }
 
@@ -343,7 +344,11 @@ func (d *Docker) exec(ctx context.Context, name string, cmd, env []string) (stri
 	if err != nil {
 		return "", fmt.Errorf("exec attach in %s: %w", name, err)
 	}
-	out, readErr := io.ReadAll(attach.Reader)
+	// Without a TTY the daemon multiplexes stdout and stderr into framed chunks; demux them or every
+	// result starts with an 8-byte header.
+	var outBuf bytes.Buffer
+	_, readErr := stdcopy.StdCopy(&outBuf, &outBuf, attach.Reader)
+	out := outBuf.Bytes()
 	attach.Close()
 	if readErr != nil {
 		return "", fmt.Errorf("exec read in %s: %w", name, readErr)

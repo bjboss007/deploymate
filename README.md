@@ -248,7 +248,6 @@ The full ordered backlog lives in
 - Build cache export for Railpack builds (`--cache-to/--cache-from`)
 - Per-runtime build/start command overrides
 - Deploy previews per PR / per branch
-- MySQL/Redis backups (Postgres ships today)
 - Remote servers (the `Runtime` interface seam)
 
 ## License

@@ -595,9 +595,8 @@ change.
   single-flight, typed-confirm restore (terminate → drop → recreate →
   pg_restore), events + alerts, bucket listing is the catalog. Migration
   0014; `runtime.Runtime` gained WriteFile/ReadFile/ExecEnv. `make
-  e2e-backup` green. Follow-ups: MySQL/Redis dumpers (same machinery,
-  different commands — Redis restore is a container-level RDB swap) and
-  manifest-declared config (the "Infra manifest seeding" item below).
+  e2e-backup` green. MySQL, Redis and MongoDB followed 2026-10-16 (see the
+  spec). Follow-up: manifest-declared config (the "Infra manifest seeding" item below).
 - [x] **Infra manifest teardown (surface-only)** — done: a
   manifest-created service the manifest stops declaring is flagged
   orphaned (badge + build-log line + `service_orphaned` event), never

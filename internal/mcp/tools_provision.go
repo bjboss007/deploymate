@@ -37,10 +37,10 @@ func init() {
 		},
 		{
 			Name: "create_service", Scope: store.ScopeProvision,
-			Description: "Create a database or cache (postgres, mysql or redis) in a project. It is created stopped — start it with start_service. Apps in the same project and environment receive its connection URL automatically on their next deploy.",
+			Description: "Create a database or cache (postgres, mysql, redis or mongodb) in a project. It is created stopped — start it with start_service. Apps in the same project and environment receive its connection URL automatically on their next deploy.",
 			Schema: schema(map[string]any{
 				"project": strProp("the project's slug"), "name": strProp("service name, e.g. dev-postgres"),
-				"type": map[string]any{"type": "string", "enum": []string{"postgres", "mysql", "redis"}}, "environment": envProp,
+				"type": map[string]any{"type": "string", "enum": []string{"postgres", "mysql", "redis", "mongodb"}}, "environment": envProp,
 			}, "project", "name", "type"),
 			Build: func(a args) (string, string, any, error) {
 				v, err := a.need("project", "name", "type")

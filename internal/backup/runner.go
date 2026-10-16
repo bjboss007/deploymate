@@ -41,8 +41,9 @@ func (m *Manager) run(ctx context.Context, svc store.Service, cfg store.BackupCo
 		m.fail(svc, "inspect", err)
 		return
 	}
-	if svc.Type != "postgres" {
-		m.fail(svc, "type", fmt.Errorf("%w (%s)", ErrNotPostgres, svc.Type))
+	eng, ok := engineFor(svc.Type)
+	if !ok {
+		m.fail(svc, "type", fmt.Errorf("%w (%s)", ErrUnsupported, svc.Type))
 		return
 	}
 	key, err := m.keyFromEnc(cfg.KeyEnc)
@@ -55,34 +56,26 @@ func (m *Manager) run(ctx context.Context, svc store.Service, cfg store.BackupCo
 		m.fail(svc, "credentials", err)
 		return
 	}
-	user, db := creds["user"], creds["db"]
-	if user == "" || db == "" {
-		m.fail(svc, "credentials", errors.New("service has no stored user/db credentials"))
+	if err := eng.check(creds); err != nil {
+		m.fail(svc, "credentials", err)
 		return
 	}
 
 	// 1. Dump INSIDE the container (ports stay unpublished — nothing outside
 	// the docker network can reach the database, so the dump must run there).
-	out, err := m.rt.ExecEnv(ctx, name, []string{"pg_dump", "-Fc", "-U", user, "-d", db, "-f", containerDump}, pgEnv(creds))
+	data, err := eng.dump(ctx, m.rt, name, creds)
 	if err != nil {
-		m.fail(svc, "pg_dump", fmt.Errorf("%w: %s", err, out))
-		return
-	}
-	// Best-effort cleanup of the container-side dump whatever happens next.
-	defer func() {
-		if _, err := m.rt.Exec(ctx, name, []string{"rm", "-f", containerDump}); err != nil {
-			slog.Warn("backup: container dump cleanup", "slug", svc.Slug, "err", err)
+		step := "dump"
+		var se stepError
+		if errors.As(err, &se) {
+			step = se.step
 		}
-	}()
-
-	// 2. Copy the dump out, gzip, encrypt with the service's own key. The
-	// blob stays in memory — fine for MVP sizes; streaming (tar to the
-	// destination) is the natural follow-up if dumps ever grow.
-	data, err := m.rt.ReadFile(ctx, name, containerDump)
-	if err != nil {
-		m.fail(svc, "read dump", err)
+		m.fail(svc, step, err)
 		return
 	}
+
+	// 2. Gzip, encrypt with the service's own key. The blob stays in memory — fine for MVP
+	// sizes; streaming (tar to the destination) is the natural follow-up if dumps ever grow.
 	compressed, err := gzipBytes(data)
 	if err != nil {
 		m.fail(svc, "gzip", err)

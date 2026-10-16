@@ -60,8 +60,13 @@ func TestSaveConfigNoDestinationsAndWrongType(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := store.BackupConfig{Enabled: true, Schedule: "0 2 * * *", Keep: 14, Destination: "default"}
-	if err := mgr.SaveConfig(mysql, cfg); err == nil || !strings.Contains(err.Error(), "Postgres-only") {
-		t.Errorf("mysql enable = %v, want Postgres-only error", err)
+	other := mysql
+	other.Type = "nginx"
+	if err := mgr.SaveConfig(other, cfg); err == nil || !strings.Contains(err.Error(), "not available for this service type") {
+		t.Errorf("unsupported type enable = %v, want an unsupported-type error", err)
+	}
+	if err := mgr.SaveConfig(mysql, cfg); err == nil || !strings.Contains(err.Error(), "no backup destinations") {
+		t.Errorf("mysql enable = %v, want the no-destinations error (mysql is supported)", err)
 	}
 	if err := mgr.SaveConfig(mysql, store.BackupConfig{Schedule: "0 2 * * *", Keep: 14}); err != nil {
 		t.Errorf("disabled config save should not need postgres/destinations: %v", err)
