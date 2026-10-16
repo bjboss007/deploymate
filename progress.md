@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-16 (server security phase C: dashboard)** — Security headers (CSP/frame/nosniff/HSTS; not on `/preview/`),
+7-day sessions + **Sign out everywhere** (Security page), sign-ins in the audit log, alert event `login_blocked`
+(`Server.SetNotifier`), and `CF-Connecting-IP` as the client address in tunnel mode (`Server.clientAddr`). **TOTP 2FA is
+the next piece** (not started). Released so far: v0.6.1 (harden); this is unreleased. Same day, from the owner's real
+server: `harden` applied and confirmed (tunnel profile, 22 only from the LAN); two bugs found by the first run (unit
+drop-ins not read; `22/tcp (OpenSSH)` rule name) are fixed in v0.6.1.
+
 **2026-10-16 (server security phase B: `deploymate harden`)** — Opt-in host hardening, dry run by default
 (`internal/harden`, `cmd/deploymate/harden.go`, spec in `docs/specs/server-security.md`): updates, sshd drop-in
 (no root login, key-only only after a confirmed key login), ufw (public: limit 22; tunnel: close 80/443, 22 only

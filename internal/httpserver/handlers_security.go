@@ -19,6 +19,9 @@ func (s *Server) SetSecurityContext(listenAddr string, tunnel bool) {
 	s.listenAddr, s.tunnelMode = listenAddr, tunnel
 }
 
+// SetNotifier lets the dashboard raise alerts (repeated failed sign-ins).
+func (s *Server) SetNotifier(fn func(event, subject, details string)) { s.notify = fn }
+
 // securityReport gathers what only DeployMate knows (containers, services) and runs
 // the read-only audit.
 func (s *Server) securityReport(ctx context.Context) security.Report {

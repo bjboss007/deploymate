@@ -43,3 +43,9 @@ func (s *Store) DeleteExpiredSessions() (int64, error) {
 	}
 	return res.RowsAffected()
 }
+
+// DeleteSessionsForUser signs a user out everywhere.
+func (s *Store) DeleteSessionsForUser(userID string) error {
+	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
+	return err
+}

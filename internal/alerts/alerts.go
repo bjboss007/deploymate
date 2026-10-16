@@ -35,6 +35,7 @@ const (
 	EventRestoreFailed    = "restore_failed"
 	EventHostProblem      = "host_problem"
 	EventHostRecovered    = "host_recovered"
+	EventLoginBlocked     = "login_blocked"
 )
 
 // CatalogEvent pairs an event name with its UI label.
@@ -60,6 +61,7 @@ var Catalog = []CatalogEvent{
 	{EventRestoreFailed, "Restore failed"},
 	{EventHostProblem, "Server problem (disk, memory, CPU, temperature)"},
 	{EventHostRecovered, "Server recovered"},
+	{EventLoginBlocked, "Repeated failed dashboard sign-ins"},
 }
 
 // KnownEvent reports whether a name is in the catalog.

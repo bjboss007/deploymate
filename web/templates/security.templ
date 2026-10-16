@@ -45,6 +45,13 @@ templ SecurityPage(vc ViewCtx, v SecurityView) {
 				</div>
 			}
 		</div>
+		<div class="panel">
+			<p class="sec-detail">Sign-ins last 7 days. If a laptop was lost or you saw a sign-in you do not recognise, end every session, this one included.</p>
+			<form method="post" action="/logout-all">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-danger" type="submit">Sign out everywhere</button>
+			</form>
+		</div>
 		<p class="muted-text">Run <code>sudo ufw status verbose</code> and <code>sudo sshd -T</code> on the server for what these checks cannot read without root.</p>
 	}
 }

@@ -10,7 +10,7 @@ import (
 )
 
 // SessionTTL is how long a browser session stays valid.
-const SessionTTL = 30 * 24 * time.Hour
+const SessionTTL = 7 * 24 * time.Hour
 
 // NewSession creates a session record for a user. The caller stores the
 // returned plaintext token in the cookie; only TokenHash is persisted.

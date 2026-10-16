@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
@@ -46,7 +47,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	email := r.FormValue("email")
 	password := r.FormValue("password")
 
-	ip := clientIP(r)
+	ip := s.clientAddr(r)
 	if blocked, wait := s.loginLimit.blocked(ip, email); blocked {
 		mins := int(wait.Minutes()) + 1
 		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
@@ -57,7 +58,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	user, err := s.store.GetUserByEmail(email)
 	if errors.Is(err, store.ErrNotFound) {
 		// Same response as a wrong password: don't leak which emails exist.
-		s.loginLimit.fail(ip, email)
+		s.loginFailed(ip, email)
 		render(w, r, http.StatusUnauthorized, templates.LoginPage("Invalid email or password."))
 		return
 	}
@@ -68,11 +69,12 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	ok, err := auth.VerifyPassword(password, user.PasswordHash)
 	if err != nil || !ok {
-		s.loginLimit.fail(ip, email)
+		s.loginFailed(ip, email)
 		render(w, r, http.StatusUnauthorized, templates.LoginPage("Invalid email or password."))
 		return
 	}
 	s.loginLimit.succeed(ip)
+	s.auditLogin("login", email, ip, "ok")
 
 	sess, token, err := auth.NewSession(user.ID)
 	if err != nil {
@@ -110,4 +112,28 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 	http.Redirect(w, r, "/login", http.StatusSeeOther)
+}
+
+// auditLogin records a dashboard sign-in in the audit log (the token fields hold "dashboard").
+func (s *Server) auditLogin(action, email, ip, result string) {
+	if len(email) > 100 {
+		email = email[:100]
+	}
+	_ = s.store.RecordAudit(store.AuditEntry{TokenName: "dashboard", Action: action, Target: email, Detail: ip, Result: result})
+}
+
+func (s *Server) loginFailed(ip, email string) {
+	s.auditLogin("login", email, ip, "refused")
+	if s.loginLimit.fail(ip, email) && s.notify != nil {
+		go s.notify(alerts.EventLoginBlocked, "sign-ins blocked for "+ip,
+			"Too many failed dashboard sign-ins (last tried: "+email+"). Further attempts are refused for up to 15 minutes.")
+	}
+}
+
+// handleLogoutAll ends every session of the signed-in user, this one included.
+func (s *Server) handleLogoutAll(w http.ResponseWriter, r *http.Request) {
+	if u, ok := auth.UserFromContext(r.Context()); ok {
+		_ = s.store.DeleteSessionsForUser(u.ID)
+	}
+	s.handleLogout(w, r)
 }

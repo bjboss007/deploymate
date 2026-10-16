@@ -230,7 +230,20 @@ func SecurityPage(vc ViewCtx, v SecurityView) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div><p class=\"muted-text\">Run <code>sudo ufw status verbose</code> and <code>sudo sshd -T</code> on the server for what these checks cannot read without root.</p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 18, "</div><div class=\"panel\"><p class=\"sec-detail\">Sign-ins last 7 days. If a laptop was lost or you saw a sign-in you do not recognise, end every session, this one included.</p><form method=\"post\" action=\"/logout-all\"><input type=\"hidden\" name=\"csrf_token\" value=\"")
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			var templ_7745c5c3_Var16 string
+			templ_7745c5c3_Var16, templ_7745c5c3_Err = templ.ResolveAttributeValue(vc.CSRF)
+			if templ_7745c5c3_Err != nil {
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/security.templ`, Line: 51, Col: 58}
+			}
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var16)
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 19, "\"> <button class=\"btn btn-danger\" type=\"submit\">Sign out everywhere</button></form></div><p class=\"muted-text\">Run <code>sudo ufw status verbose</code> and <code>sudo sshd -T</code> on the server for what these checks cannot read without root.</p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}

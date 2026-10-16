@@ -56,7 +56,8 @@ type Server struct {
 	repoCacheV  repoCache // the app page's repository list, briefly cached
 	auth        *gitauth.Resolver
 	loginLimit  *loginLimiter
-	previewRR   sync.Map // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
+	notify      func(event, subject, details string) // alert dispatch; nil = none
+	previewRR   sync.Map                             // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
 // New builds a Server.
@@ -101,6 +102,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 
+	r.Use(securityHeaders)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte("ok"))
@@ -192,6 +194,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/stats", s.handleStatsPage)
 		r.Get("/server", s.handleServerPage)
 		r.Get("/security", s.handleSecurityPage)
+		r.Post("/logout-all", am.CheckCSRF(s.handleLogoutAll))
 		r.Get("/server/history", s.handleServerHistory)
 		r.Post("/server/cleanup", s.handleServerCleanup)
 		r.Post("/alerts", am.CheckCSRF(s.handleAlertCreate))

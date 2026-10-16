@@ -67,10 +67,24 @@ login audit or alerts; 30-day sessions; no 2FA.
     a box that has none is the owner's call; harden says so and stops).
   - *Tested:* unit tests with a fake host (ordering, key gate, rollback of a rejected sshd config, undo); the drop-in
     validated by real OpenSSH 9 in Ubuntu 24.04. **Not tested on a real host:** ufw changes and the revert timer.
-- **C. DeployMate itself:** security headers (CSP, frame, content-type, HSTS behind HTTPS), shorter sessions and
-  "sign out everywhere", login audit events and alerts (failed bursts, new address), optional TOTP, a fail2ban
-  jail for dashboard sign-in (needs Traefik's access log; useless behind Cloudflare), optionally trusting
-  `CF-Connecting-IP` for the login limiter in tunnel mode.
+- **C. DeployMate itself (built 2026-10-16, without 2FA).**
+  - *Headers* (`internal/httpserver/headers.go`) on every dashboard response except `/preview/` (a proxied app keeps
+    its own): CSP (`frame-ancestors 'none'`, `base-uri`, `object-src 'none'`, `connect-src 'self'`; scripts and styles
+    keep `'unsafe-inline'` because pages still use inline scripts and handlers, so it does not stop injected inline
+    script), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy`, and HSTS (1 year,
+    no subdomains) only over HTTPS.
+  - *Sessions* last 7 days (was 30; existing ones keep their expiry). **Sign out everywhere** on the Security page
+    (`POST /logout-all`, `Store.DeleteSessionsForUser`).
+  - *Sign-in audit:* successful and refused sign-ins go to the audit log (`token_name` "dashboard", action `login`,
+    target = email, detail = address). Attempts refused by the limiter are not logged (a scan would flood the table).
+    New alert event **`login_blocked`** ("Repeated failed dashboard sign-ins"): one notification when an address or
+    email reaches its limit (`loginLimiter.fail` reports the crossing), not one per attempt.
+  - *Client address in tunnel mode:* `Server.clientAddr` trusts `CF-Connecting-IP`, but only when
+    `DEPLOYMATE_LE_MODE=off` and the peer is loopback (the tunnel is then the only way in); otherwise the old
+    last-`X-Forwarded-For` rule applies. Without this every visitor behind the tunnel shared one rate-limit bucket.
+  - *Not done:* **optional TOTP 2FA** (own round: secret storage, enrolment, recovery codes, login step), alert on a
+    sign-in from a never-seen address, a fail2ban jail for the dashboard (useless behind Cloudflare, and needs
+    Traefik's access log on public servers).
 - **E. Docs:** hardening guide, Cloudflare Access for SSH and the dashboard, what to rotate after a suspected breach.
 
 ## Safety rules

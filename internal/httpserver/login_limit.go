@@ -45,13 +45,14 @@ func (l *loginLimiter) blocked(ip, email string) (bool, time.Duration) {
 	return wait > 0, wait
 }
 
-// fail records a failed sign-in.
-func (l *loginLimiter) fail(ip, email string) {
+// fail records a failed sign-in and reports whether this one pushed the address or the email over its limit.
+func (l *loginLimiter) fail(ip, email string) (justBlocked bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	now := l.now()
-	for _, key := range []string{"ip:" + ip, "mail:" + strings.ToLower(email)} {
+	for key, max := range map[string]int{"ip:" + ip: loginMaxFailsIP, "mail:" + strings.ToLower(email): loginMaxFailsMail} {
 		l.fails[key] = append(keepAfter(l.fails[key], now.Add(-loginWindow)), now)
+		justBlocked = justBlocked || len(l.fails[key]) == max
 	}
 	// Keep the map from growing without bound under a scan.
 	if len(l.fails) > 5000 {
@@ -61,6 +62,7 @@ func (l *loginLimiter) fail(ip, email string) {
 			}
 		}
 	}
+	return justBlocked
 }
 
 // succeed forgives the address (the owner typed it right, eventually).
@@ -68,6 +70,22 @@ func (l *loginLimiter) succeed(ip string) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	delete(l.fails, "ip:"+ip)
+}
+
+// clientAddr is clientIP, except behind a tunnel: there Cloudflare puts the visitor's address in
+// CF-Connecting-IP, and the only way to reach the dashboard is through the tunnel's loopback connection,
+// so the header can be believed (X-Forwarded-For would just be cloudflared's own view).
+func (s *Server) clientAddr(r *http.Request) string {
+	if s.tunnelMode {
+		if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {
+			if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+				if cf := strings.TrimSpace(r.Header.Get("CF-Connecting-IP")); net.ParseIP(cf) != nil {
+					return cf
+				}
+			}
+		}
+	}
+	return clientIP(r)
 }
 
 // clientIP is the address a sign-in attempt came from. Behind Traefik (or a tunnel)
