@@ -203,3 +203,10 @@ func TestUndoRestoresFilesAndRulesNewestFirst(t *testing.T) {
 		t.Fatal("state should be empty after undo")
 	}
 }
+
+func TestParseUFWNamesTheAppProfile(t *testing.T) {
+	got := parseUFW("To  Action  From\n--  ------  ----\n22/tcp (OpenSSH)           ALLOW IN    Anywhere\n22/tcp (OpenSSH (v6))      ALLOW IN    Anywhere (v6)\n")
+	if len(got) != 1 || got[0].To != "OpenSSH" || portOf(got[0].To) != "22" {
+		t.Fatalf("%+v", got)
+	}
+}

@@ -227,7 +227,11 @@ func parseUFW(status string) (rules []ufwRule) {
 		if len(fields) == 0 {
 			continue
 		}
-		r := ufwRule{To: f[0], Action: fields[0]}
+		to := f[0]
+		if m := regexp.MustCompile(`^\S+ \((.+)\)$`).FindStringSubmatch(to); m != nil {
+			to = m[1] // "22/tcp (OpenSSH)" is the OpenSSH profile: delete it by that name
+		}
+		r := ufwRule{To: to, Action: fields[0]}
 		if len(f) > 2 {
 			r.From = f[2]
 		}
