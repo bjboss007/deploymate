@@ -22,7 +22,7 @@
   </div>
 </div></header>
 <main id="main"><div class="wrap doc">
-<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html" aria-current="page">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
+<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html" aria-current="page">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Operate</div><a href="secure-your-server.html">Secure your server</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
 <article>
 
 <p class="kicker">Start</p>
@@ -83,9 +83,9 @@ DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymat
 
 <h2 id="database">6. Add a database</h2>
 <ol>
-<li>On the project page choose <strong>New database or cache</strong>: PostgreSQL, MySQL or Redis. Pick an <strong>environment</strong> — apps get the services of <em>their own</em> environment, so a dev app and a dev database belong together.</li>
+<li>On the project page choose <strong>New database or cache</strong>: PostgreSQL, MySQL, Redis or MongoDB. Pick an <strong>environment</strong> — apps get the services of <em>their own</em> environment, so a dev app and a dev database belong together.</li>
 <li>Open the new service and press <strong>Start</strong>.</li>
-<li>Redeploy the app. Apps in the same project and environment now receive the connection URL as <code>DATABASE_URL</code> (Postgres), <code>REDIS_URL</code> (Redis) or <code>MYSQL_URL</code> (MySQL). On the project page each app card shows what it receives, and <strong>Stop sending</strong> turns one off for an app that doesn't use it.</li>
+<li>Redeploy the app. Apps in the same project and environment now receive the connection URL as <code>DATABASE_URL</code> (Postgres), <code>REDIS_URL</code> (Redis) or <code>MYSQL_URL</code> (MySQL) or <code>MONGODB_URL</code> (MongoDB), plus <code>_HOST</code>, <code>_PORT</code>, <code>_USER</code>, <code>_PASSWORD</code> and <code>_NAME</code> variants for frameworks that take them apart. On the project page each app card shows what it receives, and <strong>Stop sending</strong> turns one off for an app that doesn't use it.</li>
 </ol>
 
 <h2 id="domain">7. Go live on your domain</h2>
@@ -101,7 +101,7 @@ DEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymat
 <p>It downloads the release, checks its SHA-256 against the published <code>checksums.txt</code>, and refuses on any mismatch. It then stops the dashboard service, copies the database aside, swaps the binary, starts the new version and waits for it to answer. <strong>If the new version doesn't come up, the old binary and database are put back automatically.</strong> Your apps keep running throughout, because they are separate containers; only the dashboard is briefly unavailable. If the release pins a newer Traefik (the proxy that serves your domains), the update then replaces that container too, which takes a few seconds, and puts the old one back if the new one doesn't stay up. <code>--skip-traefik</code> leaves it alone.</p>
 <p><code>sudo deploymate update --check</code> only reports whether a newer release exists. <code>--version v0.1.2</code> installs a specific version, which is also how you go back. <code>--from file.tar.gz</code> installs an archive you copied over, for a server that can't reach GitHub. The previous binary stays at <code>/usr/local/bin/deploymate.prev</code> and the pre-update database at <code>data.db.pre-update</code> in the data folder.</p>
 
-<div class="callout warn"><strong>Back up before you trust it</strong>Backups are opt-in. Configure a storage destination (S3, R2, MinIO) with the <code>DEPLOYMATE_BACKUP_DEST_*</code> variables, then enable them on each PostgreSQL service's page. MySQL and Redis are not backed up yet.</div>
+<div class="callout warn"><strong>Back up before you trust it</strong>Backups are opt-in. Configure a storage destination (S3, R2, MinIO) with the <code>DEPLOYMATE_BACKUP_DEST_*</code> variables, then enable them on each database's page. PostgreSQL, MySQL, Redis and MongoDB are covered; restoring a Redis backup restarts it for a few seconds. See <a href="secure-your-server.html">Secure your server</a> for the rest of the safety checklist.</div>
 
 <div class="pager"><span></span><a href="connect-github.html">Connect GitHub →</a></div>
 </article>

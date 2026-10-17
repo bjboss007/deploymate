@@ -157,7 +157,7 @@
         <ul>
           <li><strong>Zero-downtime swaps</strong> — the old version serves until the new one is healthy.</li>
           <li><strong>1–5 replicas</strong> per app, load-balanced, rolled one at a time.</li>
-          <li><strong>Postgres, MySQL and Redis</strong> in a click; apps in the same project and environment get the connection URL automatically.</li>
+          <li><strong>Postgres, MySQL, Redis and MongoDB</strong> in a click; apps in the same project and environment get the connection URL automatically.</li>
           <li><strong>dev, staging, production</strong>, each with its own services. A <code>deploymate.yml</code> in the repo provisions them for you.</li>
         </ul>
       </div>
@@ -165,6 +165,7 @@
         <h3>Watch</h3><p class="tag">know before your users do</p>
         <ul>
           <li><strong>Fleet board:</strong> what needs you, first. 24-hour strips per app.</li>
+          <li>A <strong>Server page</strong>: disk, memory, CPU, temperature and a 7-day history, with alerts and a Clean up button.</li>
           <li>Health checks every 30 s, uptime probes per domain, <strong>real certificate state</strong> and expiry.</li>
           <li><strong>Failures explained</strong> in plain words, with the container's own last output.</li>
           <li>Alerts to any webhook (Slack-compatible), CPU and memory charts, live logs.</li>
@@ -175,7 +176,7 @@
         <ul>
           <li><strong>One-click rollback</strong> — the last five images are kept.</li>
           <li><strong>Retry</strong> a failed deploy, or <strong>redeploy</strong> with changed variables and no new build.</li>
-          <li><strong>PostgreSQL backups</strong> on a schedule to any S3-compatible storage (S3, R2, MinIO), with typed-confirm restore.</li>
+          <li><strong>Database backups</strong> for Postgres, MySQL, Redis and MongoDB on a schedule to any S3-compatible storage (S3, R2, MinIO), encrypted with your own key, with typed-confirm restore.</li>
           <li>Crashed containers are healed automatically.</li>
         </ul>
       </div>
@@ -185,7 +186,8 @@
           <li>The firewall opens only <strong>SSH, 80 and 443</strong>; the dashboard and Docker are never exposed.</li>
           <li>Keys, secrets and variables are <strong>encrypted at rest</strong> (XChaCha20-Poly1305).</li>
           <li><strong>Automatic HTTPS</strong> through Let's Encrypt, with a staging mode so mistakes can't burn your rate limit.</li>
-          <li>API tokens are hashed, scoped and expiring.</li>
+          <li>API tokens are hashed, scoped and expiring. Redis gets a password and every container runs with <code>no-new-privileges</code>.</li>
+          <li>A <strong>Security page</strong> that reads your server and says what to fix, and <code>deploymate harden</code> to apply it: firewall, SSH policy, fail2ban, updates. Dry run first, undo any time.</li>
         </ul>
       </div>
       <div class="card" style="--c: var(--accent)">
@@ -288,7 +290,7 @@ curl -fsSL https://deploymate.link/install \
         <ul>
           <li>You have one server and want to stop paying per-seat, per-GB platform prices.</li>
           <li>You deploy web apps and APIs: a handful to a few dozen.</li>
-          <li>You want Postgres, MySQL or Redis next to the app without managing them by hand.</li>
+          <li>You want Postgres, MySQL, Redis or MongoDB next to the app without managing them by hand.</li>
           <li>You like the idea of an agent doing the routine ops, with limits.</li>
         </ul>
       </div>
@@ -296,7 +298,7 @@ curl -fsSL https://deploymate.link/install \
         <h3>Not yet</h3><p class="tag">on purpose, or not built</p>
         <ul>
           <li><strong>One server, one owner.</strong> No clustering, no teams or roles yet.</li>
-          <li><strong>Backups cover PostgreSQL</strong>, not MySQL or Redis.</li>
+          <li><strong>No two-factor sign-in yet</strong> for the dashboard (use an access policy in front of it).</li>
           <li><strong>Prebuilt mode is GitHub + Java</strong> (Gradle or Maven) for now.</li>
           <li>No built-in metrics export yet, and no per-branch preview deploys.</li>
         </ul>

@@ -19,6 +19,7 @@ WORKFLOW = (HERE / "workflow.example.yml").read_text()
 NAV = [
     ("Start", [("quickstart.html", "Quickstart"), ("connect-github.html", "Connect GitHub"), ("deploy-on-push.html", "Deploy on every push"), ("concepts.html", "How it fits together")]),
     ("Agents", [("agents.html", "AI agents (MCP)")]),
+    ("Operate", [("secure-your-server.html", "Secure your server")]),
     ("Optional", [("cloudflare-tunnel.html", "No open ports? Use a tunnel")]),
 ]
 
@@ -139,9 +140,9 @@ QUICK = """
 
 <h2 id="database">6. Add a database</h2>
 <ol>
-<li>On the project page choose <strong>New database or cache</strong>: PostgreSQL, MySQL or Redis. Pick an <strong>environment</strong> — apps get the services of <em>their own</em> environment, so a dev app and a dev database belong together.</li>
+<li>On the project page choose <strong>New database or cache</strong>: PostgreSQL, MySQL, Redis or MongoDB. Pick an <strong>environment</strong> — apps get the services of <em>their own</em> environment, so a dev app and a dev database belong together.</li>
 <li>Open the new service and press <strong>Start</strong>.</li>
-<li>Redeploy the app. Apps in the same project and environment now receive the connection URL as <code>DATABASE_URL</code> (Postgres), <code>REDIS_URL</code> (Redis) or <code>MYSQL_URL</code> (MySQL). On the project page each app card shows what it receives, and <strong>Stop sending</strong> turns one off for an app that doesn't use it.</li>
+<li>Redeploy the app. Apps in the same project and environment now receive the connection URL as <code>DATABASE_URL</code> (Postgres), <code>REDIS_URL</code> (Redis) or <code>MYSQL_URL</code> (MySQL) or <code>MONGODB_URL</code> (MongoDB), plus <code>_HOST</code>, <code>_PORT</code>, <code>_USER</code>, <code>_PASSWORD</code> and <code>_NAME</code> variants for frameworks that take them apart. On the project page each app card shows what it receives, and <strong>Stop sending</strong> turns one off for an app that doesn't use it.</li>
 </ol>
 
 <h2 id="domain">7. Go live on your domain</h2>
@@ -157,7 +158,7 @@ QUICK = """
 <p>It downloads the release, checks its SHA-256 against the published <code>checksums.txt</code>, and refuses on any mismatch. It then stops the dashboard service, copies the database aside, swaps the binary, starts the new version and waits for it to answer. <strong>If the new version doesn't come up, the old binary and database are put back automatically.</strong> Your apps keep running throughout, because they are separate containers; only the dashboard is briefly unavailable. If the release pins a newer Traefik (the proxy that serves your domains), the update then replaces that container too, which takes a few seconds, and puts the old one back if the new one doesn't stay up. <code>--skip-traefik</code> leaves it alone.</p>
 <p><code>sudo deploymate update --check</code> only reports whether a newer release exists. <code>--version v0.1.2</code> installs a specific version, which is also how you go back. <code>--from file.tar.gz</code> installs an archive you copied over, for a server that can't reach GitHub. The previous binary stays at <code>/usr/local/bin/deploymate.prev</code> and the pre-update database at <code>data.db.pre-update</code> in the data folder.</p>
 
-<div class="callout warn"><strong>Back up before you trust it</strong>Backups are opt-in. Configure a storage destination (S3, R2, MinIO) with the <code>DEPLOYMATE_BACKUP_DEST_*</code> variables, then enable them on each PostgreSQL service's page. MySQL and Redis are not backed up yet.</div>
+<div class="callout warn"><strong>Back up before you trust it</strong>Backups are opt-in. Configure a storage destination (S3, R2, MinIO) with the <code>DEPLOYMATE_BACKUP_DEST_*</code> variables, then enable them on each database's page. PostgreSQL, MySQL, Redis and MongoDB are covered; restoring a Redis backup restarts it for a few seconds. See <a href="secure-your-server.html">Secure your server</a> for the rest of the safety checklist.</div>
 """
 
 QUICK_BLOCKS = {
@@ -391,6 +392,51 @@ TUNNEL_BLOCKS = {
     "sshconfig": "Host dm-server\n  HostName ssh.example.com\n  User your-user\n  ProxyCommand cloudflared access ssh --hostname %h",
 }
 
+SECURE = """
+<p class="kicker">Operate</p>
+<h1>Secure your server</h1>
+<p>A DeployMate server is a machine on the internet that can run code for you, so it deserves a few minutes of care. This page covers what DeployMate checks for you, the one command that applies the fixes, and what the dashboard does to protect itself.</p>
+
+<h2 id="page">The Security page</h2>
+<p>In the sidebar, under <strong>Server</strong>, open <strong>Security</strong>. It reads your machine and lists what an attacker could reach: whether the firewall is on and drops by default, which ports listen on every interface (databases on a public address are critical), SSH password and root login, fail2ban, automatic updates and a pending reboot, who is in the <code>docker</code> group, containers that publish a port or run privileged, and Redis services without a password. Each finding says what it found and the exact fix. The page only reads; nothing on it changes the machine. The same report is at <code>GET /api/v1/security</code> and as the MCP tool <code>security_status</code>.</p>
+
+<h2 id="harden">deploymate harden</h2>
+<p>Run it over SSH. It prints a plan and changes nothing until you add <code>--apply</code>:</p>
+[[dry]]
+<p>It picks a profile on its own: a <strong>public server</strong> (ports open) or a <strong>tunnel server</strong> (<code>DEPLOYMATE_LE_MODE=off</code>, see <a href="cloudflare-tunnel.html">tunnels</a>).</p>
+<table>
+<tr><th>Both</th><td>Automatic security updates. SSH settings: at most 4 tries per connection, no root login, and password login off, but only when you have a key installed <em>and</em> SSH has logged you in with it before. The new SSH config is checked with <code>sshd -t</code> before it takes effect.</td></tr>
+<tr><th>Public</th><td>Firewall: SSH rate-limited, 80 and 443 open, everything else denied. fail2ban for SSH.</td></tr>
+<tr><th>Tunnel</th><td>Ports 80 and 443 closed (the tunnel connects out). Port 22 closed to everyone except the network you give with <code>--ssh-from</code>. No fail2ban: behind a tunnel every connection looks local, so it couldn't tell attackers apart. Protect SSH with the tunnel's access policy instead.</td></tr>
+</table>
+<div class="callout warn"><strong>Keep a way in</strong>Changes to the firewall and SSH start a five-minute revert timer inside systemd, so it fires even if your session drops. Open a <em>second</em> terminal and log in; if it works, run <code>sudo deploymate harden --confirm</code>. If you don't, the old settings come back by themselves. <code>sudo deploymate harden --undo</code> reverses everything later. If the server is only reachable through a tunnel, make sure you can still reach the machine another way (keyboard, or your provider's console) before closing port 22.</div>
+
+<h2 id="redis">Databases and containers</h2>
+<p>New Redis services get a password, because every container on the server's network can reach every Redis. A Redis created earlier keeps working without one; its page offers <strong>Add a password</strong>, which restarts it and redeploys the apps that use it, and <strong>Remove password</strong> for an app that can't use one. Every container DeployMate starts runs with <code>no-new-privileges</code>, a trimmed set of Linux capabilities and a process limit.</p>
+
+<h2 id="dashboard">The dashboard itself</h2>
+<ul>
+<li><strong>Headers.</strong> The dashboard refuses to be framed, sets a content security policy and, over HTTPS, HSTS.</li>
+<li><strong>Sign-in limits.</strong> Ten failed sign-ins from one address in 15 minutes, or thirty for one email, and further attempts are refused. Behind a Cloudflare tunnel the real visitor address is used. Every attempt is in the audit log, and an alert event, <em>Repeated failed dashboard sign-ins</em>, can post to your webhook.</li>
+<li><strong>Sessions</strong> last 7 days. <strong>Sign out everywhere</strong> at the bottom of the Security page ends all of them.</li>
+<li><strong>Not yet:</strong> two-factor sign-in. Until then, put an access policy (Cloudflare Access, a VPN) in front of the dashboard.</li>
+</ul>
+
+<h2 id="rotate">After a scare: what to rotate</h2>
+<ol>
+<li>Sign out everywhere, and change your dashboard password.</li>
+<li>Revoke API tokens you don't recognise on the Tokens page, and create new ones.</li>
+<li>Rotate backup storage keys (the S3 or R2 access keys) and download a fresh backup key for each database.</li>
+<li>Disconnect and reconnect GitHub, and review its installation.</li>
+<li>If you use a tunnel, rotate the tunnel token in Cloudflare.</li>
+<li>Check <code>~/.ssh/authorized_keys</code> for keys you didn't add, and run the Security page again.</li>
+</ol>
+"""
+
+SECURE_BLOCKS = {
+    "dry": "sudo deploymate harden                                   # public server\nsudo deploymate harden --ssh-from 192.168.1.0/24          # tunnel server\nsudo deploymate harden --apply                            # when the plan looks right",
+}
+
 # --------------------------------------------------------------------------- index
 CONNECT = """
 <p class="kicker">Start</p>
@@ -460,6 +506,7 @@ INDEX = """
 <tr><th><a href="deploy-on-push.html">Deploy on every push</a></th><td>The manual way: add a webhook yourself. For GitLab, Gitea, or GitHub without the app.</td></tr>
 <tr><th><a href="concepts.html">How it fits together</a></th><td>Zero-downtime deploys, build modes, services and environments, recovery.</td></tr>
 <tr><th><a href="agents.html">AI agents (MCP)</a></th><td>Connect an agent with scoped, audited, delete-free access.</td></tr>
+<tr><th><a href="secure-your-server.html">Secure your server</a></th><td>The Security page, <code>deploymate harden</code>, dashboard protection, and what to rotate after a scare.</td></tr>
 <tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
 </table>
 <h2>In the repository</h2>
@@ -487,10 +534,13 @@ def main():
            CONCEPTS, CONCEPTS_BLOCKS, ("deploy-on-push.html", "Deploy on every push"), ("agents.html", "AI agents (MCP)"))
     render("agents.html", "AI agents (MCP)",
            "Connect Claude or another agent to DeployMate with scoped, audited, delete-free access.",
-           AGENTS, AGENTS_BLOCKS, ("concepts.html", "How it fits together"), None)
+           AGENTS, AGENTS_BLOCKS, ("concepts.html", "How it fits together"), ("secure-your-server.html", "Secure your server"))
+    render("secure-your-server.html", "Secure your server",
+           "What DeployMate checks and hardens on your server: the Security page, deploymate harden, the dashboard's protections, and what to rotate after a scare.",
+           SECURE, SECURE_BLOCKS, ("agents.html", "AI agents (MCP)"), ("cloudflare-tunnel.html", "No open ports? Use a tunnel"))
     render("cloudflare-tunnel.html", "No open ports? Use a tunnel",
            "An optional way to run DeployMate on a machine that can't open ports 80 and 443, using a Cloudflare Tunnel.",
-           TUNNEL, TUNNEL_BLOCKS, ("agents.html", "AI agents (MCP)"), None)
+           TUNNEL, TUNNEL_BLOCKS, ("secure-your-server.html", "Secure your server"), None)
     render("index.html", "Documentation", "DeployMate documentation: quickstart, concepts and AI agent access.",
            INDEX, {}, None, ("quickstart.html", "Quickstart"))
 
