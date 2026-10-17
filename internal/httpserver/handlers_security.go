@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -131,17 +132,59 @@ func (s *Server) handleAPISecurity(w http.ResponseWriter, r *http.Request) {
 func (s *Server) signInView() templates.SignInView {
 	var v templates.SignInView
 	now := time.Now().UTC()
-	if c, err := s.store.LoginCounts(now.Add(-24 * time.Hour).Format(time.RFC3339Nano)); err == nil {
+	day := now.Add(-24 * time.Hour).Format(time.RFC3339Nano)
+	if c, err := s.store.LoginCounts(day); err == nil {
 		v.OK, v.Refused, v.Blocked = c["ok"], c["refused"], c["blocked"]
 	}
 	if c, err := s.store.LoginCounts(now.AddDate(0, 0, -7).Format(time.RFC3339Nano)); err == nil {
 		v.OK7, v.Refused7 = c["ok"], c["refused"]
 	}
 	v.ActiveSessions, _ = s.store.CountActiveSessions()
-	if rows, err := s.store.ListLogins(20); err == nil {
+
+	// 24 hourly columns, oldest first; heights are relative to the busiest hour (a nonzero hour is never invisible).
+	byHour, _ := s.store.LoginHours(now.Add(-24 * time.Hour).Truncate(time.Hour).Format(time.RFC3339Nano))
+	top := 1
+	for i := 23; i >= 0; i-- {
+		t := now.Add(-time.Duration(i) * time.Hour)
+		c := byHour[t.Format("2006-01-02T15")]
+		h := templates.SignInHour{Label: t.Format("Jan 2, 15:00") + " UTC", OK: c["ok"], Failed: c["refused"]}
+		if n := h.OK + h.Failed; n > top {
+			top = n
+		}
+		v.Hours = append(v.Hours, h)
+	}
+	pct := func(n int) int {
+		if n == 0 {
+			return 0
+		}
+		return max(8, n*100/top)
+	}
+	for i := range v.Hours {
+		v.Hours[i].OKPct, v.Hours[i].FailPct = pct(v.Hours[i].OK)*70/100, pct(v.Hours[i].Failed)*70/100
+	}
+	if src, err := s.store.FailureSources(day, 5); err == nil {
+		for _, f := range src {
+			v.Sources = append(v.Sources, templates.SignInSource{Address: f.Address, Count: f.Count, Emails: f.Emails, Last: f.Last})
+		}
+	}
+	if rows, err := s.store.ListLogins(12); err == nil {
 		for _, r := range rows {
 			v.Recent = append(v.Recent, templates.SignInRow{TS: r.TS, Email: r.Email, Address: r.Address, Result: r.Result, NewAddress: r.NewAddress})
 		}
+	}
+	failed := fmt.Sprintf("%d failed sign-ins", v.Refused)
+	if v.Refused == 1 {
+		failed = "1 failed sign-in"
+	}
+	switch {
+	case v.Blocked > 0:
+		v.Status, v.StatusLevel = failed+" in the last 24 hours, and an address was blocked.", "warn"
+	case v.Refused >= 10:
+		v.Status, v.StatusLevel = failed+" in the last 24 hours. Worth a look.", "warn"
+	case v.Refused > 0:
+		v.Status, v.StatusLevel = failed+" in the last 24 hours, nothing blocked.", "ok"
+	default:
+		v.Status, v.StatusLevel = "No failed sign-ins in the last 24 hours.", "ok"
 	}
 	return v
 }

@@ -29,30 +29,43 @@ func LoginPage(err ...string) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Sign in · DeployMate</title><script>\n\t\t\t\ttry { var t = localStorage.getItem(\"dm-theme\"); if (t === \"light\") document.documentElement.setAttribute(\"data-theme\", \"light\"); } catch (e) {}\n\t\t\t</script><link rel=\"stylesheet\" href=\"/static/app.css\"></head><body class=\"login-body\"><div class=\"login-card\"><div class=\"login-brand\"><span class=\"led\"></span> <span>deploymate</span></div><p class=\"login-sub\">Sign in to manage your apps.</p>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Sign in · DeployMate</title><script>\n\t\t\t\ttry { var t = localStorage.getItem(\"dm-theme\"); if (t === \"light\") document.documentElement.setAttribute(\"data-theme\", \"light\"); } catch (e) {}\n\t\t\t</script><link rel=\"stylesheet\" href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var2 templ.SafeURL
+		templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinURLErrs(assetURL("/static/app.css"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/login.templ`, Line: 13, Col: 60}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "\"></head><body class=\"login-body\"><div class=\"login-card\"><div class=\"login-brand\"><span class=\"led\"></span> <span>deploymate</span></div><p class=\"login-sub\">Sign in to manage your apps.</p>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		if len(err) > 0 && err[0] != "" {
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"flash flash-error\">")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<div class=\"flash flash-error\">")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			var templ_7745c5c3_Var2 string
-			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(err[0])
+			var templ_7745c5c3_Var3 string
+			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinStringErrs(err[0])
 			if templ_7745c5c3_Err != nil {
 				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/login.templ`, Line: 23, Col: 44}
 			}
-			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
+			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "</div>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<form method=\"post\" action=\"/login\" class=\"login-form\"><label>Email <input type=\"email\" name=\"email\" autocomplete=\"username\" required autofocus></label> <label>Password <input type=\"password\" name=\"password\" autocomplete=\"current-password\" required></label> <button class=\"btn btn-primary\" type=\"submit\">Sign in</button></form></div></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<form method=\"post\" action=\"/login\" class=\"login-form\"><label>Email <input type=\"email\" name=\"email\" autocomplete=\"username\" required autofocus></label> <label>Password <input type=\"password\" name=\"password\" autocomplete=\"current-password\" required></label> <button class=\"btn btn-primary\" type=\"submit\">Sign in</button></form></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -78,12 +91,25 @@ func NotFoundPage() templ.Component {
 			}()
 		}
 		ctx = templ.InitializeContext(ctx)
-		templ_7745c5c3_Var3 := templ.GetChildren(ctx)
-		if templ_7745c5c3_Var3 == nil {
-			templ_7745c5c3_Var3 = templ.NopComponent
+		templ_7745c5c3_Var4 := templ.GetChildren(ctx)
+		if templ_7745c5c3_Var4 == nil {
+			templ_7745c5c3_Var4 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Page not found · DeployMate</title><script>\n\t\t\t\ttry { var t = localStorage.getItem(\"dm-theme\"); if (t === \"light\") document.documentElement.setAttribute(\"data-theme\", \"light\"); } catch (e) {}\n\t\t\t</script><link rel=\"stylesheet\" href=\"/static/app.css\"></head><body class=\"login-body\"><div class=\"login-card\"><div class=\"login-brand\"><span class=\"led\"></span> <span>deploymate</span></div><h1 class=\"nf-title\">Page not found</h1><p class=\"login-sub\">That address doesn't exist, or the app or project it pointed to has been deleted.</p><a class=\"btn btn-primary nf-btn\" href=\"/projects\">Go to your fleet</a></div></body></html>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<!doctype html><html lang=\"en\"><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>Page not found · DeployMate</title><script>\n\t\t\t\ttry { var t = localStorage.getItem(\"dm-theme\"); if (t === \"light\") document.documentElement.setAttribute(\"data-theme\", \"light\"); } catch (e) {}\n\t\t\t</script><link rel=\"stylesheet\" href=\"")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		var templ_7745c5c3_Var5 templ.SafeURL
+		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinURLErrs(assetURL("/static/app.css"))
+		if templ_7745c5c3_Err != nil {
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/templates/login.templ`, Line: 51, Col: 60}
+		}
+		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "\"></head><body class=\"login-body\"><div class=\"login-card\"><div class=\"login-brand\"><span class=\"led\"></span> <span>deploymate</span></div><h1 class=\"nf-title\">Page not found</h1><p class=\"login-sub\">That address doesn't exist, or the app or project it pointed to has been deleted.</p><a class=\"btn btn-primary nf-btn\" href=\"/projects\">Go to your fleet</a></div></body></html>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

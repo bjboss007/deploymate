@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-17 (stale assets + sign-ins redesign)** — The owner updated to v0.8.1 and saw the Sign-ins block unstyled (tiles stacked as plain
+text): the browser/Cloudflare kept the v0.8.0 `app.css`. Real defect: asset URLs never changed between releases. Now every page links
+`/static/app.css?v=<release>` (and htmx/chart/app.js; `templates.AssetVersion` set by `Server.SetVersion`, start time for dev builds),
+versioned URLs and fonts are cached for a year (`staticCache` in `headers.go`), bare `/static/*` revalidates. Sign-ins block redesigned:
+status sentence, four tiles with 7-day context, 24-hour stacked strip, "most failed attempts from" (addresses, counts, emails tried),
+latest 12 attempts. Unreleased: tag as v0.8.2 when asked; after that update, a hard refresh is no longer needed.
+
 **2026-10-17 (sign-in metrics)** — The owner expected to *see* login and failed-login numbers (phase C had only recorded them). Security page
 now has a **Sign-ins** block (24 h counts, 7-day totals, active sessions, latest 20 attempts, new-address tag); `blocked` entries
 once per block; sign-in rows pruned after 90 days and excluded from `ListAudit`. Unreleased. Not done: sign-in numbers in

@@ -130,7 +130,7 @@ templ GitHubRedirectPage(formURL string, manifest string) {
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>Opening GitHub · DeployMate</title>
-			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="stylesheet" href={ assetURL("/static/app.css") }/>
 		</head>
 		<body>
 			<main style="max-width:520px;margin:15vh auto;padding:0 16px">

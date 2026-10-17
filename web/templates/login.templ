@@ -10,7 +10,7 @@ templ LoginPage(err ...string) {
 			<script>
 				try { var t = localStorage.getItem("dm-theme"); if (t === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
 			</script>
-			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="stylesheet" href={ assetURL("/static/app.css") }/>
 		</head>
 		<body class="login-body">
 			<div class="login-card">
@@ -48,7 +48,7 @@ templ NotFoundPage() {
 			<script>
 				try { var t = localStorage.getItem("dm-theme"); if (t === "light") document.documentElement.setAttribute("data-theme", "light"); } catch (e) {}
 			</script>
-			<link rel="stylesheet" href="/static/app.css"/>
+			<link rel="stylesheet" href={ assetURL("/static/app.css") }/>
 		</head>
 		<body class="login-body">
 			<div class="login-card">

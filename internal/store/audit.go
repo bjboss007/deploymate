@@ -110,3 +110,52 @@ func (s *Store) PruneLogins(before string) (int64, error) {
 	}
 	return res.RowsAffected()
 }
+
+// LoginHours counts sign-in attempts per UTC hour ("2026-10-17T20") and result since a timestamp.
+func (s *Store) LoginHours(since string) (map[string]map[string]int, error) {
+	rows, err := s.db.Query(`SELECT substr(ts, 1, 13), result, COUNT(*) FROM audit_log WHERE action = 'login' AND ts >= ? GROUP BY 1, 2`, since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[string]map[string]int{}
+	for rows.Next() {
+		var h, res string
+		var n int
+		if err := rows.Scan(&h, &res, &n); err != nil {
+			return nil, err
+		}
+		if out[h] == nil {
+			out[h] = map[string]int{}
+		}
+		out[h][res] = n
+	}
+	return out, rows.Err()
+}
+
+// FailureSource is an address that failed to sign in.
+type FailureSource struct {
+	Address string
+	Count   int
+	Emails  int // different emails it tried
+	Last    string
+}
+
+// FailureSources lists the addresses with the most failed sign-ins since a timestamp.
+func (s *Store) FailureSources(since string, limit int) ([]FailureSource, error) {
+	rows, err := s.db.Query(`SELECT detail, COUNT(*) AS n, COUNT(DISTINCT target), MAX(ts) FROM audit_log
+		WHERE action = 'login' AND result = 'refused' AND ts >= ? GROUP BY detail ORDER BY n DESC, MAX(ts) DESC LIMIT ?`, since, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []FailureSource
+	for rows.Next() {
+		var f FailureSource
+		if err := rows.Scan(&f.Address, &f.Count, &f.Emails, &f.Last); err != nil {
+			return nil, err
+		}
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}

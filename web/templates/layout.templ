@@ -2,6 +2,12 @@ package templates
 
 import "strings"
 
+// AssetVersion is appended to the stylesheet and script URLs (?v=…), so a new release is never served from a
+// browser or CDN copy of the old files. The server sets it once at start.
+var AssetVersion = "0"
+
+func assetURL(path string) string { return path + "?v=" + AssetVersion }
+
 // ViewCtx carries the per-request values every page needs.
 type ViewCtx struct {
 	Email string
@@ -39,10 +45,10 @@ templ Layout(vc ViewCtx, title string, appSlug string, crumbs []Crumb) {
 				// Apply the saved theme before first paint (dark is the default).
 				try { var t = localStorage.getItem("dm-theme"); if (t === "light") document.documentElement.setAttribute("data-theme", "light"); if (localStorage.getItem("dm-nav") === "rail") document.documentElement.setAttribute("data-nav", "rail"); } catch (e) {}
 			</script>
-			<link rel="stylesheet" href="/static/app.css"/>
-			<script src="/static/htmx.min.js" defer></script>
-			<script src="/static/chart.umd.min.js" defer></script>
-			<script src="/static/app.js" defer></script>
+			<link rel="stylesheet" href={ assetURL("/static/app.css") }/>
+			<script src={ assetURL("/static/htmx.min.js") } defer></script>
+			<script src={ assetURL("/static/chart.umd.min.js") } defer></script>
+			<script src={ assetURL("/static/app.js") } defer></script>
 		</head>
 		<body
 			if appSlug != "" {

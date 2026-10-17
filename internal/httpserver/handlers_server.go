@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/hostinfo"
@@ -32,7 +33,14 @@ func (s *Server) SetHostSource(h HostSource) { s.host = h }
 func (s *Server) SetDemoHost(h HostSource) { s.host, s.demoHost = h, true }
 
 // SetVersion tells the Server page which release is running.
-func (s *Server) SetVersion(v string) { s.version = v }
+func (s *Server) SetVersion(v string) {
+	s.version = v
+	// Release builds stamp assets with the version; dev builds with the start time, so a rebuild is never stale.
+	if v == "" || v == "dev" {
+		v = strconv.FormatInt(time.Now().Unix(), 10)
+	}
+	templates.AssetVersion = v
+}
 
 // serverReport is one reading of the server, shared by the page and the API.
 type serverReport struct {

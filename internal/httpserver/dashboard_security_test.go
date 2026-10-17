@@ -13,6 +13,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
+	"github.com/habibmuhammad/deploymate/web/templates"
 )
 
 func TestDashboardSendsSecurityHeadersButNotOnPreview(t *testing.T) {
@@ -155,9 +156,33 @@ func TestSecurityPageShowsSignInActivity(t *testing.T) {
 	rec := httptest.NewRecorder()
 	e.s.Handler().ServeHTTP(rec, req)
 	body := rec.Body.String()
-	for _, want := range []string{"Sign-ins", "signed in, 24 h", "failed, 24 h", "blocked, 24 h", "active sessions", "attacker@evil.test", "203.0.113.9", "new address", ">blocked<"} {
+	for _, want := range []string{"Sign-ins", "1 failed sign-in in the last 24 hours, and an address was blocked", "signed in", "active sessions", "Most failed attempts from", "1 failed, 1 email(s)", "Latest attempts", "attacker@evil.test", "203.0.113.9", "new address", ">blocked<", "si-col"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}
+	}
+}
+
+func TestAssetsCarryTheReleaseSoAnUpdateIsNeverStale(t *testing.T) {
+	e := newWebhookEnv(t)
+	e.s.SetVersion("v9.9.9")
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/login", nil))
+	if !strings.Contains(rec.Body.String(), `/static/app.css?v=v9.9.9`) {
+		t.Fatalf("the stylesheet link must name the release:\n%s", rec.Body.String())
+	}
+	versioned := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(versioned, httptest.NewRequest(http.MethodGet, "/static/app.css?v=v9.9.9", nil))
+	if cc := versioned.Header().Get("Cache-Control"); !strings.Contains(cc, "immutable") {
+		t.Errorf("a versioned asset can be cached for good, got %q", cc)
+	}
+	bare := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(bare, httptest.NewRequest(http.MethodGet, "/static/app.css", nil))
+	if bare.Header().Get("Cache-Control") != "no-cache" {
+		t.Errorf("an unversioned asset must revalidate, got %q", bare.Header().Get("Cache-Control"))
+	}
+	e.s.SetVersion("dev")
+	if templates.AssetVersion == "dev" || templates.AssetVersion == "" {
+		t.Errorf("dev builds stamp the start time, got %q", templates.AssetVersion)
 	}
 }

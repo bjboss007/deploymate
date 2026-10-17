@@ -112,7 +112,7 @@ func (s *Server) Handler() http.Handler {
 	if err != nil {
 		panic("httpserver: static embed broken: " + err.Error())
 	}
-	r.Handle("/static/*", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	r.Handle("/static/*", staticCache(http.StripPrefix("/static/", http.FileServer(http.FS(staticFS)))))
 
 	// Public, session-aware routes.
 	r.Group(func(r chi.Router) {

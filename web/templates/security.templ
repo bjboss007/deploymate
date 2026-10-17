@@ -15,7 +15,23 @@ type SignInView struct {
 	OK, Refused, Blocked int // last 24 hours
 	OK7, Refused7        int // last 7 days
 	ActiveSessions       int
+	Status, StatusLevel  string        // one sentence, ok | warn
+	Hours                []SignInHour  // the last 24 hours, oldest first
+	Sources              []SignInSource // addresses with the most failures
 	Recent               []SignInRow
+}
+
+// SignInHour is one hour of the strip; the percentages are heights against the busiest hour.
+type SignInHour struct {
+	Label           string
+	OK, Failed      int
+	OKPct, FailPct  int
+}
+
+// SignInSource is one address that failed to sign in.
+type SignInSource struct {
+	Address, Last string
+	Count, Emails int
 }
 
 // SignInRow is one recent attempt.
@@ -65,42 +81,71 @@ templ SecurityPage(vc ViewCtx, v SecurityView) {
 		</div>
 		<div class="panel">
 			<div class="panel-title">Sign-ins <span class="panel-note">dashboard logins, kept 90 days</span></div>
-			<div class="si-tiles">
-				<div class="si-tile"><span class="si-num">{ strconv.Itoa(v.SignIns.OK) }</span><span class="si-lbl">signed in, 24 h</span></div>
-				<div class={ "si-tile", templ.KV("si-bad", v.SignIns.Refused > 0) }><span class="si-num">{ strconv.Itoa(v.SignIns.Refused) }</span><span class="si-lbl">failed, 24 h</span></div>
-				<div class={ "si-tile", templ.KV("si-bad", v.SignIns.Blocked > 0) }><span class="si-num">{ strconv.Itoa(v.SignIns.Blocked) }</span><span class="si-lbl">blocked, 24 h</span></div>
-				<div class="si-tile"><span class="si-num">{ strconv.Itoa(v.SignIns.ActiveSessions) }</span><span class="si-lbl">active sessions</span></div>
+			<div class={ "si-status", "si-" + v.SignIns.StatusLevel }>
+				<span class={ "status-dot", "dot-" + v.SignIns.StatusLevel }></span>
+				<span>{ v.SignIns.Status }</span>
 			</div>
-			<p class="muted-text">Last 7 days: { strconv.Itoa(v.SignIns.OK7) } signed in, { strconv.Itoa(v.SignIns.Refused7) } failed.</p>
-			if len(v.SignIns.Recent) == 0 {
-				<p class="muted-text">No sign-ins recorded yet.</p>
-			} else {
-				<table class="deploy-table">
-					<thead><tr><th>When</th><th>Email</th><th>Address</th><th></th></tr></thead>
-					<tbody>
-						for _, a := range v.SignIns.Recent {
-							<tr>
-								<td class="muted-text">{ ago(a.TS) }</td>
-								<td>{ a.Email }</td>
-								<td class="mono">{ a.Address }</td>
-								<td>
+			<div class="si-tiles">
+				<div class="si-tile si-t-ok"><span class="si-num">{ strconv.Itoa(v.SignIns.OK) }</span><span class="si-lbl">signed in</span><span class="si-sub">{ strconv.Itoa(v.SignIns.OK7) } in 7 days</span></div>
+				<div class={ "si-tile", templ.KV("si-t-warn", v.SignIns.Refused > 0) }><span class="si-num">{ strconv.Itoa(v.SignIns.Refused) }</span><span class="si-lbl">failed</span><span class="si-sub">{ strconv.Itoa(v.SignIns.Refused7) } in 7 days</span></div>
+				<div class={ "si-tile", templ.KV("si-t-bad", v.SignIns.Blocked > 0) }><span class="si-num">{ strconv.Itoa(v.SignIns.Blocked) }</span><span class="si-lbl">blocked</span><span class="si-sub">address hit its limit</span></div>
+				<div class="si-tile"><span class="si-num">{ strconv.Itoa(v.SignIns.ActiveSessions) }</span><span class="si-lbl">active sessions</span><span class="si-sub">signed in right now</span></div>
+			</div>
+			<div class="si-chart">
+				<div class="si-bars" role="img" aria-label="Sign-ins per hour over the last 24 hours">
+					for _, h := range v.SignIns.Hours {
+						<div class="si-col" title={ h.Label + ": " + strconv.Itoa(h.OK) + " signed in, " + strconv.Itoa(h.Failed) + " failed" }>
+							<span class="si-seg si-seg-fail" style={ templ.SafeCSS("height:" + strconv.Itoa(h.FailPct) + "%") }></span>
+							<span class="si-seg si-seg-ok" style={ templ.SafeCSS("height:" + strconv.Itoa(h.OKPct) + "%") }></span>
+						</div>
+					}
+				</div>
+				<div class="si-axis"><span>24 hours ago</span><span>now</span></div>
+			</div>
+			<div class="si-split">
+				<div>
+					<div class="panel-sub">Most failed attempts from</div>
+					if len(v.SignIns.Sources) == 0 {
+						<p class="muted-text">No failed attempts in the last 24 hours.</p>
+					} else {
+						<ul class="si-sources">
+							for _, src := range v.SignIns.Sources {
+								<li>
+									<span class="mono">{ src.Address }</span>
+									<span class="muted-text">{ strconv.Itoa(src.Count) } failed, { strconv.Itoa(src.Emails) } email(s), { ago(src.Last) }</span>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+				<div>
+					<div class="panel-sub">Latest attempts</div>
+					if len(v.SignIns.Recent) == 0 {
+						<p class="muted-text">No sign-ins recorded yet. They appear here from the next one.</p>
+					} else {
+						<ul class="si-recent">
+							for _, a := range v.SignIns.Recent {
+								<li>
 									switch a.Result {
 										case "ok":
 											<span class="badge badge-running">signed in</span>
-											if a.NewAddress {
-												<span class="badge" title="This address had not signed in before">new address</span>
-											}
 										case "blocked":
 											<span class="badge badge-failed">blocked</span>
 										default:
 											<span class="badge">failed</span>
 									}
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
-			}
+									<span class="si-who">{ a.Email }</span>
+									<span class="mono muted-text">{ a.Address }</span>
+									if a.NewAddress {
+										<span class="badge badge-accent" title="This address had not signed in before">new address</span>
+									}
+									<span class="muted-text si-when">{ ago(a.TS) }</span>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+			</div>
 		</div>
 		<div class="panel">
 			<p class="sec-detail">Sessions last 7 days. If a laptop was lost or you saw a sign-in you do not recognise, end every session, this one included.</p>
