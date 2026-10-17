@@ -1,10 +1,28 @@
 package templates
 
+import "strconv"
+
 // SecurityView is the Security page, already formatted (httpserver.buildSecurityView).
 type SecurityView struct {
 	Level    string // ok | warn | crit
 	Headline string
 	Checks   []SecurityCheck
+	SignIns  SignInView
+}
+
+// SignInView is the sign-in activity block of the Security page.
+type SignInView struct {
+	OK, Refused, Blocked int // last 24 hours
+	OK7, Refused7        int // last 7 days
+	ActiveSessions       int
+	Recent               []SignInRow
+}
+
+// SignInRow is one recent attempt.
+type SignInRow struct {
+	TS, Email, Address string
+	Result             string // ok | refused | blocked
+	NewAddress         bool
 }
 
 // SecurityCheck is one finding.
@@ -46,7 +64,46 @@ templ SecurityPage(vc ViewCtx, v SecurityView) {
 			}
 		</div>
 		<div class="panel">
-			<p class="sec-detail">Sign-ins last 7 days. If a laptop was lost or you saw a sign-in you do not recognise, end every session, this one included.</p>
+			<div class="panel-title">Sign-ins <span class="panel-note">dashboard logins, kept 90 days</span></div>
+			<div class="si-tiles">
+				<div class="si-tile"><span class="si-num">{ strconv.Itoa(v.SignIns.OK) }</span><span class="si-lbl">signed in, 24 h</span></div>
+				<div class={ "si-tile", templ.KV("si-bad", v.SignIns.Refused > 0) }><span class="si-num">{ strconv.Itoa(v.SignIns.Refused) }</span><span class="si-lbl">failed, 24 h</span></div>
+				<div class={ "si-tile", templ.KV("si-bad", v.SignIns.Blocked > 0) }><span class="si-num">{ strconv.Itoa(v.SignIns.Blocked) }</span><span class="si-lbl">blocked, 24 h</span></div>
+				<div class="si-tile"><span class="si-num">{ strconv.Itoa(v.SignIns.ActiveSessions) }</span><span class="si-lbl">active sessions</span></div>
+			</div>
+			<p class="muted-text">Last 7 days: { strconv.Itoa(v.SignIns.OK7) } signed in, { strconv.Itoa(v.SignIns.Refused7) } failed.</p>
+			if len(v.SignIns.Recent) == 0 {
+				<p class="muted-text">No sign-ins recorded yet.</p>
+			} else {
+				<table class="deploy-table">
+					<thead><tr><th>When</th><th>Email</th><th>Address</th><th></th></tr></thead>
+					<tbody>
+						for _, a := range v.SignIns.Recent {
+							<tr>
+								<td class="muted-text">{ ago(a.TS) }</td>
+								<td>{ a.Email }</td>
+								<td class="mono">{ a.Address }</td>
+								<td>
+									switch a.Result {
+										case "ok":
+											<span class="badge badge-running">signed in</span>
+											if a.NewAddress {
+												<span class="badge" title="This address had not signed in before">new address</span>
+											}
+										case "blocked":
+											<span class="badge badge-failed">blocked</span>
+										default:
+											<span class="badge">failed</span>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+		<div class="panel">
+			<p class="sec-detail">Sessions last 7 days. If a laptop was lost or you saw a sign-in you do not recognise, end every session, this one included.</p>
 			<form method="post" action="/logout-all">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 				<button class="btn btn-danger" type="submit">Sign out everywhere</button>

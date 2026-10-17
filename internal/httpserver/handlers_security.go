@@ -96,6 +96,7 @@ func (s *Server) handleSecurityPage(w http.ResponseWriter, r *http.Request) {
 	for _, c := range rep.Checks {
 		v.Checks = append(v.Checks, templates.SecurityCheck{Title: c.Title, Level: secClass(c.Level), Label: levelLabel(c.Level), Detail: c.Detail, Fix: c.Fix})
 	}
+	v.SignIns = s.signInView()
 	render(w, r, http.StatusOK, templates.SecurityPage(s.viewCtx(r), v))
 }
 
@@ -124,4 +125,23 @@ func (s *Server) handleAPISecurity(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Debug("api: security", "status", out.Status)
 	apiJSON(w, http.StatusOK, out)
+}
+
+// signInView gathers the sign-in activity block; a failed lookup just leaves a part empty.
+func (s *Server) signInView() templates.SignInView {
+	var v templates.SignInView
+	now := time.Now().UTC()
+	if c, err := s.store.LoginCounts(now.Add(-24 * time.Hour).Format(time.RFC3339Nano)); err == nil {
+		v.OK, v.Refused, v.Blocked = c["ok"], c["refused"], c["blocked"]
+	}
+	if c, err := s.store.LoginCounts(now.AddDate(0, 0, -7).Format(time.RFC3339Nano)); err == nil {
+		v.OK7, v.Refused7 = c["ok"], c["refused"]
+	}
+	v.ActiveSessions, _ = s.store.CountActiveSessions()
+	if rows, err := s.store.ListLogins(20); err == nil {
+		for _, r := range rows {
+			v.Recent = append(v.Recent, templates.SignInRow{TS: r.TS, Email: r.Email, Address: r.Address, Result: r.Result, NewAddress: r.NewAddress})
+		}
+	}
+	return v
 }

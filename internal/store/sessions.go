@@ -49,3 +49,10 @@ func (s *Store) DeleteSessionsForUser(userID string) error {
 	_, err := s.db.Exec(`DELETE FROM sessions WHERE user_id = ?`, userID)
 	return err
 }
+
+// CountActiveSessions counts sessions that have not expired.
+func (s *Store) CountActiveSessions() (int, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM sessions WHERE expires_at > ?`, Now()).Scan(&n)
+	return n, err
+}

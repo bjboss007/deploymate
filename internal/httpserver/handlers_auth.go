@@ -124,7 +124,11 @@ func (s *Server) auditLogin(action, email, ip, result string) {
 
 func (s *Server) loginFailed(ip, email string) {
 	s.auditLogin("login", email, ip, "refused")
-	if s.loginLimit.fail(ip, email) && s.notify != nil {
+	if !s.loginLimit.fail(ip, email) {
+		return
+	}
+	s.auditLogin("login", email, ip, "blocked") // once per block, so a scan cannot flood the log
+	if s.notify != nil {
 		go s.notify(alerts.EventLoginBlocked, "sign-ins blocked for "+ip,
 			"Too many failed dashboard sign-ins (last tried: "+email+"). Further attempts are refused for up to 15 minutes.")
 	}

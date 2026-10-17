@@ -79,6 +79,11 @@ login audit or alerts; 30-day sessions; no 2FA.
     target = email, detail = address). Attempts refused by the limiter are not logged (a scan would flood the table).
     New alert event **`login_blocked`** ("Repeated failed dashboard sign-ins"): one notification when an address or
     email reaches its limit (`loginLimiter.fail` reports the crossing), not one per attempt.
+  - *Sign-ins section on the Security page (added 2026-10-17):* counts for the last 24 hours (signed in, failed,
+    blocked) and active sessions, 7-day totals, and the latest 20 attempts with a **new address** tag on a successful
+    sign-in from an address that never signed in before. Refused attempts are recorded; a **blocked** entry is written
+    once when an address or email reaches its limit. Sign-in rows are kept 90 days (pruned every 6 hours) and no longer
+    appear in the API tokens page's activity list.
   - *Client address in tunnel mode:* `Server.clientAddr` trusts `CF-Connecting-IP`, but only when
     `DEPLOYMATE_LE_MODE=off` and the peer is loopback (the tunnel is then the only way in); otherwise the old
     last-`X-Forwarded-For` rule applies. Without this every visitor behind the tunnel shared one rate-limit bucket.

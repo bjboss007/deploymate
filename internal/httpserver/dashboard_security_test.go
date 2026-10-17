@@ -11,6 +11,7 @@ import (
 
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -73,12 +74,21 @@ func TestFailedSignInsAreAuditedAndTheBlockRaisesOneAlert(t *testing.T) {
 	if len(events) != 1 || !strings.HasPrefix(events[0], alerts.EventLoginBlocked+":sign-ins blocked for 203.0.113.9") {
 		t.Fatalf("alerts: %v (want exactly one)", events)
 	}
-	log, _ := e.st.ListAudit(50)
-	refused := 0
+	log, _ := e.st.ListLogins(50)
+	refused, blocked := 0, 0
 	for _, a := range log {
-		if a.Action == "login" && a.Result == "refused" && a.Detail == "203.0.113.9" {
-			refused++
+		if a.Address != "203.0.113.9" {
+			continue
 		}
+		switch a.Result {
+		case "refused":
+			refused++
+		case "blocked":
+			blocked++
+		}
+	}
+	if blocked != 1 {
+		t.Errorf("recorded %d blocks, want exactly one per block", blocked)
 	}
 	if refused != loginMaxFailsIP {
 		t.Errorf("audited %d refused sign-ins, want %d (blocked attempts are not recorded)", refused, loginMaxFailsIP)
@@ -129,5 +139,25 @@ func TestClientAddrTrustsCloudflareOnlyBehindTheTunnel(t *testing.T) {
 func TestSessionsLastAWeek(t *testing.T) {
 	if auth.SessionTTL != 7*24*time.Hour {
 		t.Fatal(auth.SessionTTL)
+	}
+}
+
+func TestSecurityPageShowsSignInActivity(t *testing.T) {
+	e := newWebhookEnv(t)
+	e.s.rt = &fakeRuntime{inspectErr: runtime.ErrContainerNotFound}
+	owner, _ := e.st.CreateUser(store.User{Email: "o@test.dev", PasswordHash: "x", Role: "owner"})
+	e.st.CreateSession(store.Session{UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "c", ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)})
+	e.s.auditLogin("login", "o@test.dev", "10.0.0.1", "ok")
+	e.s.auditLogin("login", "attacker@evil.test", "203.0.113.9", "refused")
+	e.s.auditLogin("login", "attacker@evil.test", "203.0.113.9", "blocked")
+	req := httptest.NewRequest(http.MethodGet, "/security", nil)
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, req)
+	body := rec.Body.String()
+	for _, want := range []string{"Sign-ins", "signed in, 24 h", "failed, 24 h", "blocked, 24 h", "active sessions", "attacker@evil.test", "203.0.113.9", "new address", ">blocked<"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("page missing %q", want)
+		}
 	}
 }

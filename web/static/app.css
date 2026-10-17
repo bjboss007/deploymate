@@ -971,3 +971,10 @@ select { cursor: pointer; }
 .sec-label { margin-left: auto; font-size: 12.5px; }
 .sec-detail { margin: 6px 0 0 15px; color: var(--muted); font-size: 14px; }
 .sec-fix { margin: 8px 0 0 15px; padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
+
+/* ---- sign-in activity (Security page) -------------------------------- */
+.si-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 6px 0 12px; }
+.si-tile { background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; display: flex; flex-direction: column; gap: 2px; }
+.si-num { font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+.si-lbl { font-size: 12.5px; color: var(--muted); }
+.si-bad .si-num { color: var(--amber); }

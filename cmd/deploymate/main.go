@@ -215,6 +215,10 @@ func pruneSessions(st *store.Store) {
 		} else if n > 0 {
 			slog.Info("pruned expired sessions", "count", n)
 		}
+		// Sign-in history is kept for 90 days.
+		if _, err := st.PruneLogins(time.Now().UTC().AddDate(0, 0, -90).Format(time.RFC3339Nano)); err != nil {
+			slog.Error("prune sign-ins", "err", err)
+		}
 	}
 }
 
