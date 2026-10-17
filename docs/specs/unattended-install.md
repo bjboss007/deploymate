@@ -113,13 +113,18 @@ reported, not hidden. If step 6 fails the firewall is never closed.
 4. A cloud-init template per provider documented on the website; the VM end-to-end test.
 5. Only then the control plane (separate spec).
 
-## Open questions for the owner
-1. **How do we reach a managed server afterwards?** Tunnel servers expose nothing inbound. Options: the management
-   token over the customer's own tunnel hostname (needs a Cloudflare Access service token on their account), or an
-   outbound agent from the server to us. The first needs no new component; the second is more robust.
-2. **Whose Cloudflare account?** A tunnel in the customer's account keeps them in control; one in ours is simpler to
-   automate but makes us a single point of failure for their access.
-3. **Which providers first** (Hetzner, DigitalOcean, any cloud-init host)? The script is provider-neutral; only the
-   docs and the later control plane differ.
-4. **Support boundary:** do we ever log in to a customer's server? If yes, it should be a revocable key in
-   `authorized_keys` that the customer can see, never a shared secret.
+## Decisions (owner, 2026-10-17)
+1. **Reaching a managed server:** through the customer's own tunnel hostname, with a Cloudflare Access service token on
+   their account. No agent for now; revisit if it becomes a pain (the agent is the more robust option).
+2. **The tunnel lives in the customer's Cloudflare account.** They stay in control; we never hold their only way in.
+3. **Providers:** provider-neutral script; Hetzner and DigitalOcean first for docs. Revisit when a first customer names
+   their provider.
+4. **Support access:** a visible, revocable SSH key in the customer's `authorized_keys` (labelled, listed on the
+   Security page, removable), never a shared secret. Without that key we work only through the dashboard API and the
+   management token. The unattended installer must therefore be able to add (and a flag to omit) this key.
+
+Consequences for the build: the ready callback carries the Access service-token hostname instead of a public address;
+the installer takes `DEPLOYMATE_SUPPORT_KEY` (public key, optional) and writes it with a comment such as
+`deploymate-support` so it is recognisable; the Security audit lists it.
+
+See `docs/knowledge/legal-checklist.md` for the legal questions that gate the first paid customer.

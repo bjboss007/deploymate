@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-17 (v0.8.0 released; commercial decisions)** — Tagged v0.8.0 (sidebar, MySQL/Redis/MongoDB backups, exec demux).
+Owner answered the unattended-install questions (customer's own Cloudflare tunnel + Access token, no agent, visible
+revocable support SSH key; provider-neutral) — recorded in `docs/specs/unattended-install.md`; legal questions to put to
+a lawyer are in `docs/knowledge/legal-checklist.md` (not legal advice). **Next:** step one of the installer spec
+(`deploymate token create`, hash-based `setup-admin`, `harden --trust-ssh-key --no-timer`, `DEPLOYMATE_SUPPORT_KEY`).
+
 **2026-10-17 (navigation: grouped sidebar)** — The top bar's icons became a left sidebar (owner picked design A of four):
 Projects / Server (Health, Security, Build stats) / Settings (GitHub, API tokens, Alerts), theme toggle, collapse to an
 icon rail (remembered in `localStorage` `dm-nav`, applied before paint), account row with log out; on phones a menu bar
