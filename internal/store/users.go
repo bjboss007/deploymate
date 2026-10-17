@@ -44,3 +44,13 @@ func (s *Store) scanUser(query string, arg any) (User, error) {
 	}
 	return u, err
 }
+
+// OwnerEmail is the first owner's email, or sql.ErrNoRows-style ErrNotFound when no user exists.
+func (s *Store) OwnerEmail() (string, error) {
+	var e string
+	err := s.db.QueryRow(`SELECT email FROM users WHERE role = 'owner' ORDER BY created_at LIMIT 1`).Scan(&e)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return e, err
+}

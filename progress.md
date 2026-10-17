@@ -7,6 +7,11 @@
 
 ## Where we stopped
 
+**2026-10-17 (unattended install, step one)** — `deploymate token create`, `deploymate hash-password`,
+`DEPLOYMATE_SETUP_PASSWORD_HASH` (setup-admin and serve), `harden --trust-ssh-key --no-timer --user`. Tested (unit tests
+plus the real commands in a scratch dir). Unreleased. **Next: step two** — installer `--unattended`, provisioning file,
+profile-aware firewall, cloudflared, `DEPLOYMATE_SUPPORT_KEY` (see `docs/specs/unattended-install.md`).
+
 **2026-10-17 (v0.8.0 released; commercial decisions)** — Tagged v0.8.0 (sidebar, MySQL/Redis/MongoDB backups, exec demux).
 Owner answered the unattended-install questions (customer's own Cloudflare tunnel + Access token, no agent, visible
 revocable support SSH key; provider-neutral) — recorded in `docs/specs/unattended-install.md`; legal questions to put to

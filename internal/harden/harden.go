@@ -27,6 +27,9 @@ type Options struct {
 	Tunnel  bool
 	SSHFrom string // tunnel only: CIDR that may still reach port 22
 	User    string // the human who ran sudo; empty or root when logged in as root
+	// TrustKey: an authorized key is enough to turn passwords off, without a logged key login (unattended
+	// installs have no login history; the provider put the key there).
+	TrustKey bool
 }
 
 // Undo is one reversible step: restore a file (Prev nil = it did not exist) or run a command.
@@ -132,7 +135,7 @@ func sshStep(ctx context.Context, s System, o Options) Step {
 		notes = append(notes, "you are not logged in through sudo as a normal user, so root login and passwords are left alone")
 	} else {
 		lines = append(lines, "PermitRootLogin no")
-		if ok, why := keyConfirmed(ctx, s, o.User); ok {
+		if ok, why := keyConfirmed(ctx, s, o.User, o.TrustKey); ok {
 			lines = append(lines, "PasswordAuthentication no", "KbdInteractiveAuthentication no")
 		} else {
 			notes = append(notes, "password login left on: "+why)
@@ -168,13 +171,23 @@ func sshStep(ctx context.Context, s System, o Options) Step {
 	return st
 }
 
+// HasAuthorizedKey reports whether user has at least one line in their authorized_keys.
+func HasAuthorizedKey(s System, user string) bool {
+	if !userRe.MatchString(user) {
+		return false
+	}
+	keys, _ := s.Read("/home/" + user + "/.ssh/authorized_keys")
+	return strings.TrimSpace(keys) != ""
+}
+
 // keyConfirmed: the user has an authorized key AND sshd logged them in with a key before, so
 // switching passwords off cannot strand them.
-func keyConfirmed(ctx context.Context, s System, user string) (bool, string) {
-	home := "/home/" + user
-	keys, _ := s.Read(home + "/.ssh/authorized_keys")
-	if strings.TrimSpace(keys) == "" {
-		return false, "no key in " + home + "/.ssh/authorized_keys (run ssh-copy-id first)"
+func keyConfirmed(ctx context.Context, s System, user string, trust bool) (bool, string) {
+	if !HasAuthorizedKey(s, user) {
+		return false, "no key in /home/" + user + "/.ssh/authorized_keys (run ssh-copy-id first)"
+	}
+	if trust {
+		return true, ""
 	}
 	out, err := s.Run(ctx, "journalctl", "-u", "ssh", "-u", "sshd", "--no-pager", "-q", "--since", "-30d",
 		"-g", "Accepted publickey for "+user+" ")

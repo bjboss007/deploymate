@@ -63,6 +63,10 @@ func run() error {
 		return runMCP()
 	case "update":
 		return updateCmd(flag.Args()[1:])
+	case "token":
+		return tokenCmd(flag.Args()[1:])
+	case "hash-password":
+		return hashPasswordCmd()
 	case "harden":
 		return hardenCmd(flag.Args()[1:])
 	case "seed-demo":
@@ -100,8 +104,8 @@ func serve() error {
 	}
 	defer rt.Close()
 
-	if cfg.SetupEmail != "" && cfg.SetupPassword != "" {
-		if err := ensureOwner(st, cfg.SetupEmail, cfg.SetupPassword); err != nil {
+	if cfg.SetupEmail != "" && (cfg.SetupPassword != "" || cfg.SetupHash != "") {
+		if err := ensureOwner(st, cfg.SetupEmail, cfg.SetupPassword, cfg.SetupHash); err != nil {
 			return err
 		}
 	}
@@ -178,8 +182,9 @@ func serve() error {
 	return srv.ListenAndServe()
 }
 
-// ensureOwner creates the first user when the database is empty.
-func ensureOwner(st *store.Store, email, password string) error {
+// ensureOwner creates the first user when the database is empty. hash (an argon2id PHC string) wins over
+// password: provisioning passes only the hash, so the clear password never sits in cloud-init user-data.
+func ensureOwner(st *store.Store, email, password, hash string) error {
 	n, err := st.CountUsers()
 	if err != nil {
 		return err
@@ -187,8 +192,11 @@ func ensureOwner(st *store.Store, email, password string) error {
 	if n > 0 {
 		return nil
 	}
-	hash, err := auth.HashPassword(password)
-	if err != nil {
+	if hash != "" {
+		if err := auth.ValidPasswordHash(hash); err != nil {
+			return fmt.Errorf("DEPLOYMATE_SETUP_PASSWORD_HASH is not an argon2id hash (make one with `deploymate hash-password`): %w", err)
+		}
+	} else if hash, err = auth.HashPassword(password); err != nil {
 		return err
 	}
 	if _, err := st.CreateUser(store.User{Email: email, PasswordHash: hash, Role: "owner"}); err != nil {
@@ -224,23 +232,25 @@ func setupAdmin() error {
 
 	email := os.Getenv("DEPLOYMATE_SETUP_EMAIL")
 	password := os.Getenv("DEPLOYMATE_SETUP_PASSWORD")
-	if email == "" || password == "" {
+	hash := os.Getenv("DEPLOYMATE_SETUP_PASSWORD_HASH")
+	if email == "" || (password == "" && hash == "") {
 		reader := bufio.NewReader(os.Stdin)
 		if email == "" {
 			fmt.Print("Email: ")
 			email, _ = reader.ReadString('\n')
 		}
-		if password == "" {
+		if password == "" && hash == "" {
 			fmt.Print("Password: ")
 			password, _ = reader.ReadString('\n')
 		}
 	}
 	email = strings.TrimSpace(email)
 	password = strings.TrimSpace(password)
-	if email == "" || password == "" {
+	hash = strings.TrimSpace(hash)
+	if email == "" || (password == "" && hash == "") {
 		return errors.New("email and password are required")
 	}
-	if err := ensureOwner(st, email, password); err != nil {
+	if err := ensureOwner(st, email, password, hash); err != nil {
 		return err
 	}
 	slog.Info("admin user ready — start deploymate with: deploymate serve")

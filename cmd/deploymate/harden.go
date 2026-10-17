@@ -24,6 +24,9 @@ func hardenCmd(args []string) error {
 	confirm := fs.Bool("confirm", false, "keep the changes: cancel the pending revert")
 	revert := fs.Bool("revert", false, "undo only the firewall/SSH changes (what the timer runs)")
 	undo := fs.Bool("undo", false, "undo everything harden changed")
+	trustKey := fs.Bool("trust-ssh-key", false, "unattended installs: an authorized key is enough to turn password login off")
+	noTimer := fs.Bool("no-timer", false, "unattended installs: no revert timer (nobody is there to confirm)")
+	user := fs.String("user", os.Getenv("SUDO_USER"), "the login user whose authorized_keys count (default: who ran sudo)")
 	_ = fs.Parse(args)
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("run with sudo: it changes the firewall and SSH settings")
@@ -48,7 +51,10 @@ func hardenCmd(args []string) error {
 	}
 
 	tunnel := *profile == "tunnel" || (*profile == "auto" && unitEnv("DEPLOYMATE_LE_MODE") == "off")
-	steps := harden.Plan(ctx, s, harden.Options{Tunnel: tunnel, SSHFrom: *sshFrom, User: os.Getenv("SUDO_USER")})
+	if (*trustKey || *noTimer) && !harden.HasAuthorizedKey(s, *user) {
+		return fmt.Errorf("refusing --trust-ssh-key/--no-timer: %q has no authorized key, so password login could be the only way in (pass --user, and install a key first)", *user)
+	}
+	steps := harden.Plan(ctx, s, harden.Options{Tunnel: tunnel, SSHFrom: *sshFrom, User: *user, TrustKey: *trustKey})
 	kind := "public server"
 	if tunnel {
 		kind = "tunnel server"
@@ -76,7 +82,7 @@ func hardenCmd(args []string) error {
 		fmt.Println("\nThis was a dry run. Add --apply to make these changes.")
 		return nil
 	}
-	if risky {
+	if risky && !*noTimer {
 		// The timer lives in systemd, not in this terminal, so it still fires if the connection drops.
 		exe, _ := os.Executable()
 		_ = exec.Command("systemctl", "stop", revertUnit+".timer").Run()
@@ -89,7 +95,7 @@ func hardenCmd(args []string) error {
 	if _, err := harden.Apply(ctx, s, steps, state, say); err != nil {
 		return fmt.Errorf("%w (changes so far are recorded: `sudo deploymate harden --undo` reverses them)", err)
 	}
-	if risky {
+	if risky && !*noTimer {
 		fmt.Printf("\nDone. Firewall/SSH settings change back in %d minutes unless you confirm.\nOpen a NEW terminal, log in again, and if it works run:\n\n  sudo deploymate harden --confirm\n", *minutes)
 	} else {
 		fmt.Println("\nDone.")

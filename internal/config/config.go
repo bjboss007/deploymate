@@ -22,6 +22,7 @@ type Config struct {
 	// at startup if no users exist yet.
 	SetupEmail    string
 	SetupPassword string
+	SetupHash     string // DEPLOYMATE_SETUP_PASSWORD_HASH: an argon2id hash instead of the clear password
 	// LEMode selects the Let's Encrypt resolver: "staging" (default),
 	// "production", or "off" for a server behind a tunnel or proxy that serves
 	// the real certificate (DeployMate then asks for none).
@@ -79,6 +80,7 @@ func Load() (*Config, error) {
 		DataDir:            getenv("DEPLOYMATE_DATA_DIR", "./data"),
 		SetupEmail:         os.Getenv("DEPLOYMATE_SETUP_EMAIL"),
 		SetupPassword:      os.Getenv("DEPLOYMATE_SETUP_PASSWORD"),
+		SetupHash:          os.Getenv("DEPLOYMATE_SETUP_PASSWORD_HASH"),
 		LEMode:             getenv("DEPLOYMATE_LE_MODE", "staging"),
 		RailpackPath:       getenv("DEPLOYMATE_RAILPACK", "railpack"),
 		DashboardHost:      getenv("DEPLOYMATE_DASHBOARD_HOST", ""),

@@ -148,7 +148,7 @@ func TestSSHRootAndNoKeyLeaveEverythingAlone(t *testing.T) {
 	}
 	f = sshFake()
 	f.files["/home/habib/.ssh/authorized_keys"] = ""
-	if ok, why := keyConfirmed(context.Background(), f, "habib"); ok || !strings.Contains(why, "ssh-copy-id") {
+	if ok, why := keyConfirmed(context.Background(), f, "habib", false); ok || !strings.Contains(why, "ssh-copy-id") {
 		t.Fatal(ok, why)
 	}
 }
@@ -208,5 +208,26 @@ func TestParseUFWNamesTheAppProfile(t *testing.T) {
 	got := parseUFW("To  Action  From\n--  ------  ----\n22/tcp (OpenSSH)           ALLOW IN    Anywhere\n22/tcp (OpenSSH (v6))      ALLOW IN    Anywhere (v6)\n")
 	if len(got) != 1 || got[0].To != "OpenSSH" || portOf(got[0].To) != "22" {
 		t.Fatalf("%+v", got)
+	}
+}
+
+func TestTrustKeyNeedsOnlyAKeyNotALoggedLogin(t *testing.T) {
+	f := sshFake() // has a key, no login in the log
+	st := sshStep(context.Background(), f, Options{User: "habib", TrustKey: true})
+	if _, err := Apply(context.Background(), f, []Step{st}, filepath.Join(t.TempDir(), "s.json"), func(string) {}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(f.files[sshDropin], "PasswordAuthentication no") {
+		t.Fatalf("a trusted key should switch passwords off:\n%s", f.files[sshDropin])
+	}
+	f = sshFake()
+	f.files["/home/habib/.ssh/authorized_keys"] = ""
+	st = sshStep(context.Background(), f, Options{User: "habib", TrustKey: true})
+	_, _ = Apply(context.Background(), f, []Step{st}, filepath.Join(t.TempDir(), "s.json"), func(string) {})
+	if strings.Contains(f.files[sshDropin], "PasswordAuthentication") {
+		t.Fatal("trusting a key that does not exist must never turn passwords off")
+	}
+	if HasAuthorizedKey(f, "../etc") || HasAuthorizedKey(f, "") {
+		t.Fatal("user names are validated")
 	}
 }

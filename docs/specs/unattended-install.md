@@ -107,7 +107,13 @@ reported, not hidden. If step 6 fails the firewall is never closed.
   received, second run changes nothing. This is the only test that proves the ordering, so it gates the release.
 
 ## Build order
-1. `token create` + `setup-admin` hash + `harden` switches (small, testable, useful on their own).
+1. **Done 2026-10-17:** `deploymate token create --name N --scope read|deploy|provision [--days N] [--email E]` (plaintext on
+   stdout only, rest on stderr, 20-token cap, refuses to run as root against a service-owned database);
+   `DEPLOYMATE_SETUP_PASSWORD_HASH` for `setup-admin` and for the serve-time bootstrap (validated argon2id, wins over
+   the clear password; an existing owner is never touched); `deploymate hash-password` (reads one line from stdin);
+   `harden --trust-ssh-key --no-timer --user NAME` (the two switches are refused unless that user has an authorized
+   key; `--user` replaces `SUDO_USER` for cloud-init runs). Not in this step: `DEPLOYMATE_SUPPORT_KEY`, which belongs
+   with the installer in step 2.
 2. Installer `--unattended` + provisioning file + profile-aware firewall + cloudflared.
 3. Ready callback + `install-result.json`.
 4. A cloud-init template per provider documented on the website; the VM end-to-end test.

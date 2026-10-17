@@ -70,3 +70,13 @@ func parsePHC(encoded string) (salt []byte, params phcParams, key []byte, err er
 	}
 	return salt, params, key, nil
 }
+
+// ValidPasswordHash reports whether encoded is a hash HashPassword (or a compatible tool) produced, so a hash
+// supplied from outside (provisioning) is checked before it can lock the owner out.
+func ValidPasswordHash(encoded string) error {
+	_, _, key, err := parsePHC(encoded)
+	if err == nil && len(key) == 0 {
+		err = errors.New("auth: empty hash key")
+	}
+	return err
+}
