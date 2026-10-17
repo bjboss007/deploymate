@@ -20,6 +20,10 @@ func (s *Server) SetSecurityContext(listenAddr string, tunnel bool) {
 	s.listenAddr, s.tunnelMode = listenAddr, tunnel
 }
 
+func (s *Server) handleSignInsPage(w http.ResponseWriter, r *http.Request) {
+	render(w, r, http.StatusOK, templates.SignInsPage(s.viewCtx(r), s.signInView()))
+}
+
 // SetNotifier lets the dashboard raise alerts (repeated failed sign-ins).
 func (s *Server) SetNotifier(fn func(event, subject, details string)) { s.notify = fn }
 
@@ -97,7 +101,6 @@ func (s *Server) handleSecurityPage(w http.ResponseWriter, r *http.Request) {
 	for _, c := range rep.Checks {
 		v.Checks = append(v.Checks, templates.SecurityCheck{Title: c.Title, Level: secClass(c.Level), Label: levelLabel(c.Level), Detail: c.Detail, Fix: c.Fix})
 	}
-	v.SignIns = s.signInView()
 	render(w, r, http.StatusOK, templates.SecurityPage(s.viewCtx(r), v))
 }
 

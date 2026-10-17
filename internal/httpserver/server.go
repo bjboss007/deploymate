@@ -194,6 +194,7 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/stats", s.handleStatsPage)
 		r.Get("/server", s.handleServerPage)
 		r.Get("/security", s.handleSecurityPage)
+		r.Get("/signins", s.handleSignInsPage)
 		r.Post("/logout-all", am.CheckCSRF(s.handleLogoutAll))
 		r.Get("/server/history", s.handleServerHistory)
 		r.Post("/server/cleanup", s.handleServerCleanup)

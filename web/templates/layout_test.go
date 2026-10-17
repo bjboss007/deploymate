@@ -11,6 +11,7 @@ func TestNavCurrentPicksTheSidebarItem(t *testing.T) {
 		"/server":                  "/server",
 		"/server/history":          "/server",
 		"/security":                "/security",
+		"/signins":                 "/signins",
 		"/stats":                   "/stats",
 		"/settings/github":         "/settings/github",
 		"/settings/github/connect": "/settings/github",

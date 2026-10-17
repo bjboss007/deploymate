@@ -73,13 +73,13 @@ login audit or alerts; 30-day sessions; no 2FA.
     keep `'unsafe-inline'` because pages still use inline scripts and handlers, so it does not stop injected inline
     script), `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy: same-origin`, `Permissions-Policy`, and HSTS (1 year,
     no subdomains) only over HTTPS.
-  - *Sessions* last 7 days (was 30; existing ones keep their expiry). **Sign out everywhere** on the Security page
+  - *Sessions* last 7 days (was 30; existing ones keep their expiry). **Sign out everywhere** on the Sign-ins page
     (`POST /logout-all`, `Store.DeleteSessionsForUser`).
   - *Sign-in audit:* successful and refused sign-ins go to the audit log (`token_name` "dashboard", action `login`,
     target = email, detail = address). Attempts refused by the limiter are not logged (a scan would flood the table).
     New alert event **`login_blocked`** ("Repeated failed dashboard sign-ins"): one notification when an address or
     email reaches its limit (`loginLimiter.fail` reports the crossing), not one per attempt.
-  - *Sign-ins section on the Security page (added 2026-10-17):* counts for the last 24 hours (signed in, failed,
+  - *Sign-ins page (`/signins`, sidebar item under Server; moved off the Security page 2026-10-17 because that page was getting crowded; the Security page links to it):* counts for the last 24 hours (signed in, failed,
     blocked) and active sessions, 7-day totals, and the latest 20 attempts with a **new address** tag on a successful
     sign-in from an address that never signed in before. Refused attempts are recorded; a **blocked** entry is written
     once when an address or email reaches its limit. Sign-in rows are kept 90 days (pruned every 6 hours) and no longer

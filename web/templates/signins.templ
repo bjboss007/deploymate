@@ -1,0 +1,120 @@
+package templates
+
+import "strconv"
+
+// SignInView is the sign-in activity block of the Security page.
+type SignInView struct {
+	OK, Refused, Blocked int // last 24 hours
+	OK7, Refused7        int // last 7 days
+	ActiveSessions       int
+	Status, StatusLevel  string        // one sentence, ok | warn
+	Hours                []SignInHour  // the last 24 hours, oldest first
+	Sources              []SignInSource // addresses with the most failures
+	Recent               []SignInRow
+}
+
+// SignInHour is one hour of the strip; the percentages are heights against the busiest hour.
+type SignInHour struct {
+	Label           string
+	OK, Failed      int
+	OKPct, FailPct  int
+}
+
+// SignInSource is one address that failed to sign in.
+type SignInSource struct {
+	Address, Last string
+	Count, Emails int
+}
+
+// SignInRow is one recent attempt.
+type SignInRow struct {
+	TS, Email, Address string
+	Result             string // ok | refused | blocked
+	NewAddress         bool
+}
+
+templ SignInsPage(vc ViewCtx, v SignInView) {
+	@Layout(vc, "Sign-ins", "", []Crumb{{Label: "Server", Href: "/server"}, {Label: "Sign-ins"}}) {
+		<div class="page-head">
+			<div>
+				<h1>Sign-ins</h1>
+				<p class="muted-text">Who has signed in to this dashboard, who tried and failed, and the sessions open right now.</p>
+			</div>
+		</div>
+		<div class="panel">
+			<div class="panel-title">Activity <span class="panel-note">the last 24 hours; history is kept for 90 days</span></div>
+			<div class={ "si-status", "si-" + v.StatusLevel }>
+				<span class={ "status-dot", "dot-" + v.StatusLevel }></span>
+				<span>{ v.Status }</span>
+			</div>
+			<div class="si-tiles">
+				<div class="si-tile si-t-ok"><span class="si-num">{ strconv.Itoa(v.OK) }</span><span class="si-lbl">signed in</span><span class="si-sub">{ strconv.Itoa(v.OK7) } in 7 days</span></div>
+				<div class={ "si-tile", templ.KV("si-t-warn", v.Refused > 0) }><span class="si-num">{ strconv.Itoa(v.Refused) }</span><span class="si-lbl">failed</span><span class="si-sub">{ strconv.Itoa(v.Refused7) } in 7 days</span></div>
+				<div class={ "si-tile", templ.KV("si-t-bad", v.Blocked > 0) }><span class="si-num">{ strconv.Itoa(v.Blocked) }</span><span class="si-lbl">blocked</span><span class="si-sub">address hit its limit</span></div>
+				<div class="si-tile"><span class="si-num">{ strconv.Itoa(v.ActiveSessions) }</span><span class="si-lbl">active sessions</span><span class="si-sub">signed in right now</span></div>
+			</div>
+			<div class="si-chart">
+				<div class="si-bars" role="img" aria-label="Sign-ins per hour over the last 24 hours">
+					for _, h := range v.Hours {
+						<div class="si-col" title={ h.Label + ": " + strconv.Itoa(h.OK) + " signed in, " + strconv.Itoa(h.Failed) + " failed" }>
+							<span class="si-seg si-seg-fail" style={ templ.SafeCSS("height:" + strconv.Itoa(h.FailPct) + "%") }></span>
+							<span class="si-seg si-seg-ok" style={ templ.SafeCSS("height:" + strconv.Itoa(h.OKPct) + "%") }></span>
+						</div>
+					}
+				</div>
+				<div class="si-axis"><span>24 hours ago</span><span>now</span></div>
+			</div>
+			<div class="si-split">
+				<div>
+					<div class="panel-sub">Most failed attempts from</div>
+					if len(v.Sources) == 0 {
+						<p class="muted-text">No failed attempts in the last 24 hours.</p>
+					} else {
+						<ul class="si-sources">
+							for _, src := range v.Sources {
+								<li>
+									<span class="mono">{ src.Address }</span>
+									<span class="muted-text">{ strconv.Itoa(src.Count) } failed, { strconv.Itoa(src.Emails) } email(s), { ago(src.Last) }</span>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+				<div>
+					<div class="panel-sub">Latest attempts</div>
+					if len(v.Recent) == 0 {
+						<p class="muted-text">No sign-ins recorded yet. They appear here from the next one.</p>
+					} else {
+						<ul class="si-recent">
+							for _, a := range v.Recent {
+								<li>
+									switch a.Result {
+										case "ok":
+											<span class="badge badge-running">signed in</span>
+										case "blocked":
+											<span class="badge badge-failed">blocked</span>
+										default:
+											<span class="badge">failed</span>
+									}
+									<span class="si-who">{ a.Email }</span>
+									<span class="mono muted-text">{ a.Address }</span>
+									if a.NewAddress {
+										<span class="badge badge-accent" title="This address had not signed in before">new address</span>
+									}
+									<span class="muted-text si-when">{ ago(a.TS) }</span>
+								</li>
+							}
+						</ul>
+					}
+				</div>
+			</div>
+		</div>
+		<div class="panel">
+			<p class="sec-detail">Sessions last 7 days. If a laptop was lost or you saw a sign-in you do not recognise, end every session, this one included.</p>
+			<form method="post" action="/logout-all">
+				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+				<button class="btn btn-danger" type="submit">Sign out everywhere</button>
+			</form>
+		</div>
+	}
+}

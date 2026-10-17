@@ -417,8 +417,8 @@ SECURE = """
 <h2 id="dashboard">The dashboard itself</h2>
 <ul>
 <li><strong>Headers.</strong> The dashboard refuses to be framed, sets a content security policy and, over HTTPS, HSTS.</li>
-<li><strong>Sign-in limits.</strong> Ten failed sign-ins from one address in 15 minutes, or thirty for one email, and further attempts are refused. Behind a Cloudflare tunnel the real visitor address is used. Every attempt is listed under <strong>Sign-ins</strong> on the Security page (counts, latest attempts, a tag for an address that never signed in before), and an alert event, <em>Repeated failed dashboard sign-ins</em>, can post to your webhook.</li>
-<li><strong>Sessions</strong> last 7 days. <strong>Sign out everywhere</strong> at the bottom of the Security page ends all of them.</li>
+<li><strong>Sign-in limits.</strong> Ten failed sign-ins from one address in 15 minutes, or thirty for one email, and further attempts are refused. Behind a Cloudflare tunnel the real visitor address is used. Every attempt is listed on the <strong>Sign-ins</strong> page in the sidebar (counts, latest attempts, a tag for an address that never signed in before), and an alert event, <em>Repeated failed dashboard sign-ins</em>, can post to your webhook.</li>
+<li><strong>Sessions</strong> last 7 days. <strong>Sign out everywhere</strong> on the Sign-ins page ends all of them.</li>
 <li><strong>Not yet:</strong> two-factor sign-in. Until then, put an access policy (Cloudflare Access, a VPN) in front of the dashboard.</li>
 </ul>
 

@@ -143,7 +143,7 @@ func TestSessionsLastAWeek(t *testing.T) {
 	}
 }
 
-func TestSecurityPageShowsSignInActivity(t *testing.T) {
+func TestSignInsPageShowsActivityAndTheSecurityPageLinksToIt(t *testing.T) {
 	e := newWebhookEnv(t)
 	e.s.rt = &fakeRuntime{inspectErr: runtime.ErrContainerNotFound}
 	owner, _ := e.st.CreateUser(store.User{Email: "o@test.dev", PasswordHash: "x", Role: "owner"})
@@ -151,15 +151,25 @@ func TestSecurityPageShowsSignInActivity(t *testing.T) {
 	e.s.auditLogin("login", "o@test.dev", "10.0.0.1", "ok")
 	e.s.auditLogin("login", "attacker@evil.test", "203.0.113.9", "refused")
 	e.s.auditLogin("login", "attacker@evil.test", "203.0.113.9", "blocked")
-	req := httptest.NewRequest(http.MethodGet, "/security", nil)
+	req := httptest.NewRequest(http.MethodGet, "/signins", nil)
 	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
 	rec := httptest.NewRecorder()
 	e.s.Handler().ServeHTTP(rec, req)
 	body := rec.Body.String()
-	for _, want := range []string{"Sign-ins", "1 failed sign-in in the last 24 hours, and an address was blocked", "signed in", "active sessions", "Most failed attempts from", "1 failed, 1 email(s)", "Latest attempts", "attacker@evil.test", "203.0.113.9", "new address", ">blocked<", "si-col"} {
+	for _, want := range []string{"Sign-ins", "Sign out everywhere", "1 failed sign-in in the last 24 hours, and an address was blocked", "signed in", "active sessions", "Most failed attempts from", "1 failed, 1 email(s)", "Latest attempts", "attacker@evil.test", "203.0.113.9", "new address", ">blocked<", "si-col"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("page missing %q", want)
 		}
+	}
+	sec := httptest.NewRequest(http.MethodGet, "/security", nil)
+	sec.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	srec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(srec, sec)
+	if !strings.Contains(srec.Body.String(), `href="/signins"`) || strings.Contains(srec.Body.String(), "Most failed attempts from") {
+		t.Error("the Security page should only link to sign-ins, not repeat them")
+	}
+	if !strings.Contains(body, `class="navlink on" href="/signins"`) {
+		t.Error("the sidebar marks Sign-ins as the current page")
 	}
 }
 
