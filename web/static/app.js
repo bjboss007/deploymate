@@ -431,3 +431,21 @@ document.addEventListener("click", (e) => {
     h.hidden = !any;
   });
 });
+
+
+// --- sidebar -------------------------------------------------------------
+// Collapse to an icon rail (remembered; applied before paint by an inline script in <head>) and,
+// on phones, a slide-over opened from the menu bar.
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-nav-collapse]")) {
+    const root = document.documentElement;
+    const rail = root.getAttribute("data-nav") !== "rail";
+    if (rail) root.setAttribute("data-nav", "rail"); else root.removeAttribute("data-nav");
+    try { localStorage.setItem("dm-nav", rail ? "rail" : "full"); } catch (_) {}
+  } else if (e.target.closest("[data-nav-open]")) {
+    document.body.classList.add("nav-open");
+  } else if (e.target.closest("[data-nav-close]") || e.target.closest(".sidenav a")) {
+    document.body.classList.remove("nav-open");
+  }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.body.classList.remove("nav-open"); });

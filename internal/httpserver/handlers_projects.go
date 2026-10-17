@@ -27,7 +27,7 @@ func slugify(name string) string {
 type viewCtx = templates.ViewCtx
 
 func (s *Server) viewCtx(r *http.Request) viewCtx {
-	vc := viewCtx{Flash: r.URL.Query().Get("flash")}
+	vc := viewCtx{Flash: r.URL.Query().Get("flash"), Path: r.URL.Path}
 	if user, ok := auth.UserFromContext(r.Context()); ok {
 		vc.Email = user.Email
 	}

@@ -64,8 +64,8 @@ func TestSecurityPageRendersTheChecks(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status %d", rec.Code)
 	}
-	if !strings.Contains(body, `href="/security"`) {
-		t.Error("the top bar should link to the Security page")
+	if !strings.Contains(body, `class="navlink on" href="/security"`) || !strings.Contains(body, `aria-current="page"`) {
+		t.Error("the sidebar should link to the Security page and mark it as the current one")
 	}
 	for _, want := range []string{"Security", "Dashboard address", "listens on every network interface", "DEPLOYMATE_ADDR=127.0.0.1:8080", "Tunnel mode"} {
 		if !strings.Contains(body, want) {

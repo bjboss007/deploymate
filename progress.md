@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-17 (navigation: grouped sidebar)** — The top bar's icons became a left sidebar (owner picked design A of four):
+Projects / Server (Health, Security, Build stats) / Settings (GitHub, API tokens, Alerts), theme toggle, collapse to an
+icon rail (remembered in `localStorage` `dm-nav`, applied before paint), account row with log out; on phones a menu bar
+and a slide-over drawer. `ViewCtx.Path` marks the current item (`navCurrent`; app/service/deployment pages count as
+Projects). Checked in the browser at desktop, rail and 375px; tour snapshots recaptured. Unreleased, together with
+backups for MySQL/Redis/MongoDB (e6e194a). No Alerts badge: there is no unread concept to count.
+
 **2026-10-17 (unattended install: spec only)** — `docs/specs/unattended-install.md`: provisioning file via cloud-init, password
 **hash** (no clear text), `deploymate token create`, profile-aware bootstrap (no ufw opens for tunnel servers), `harden
 --trust-ssh-key --no-timer`, ready callback + `install-result.json`, cloudflared step before the firewall closes. Nothing

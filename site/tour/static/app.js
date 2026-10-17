@@ -55,7 +55,7 @@ function confirmRestore(form) {
   const m = (form.action || "").match(/\/services\/([^/]+)\/backups\/restore/);
   const slug = m ? m[1] : "";
   if (!slug) return false;
-  const answer = prompt('Type "' + slug + '" to confirm restoring this database from the backup. The database is dropped and recreated.');
+  const answer = prompt('Type "' + slug + '" to confirm restoring this database from the backup. Its current data is replaced and cannot be recovered.');
   if (answer === null) return false;
   if (answer.trim() !== slug) {
     alert("Restore cancelled — the name did not match.");
@@ -431,3 +431,21 @@ document.addEventListener("click", (e) => {
     h.hidden = !any;
   });
 });
+
+
+// --- sidebar -------------------------------------------------------------
+// Collapse to an icon rail (remembered; applied before paint by an inline script in <head>) and,
+// on phones, a slide-over opened from the menu bar.
+document.addEventListener("click", (e) => {
+  if (e.target.closest("[data-nav-collapse]")) {
+    const root = document.documentElement;
+    const rail = root.getAttribute("data-nav") !== "rail";
+    if (rail) root.setAttribute("data-nav", "rail"); else root.removeAttribute("data-nav");
+    try { localStorage.setItem("dm-nav", rail ? "rail" : "full"); } catch (_) {}
+  } else if (e.target.closest("[data-nav-open]")) {
+    document.body.classList.add("nav-open");
+  } else if (e.target.closest("[data-nav-close]") || e.target.closest(".sidenav a")) {
+    document.body.classList.remove("nav-open");
+  }
+});
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.body.classList.remove("nav-open"); });
