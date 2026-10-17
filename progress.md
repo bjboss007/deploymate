@@ -7,6 +7,11 @@
 
 ## Where we stopped
 
+**2026-10-17 (unattended install: spec only)** — `docs/specs/unattended-install.md`: provisioning file via cloud-init, password
+**hash** (no clear text), `deploymate token create`, profile-aware bootstrap (no ufw opens for tunnel servers), `harden
+--trust-ssh-key --no-timer`, ready callback + `install-result.json`, cloudflared step before the firewall closes. Nothing
+built; four open questions for the owner at the end of the spec. Build order is in the spec.
+
 **2026-10-16 (backups for MySQL, Redis, MongoDB)** — `internal/backup/engine.go`: one engine per type (dump/restore),
 shared everything else; MongoDB is a new service type (`services.MongoDB`, `mongo:7.0`). Verified with a real-Docker
 round trip for all four (`DEPLOYMATE_DOCKER_TESTS=1`, committed test). Found and fixed on the way: `Docker.exec`
