@@ -7,6 +7,11 @@
 
 ## Where we stopped
 
+**2026-10-20 (shared compute: spec only)** — Owner wants to share compute with a friend's stronger machine for ML/AI/video.
+`docs/specs/shared-compute.md`: remote builds, then nodes and GPU-aware placement, then run-to-completion/array jobs; no splitting
+of one process across machines; trust model (a node sees everything that runs on it). Nothing built; five open questions at the
+end of the spec. The unattended installer (step two) still waits on a VM for its end-to-end test (suggested: Multipass).
+
 **2026-10-17 (stale assets + sign-ins redesign)** — The owner updated to v0.8.1 and saw the Sign-ins block unstyled (tiles stacked as plain
 text): the browser/Cloudflare kept the v0.8.0 `app.css`. Real defect: asset URLs never changed between releases. Now every page links
 `/static/app.css?v=<release>` (and htmx/chart/app.js; `templates.AssetVersion` set by `Server.SetVersion`, start time for dev builds),
