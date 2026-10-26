@@ -59,3 +59,22 @@ func TestRemoteDockerOverTheStdioTransport(t *testing.T) {
 		t.Fatalf("the ssh error should reach the user: %v", err)
 	}
 }
+
+func TestSSHFailuresSayWhatWentWrongAndWhatToDo(t *testing.T) {
+	for stderr, wantHint := range map[string]string{
+		"permission denied while trying to connect to the docker API at unix:///var/run/docker.sock": "docker group",
+		"habib@100.64.0.5: Permission denied (publickey).":                                           "authorized_keys",
+		"ssh: connect to host 100.64.0.5 port 22: Connection timed out":                              "Tailscale",
+	} {
+		fake := filepath.Join(t.TempDir(), "ssh")
+		_ = os.WriteFile(fake, []byte("#!/bin/sh\necho '"+stderr+"' >&2\nexit 255\n"), 0o755)
+		t.Setenv("DEPLOYMATE_SSH", fake)
+		_, err := NewRemote(context.Background(), "ssh://u@100.64.0.5", "")
+		if err == nil || !strings.Contains(err.Error(), stderr) || !strings.Contains(err.Error(), wantHint) {
+			t.Errorf("%q: want the message and a hint about %q, got %v", stderr, wantHint, err)
+		}
+		if err != nil && strings.Contains(err.Error(), "Is the docker daemon running") {
+			t.Errorf("the misleading Docker client text must not reach the user: %v", err)
+		}
+	}
+}

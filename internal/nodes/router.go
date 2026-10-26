@@ -148,13 +148,42 @@ type imageLoader interface {
 	LoadImage(ctx context.Context, tar io.Reader) error
 }
 
+// archer is what the architecture check needs from each side; a runtime without it is trusted to match.
+type archer interface {
+	ImageArch(ctx context.Context, ref string) (string, error)
+	HostArch(ctx context.Context) (string, error)
+}
+
+// archMismatch reports the image's architecture and the node's when they differ: an image built for one CPU cannot run
+// on another, so it must not be copied (the node pulls its own, which works for public multi-architecture images).
+func (r *Router) archMismatch(ctx context.Context, rem *remote, ref string) (image, node string, differs bool) {
+	src, ok1 := r.local.(archer)
+	dst, ok2 := rem.rt.(archer)
+	if !ok1 || !ok2 {
+		return "", "", false
+	}
+	img, err1 := src.ImageArch(ctx, ref)
+	host, err2 := dst.HostArch(ctx)
+	if err1 != nil || err2 != nil || img == "" || host == "" {
+		return "", "", false
+	}
+	img, host = runtime.NormalizeArch(img), runtime.NormalizeArch(host)
+	return img, host, img != host
+}
+
 // ensureImage makes sure the node has an image: it is copied from this server when this server has it (every image
 // DeployMate builds or pulls lands here first), and pulled by the node otherwise.
 func (r *Router) ensureImage(ctx context.Context, rem *remote, ref string) error {
 	if has, _ := rem.rt.HasImage(ctx, ref); has {
 		return nil
 	}
+	var mismatch string
 	if has, _ := r.local.HasImage(ctx, ref); has {
+		if img, node, differs := r.archMismatch(ctx, rem, ref); differs {
+			mismatch = fmt.Sprintf(" (this server's copy is built for %s, the node runs %s)", img, node)
+		}
+	}
+	if has, _ := r.local.HasImage(ctx, ref); has && mismatch == "" {
 		src, ok1 := r.local.(imageSaver)
 		dst, ok2 := rem.rt.(imageLoader)
 		if ok1 && ok2 {
@@ -170,7 +199,7 @@ func (r *Router) ensureImage(ctx context.Context, rem *remote, ref string) error
 		}
 	}
 	if err := rem.rt.PullImage(ctx, ref); err != nil {
-		return fmt.Errorf("node %s could not get image %s: %w", rem.name, ref, err)
+		return fmt.Errorf("node %s could not get image %s%s: %w", rem.name, ref, mismatch, err)
 	}
 	return nil
 }

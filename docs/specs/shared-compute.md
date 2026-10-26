@@ -68,6 +68,15 @@ the owner's Drain survives successful checks. Tested with unit tests, and the SS
 - **Traefik:** `internal/noderoute` reconciles one file route per running app with domains (every 15 s) to
   `node-address:port` per replica, with the same health check; stale files are removed. The preview subdomains and `/preview/`
   go through the dashboard proxy and need no route.
+- **Architecture:** an image built for one CPU is never copied to a node with another (`ImageArch` / `HostArch`): the node pulls its
+  own, which works for public multi-architecture images; for an image only this server has, the error says "built for arm64, the node runs
+  amd64". Found by trying the owner's real server (x86_64) from an arm64 Mac.
+- **Real-server finding (2026-10-26):** over the owner's Cloudflare SSH path the node check reaches the server in about 2.5 s, but the Docker
+  client replaced ssh's own error with "Is the docker daemon running?". `NewRemote` now returns ssh's message plus a hint (not in
+  `authorized_keys`, not in the `docker` group, host key changed, Tailscale down). The SSH user on the server (`habib-muhammad`) is not in
+  the `docker` group, so the end-to-end placement test there needs that changed first. A reusable test exists:
+  `DEPLOYMATE_REAL_NODE=ssh://user@host [DEPLOYMATE_REAL_NODE_KEY=…] go test ./internal/nodes -run RealSecondMachine -v`
+  (places an alpine container on the machine, runs `uname -m`, removes it; no network left behind).
 - **Tested:** the router with fake runtimes (placement, image copy/pull, drain/offline, rename, restart, unreachable node);
   routes (render, reconcile, only own files); and a **real second Docker daemon** (Docker-in-Docker) as the node: the container
   is created there, the image copied, it runs there, `exec`/`stats`/`inspect` work through the router, and this machine's

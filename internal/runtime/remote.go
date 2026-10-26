@@ -9,6 +9,8 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/client"
@@ -37,8 +39,11 @@ func NewRemote(ctx context.Context, endpoint, keyFile string) (*Docker, error) {
 		return nil, err
 	}
 	opts := []client.Opt{client.WithAPIVersionNegotiation()}
+	var why func() string // what ssh said last: the Docker client hides it behind "is the daemon running?"
 	if m := sshEndpointRe.FindStringSubmatch(endpoint); m != nil {
-		opts = append(opts, client.WithHost("http://docker.example.com"), client.WithDialContext(sshDialer(m[1], m[2], m[3], keyFile)))
+		dial, last := sshDialer(m[1], m[2], m[3], keyFile)
+		why = last
+		opts = append(opts, client.WithHost("http://docker.example.com"), client.WithDialContext(dial))
 	} else {
 		opts = append(opts, client.WithHost(endpoint))
 	}
@@ -50,6 +55,11 @@ func NewRemote(ctx context.Context, endpoint, keyFile string) (*Docker, error) {
 	defer cancel()
 	if _, err := cli.Ping(pctx); err != nil {
 		cli.Close()
+		if why != nil {
+			if msg := why(); msg != "" {
+				return nil, fmt.Errorf("%s: %s%s", endpoint, msg, sshHint(msg))
+			}
+		}
 		return nil, fmt.Errorf("%s: %w", endpoint, err)
 	}
 	return &Docker{cli: cli}, nil
@@ -76,8 +86,27 @@ func sshArgs(user, host, port, keyFile string) []string {
 	return append(args, "-l", user, "--", host, "docker", "system", "dial-stdio")
 }
 
-func sshDialer(user, host, port, keyFile string) func(context.Context, string, string) (net.Conn, error) {
-	return func(ctx context.Context, _, _ string) (net.Conn, error) {
+// sshHint says what to do about the common failures.
+func sshHint(msg string) string {
+	l := strings.ToLower(msg)
+	switch {
+	case strings.Contains(l, "permission denied (publickey"):
+		return " (this server's key is not in that user's ~/.ssh/authorized_keys)"
+	case strings.Contains(l, "permission denied") && strings.Contains(l, "docker"):
+		return " (the SSH user must be allowed to use Docker: add it to the docker group on that machine)"
+	case strings.Contains(l, "host key verification failed"):
+		return " (the machine's SSH host key changed since it was first trusted)"
+	case strings.Contains(l, "connection timed out"), strings.Contains(l, "no route to host"):
+		return " (is Tailscale up on both machines?)"
+	}
+	return ""
+}
+
+// sshDialer returns the dial function and a way to read the last thing ssh complained about.
+func sshDialer(user, host, port, keyFile string) (func(context.Context, string, string) (net.Conn, error), func() string) {
+	var mu sync.Mutex
+	var lastMsg string
+	dial := func(ctx context.Context, _, _ string) (net.Conn, error) {
 		cmd := exec.Command(sshCommand(), sshArgs(user, host, port, keyFile)...)
 		in, err := cmd.StdinPipe()
 		if err != nil {
@@ -92,8 +121,9 @@ func sshDialer(user, host, port, keyFile string) func(context.Context, string, s
 		if err := cmd.Start(); err != nil {
 			return nil, fmt.Errorf("start ssh: %w", err)
 		}
-		return &stdioConn{cmd: cmd, in: in, out: out, stderr: &stderr}, nil
+		return &stdioConn{cmd: cmd, in: in, out: out, stderr: &stderr, report: func(m string) { mu.Lock(); lastMsg = m; mu.Unlock() }}, nil
 	}
+	return dial, func() string { mu.Lock(); defer mu.Unlock(); return strings.TrimSpace(lastMsg) }
 }
 
 // stdioConn presents a command's stdin/stdout as a net.Conn.
@@ -102,11 +132,15 @@ type stdioConn struct {
 	in     io.WriteCloser
 	out    io.ReadCloser
 	stderr *limitedBuffer
+	report func(string) // tells the dialer what ssh said, once the stream ends
 }
 
 func (c *stdioConn) Read(p []byte) (int, error) {
 	n, err := c.out.Read(p)
 	if err == io.EOF && n == 0 && c.stderr.Len() > 0 {
+		if c.report != nil {
+			c.report(c.stderr.String())
+		}
 		return 0, fmt.Errorf("%w: %s", io.EOF, c.stderr.String())
 	}
 	return n, err
@@ -201,4 +235,35 @@ func (d *Docker) LoadImage(ctx context.Context, tar io.Reader) error {
 	defer resp.Body.Close()
 	_, err = io.Copy(io.Discard, resp.Body)
 	return err
+}
+
+// ImageArch is the CPU architecture an image was built for, as Go names it ("amd64", "arm64").
+func (d *Docker) ImageArch(ctx context.Context, ref string) (string, error) {
+	in, _, err := d.cli.ImageInspectWithRaw(ctx, ref)
+	if err != nil {
+		return "", fmt.Errorf("inspect image %s: %w", ref, err)
+	}
+	return in.Architecture, nil
+}
+
+// HostArch is the daemon's CPU architecture in the same names as ImageArch.
+func (d *Docker) HostArch(ctx context.Context) (string, error) {
+	info, err := d.cli.Info(ctx)
+	if err != nil {
+		return "", fmt.Errorf("docker info: %w", err)
+	}
+	return NormalizeArch(info.Architecture), nil
+}
+
+// NormalizeArch maps uname-style names to Go's.
+func NormalizeArch(a string) string {
+	switch a {
+	case "x86_64", "amd64":
+		return "amd64"
+	case "aarch64", "arm64":
+		return "arm64"
+	case "armv7l", "armv6l":
+		return "arm"
+	}
+	return a
 }

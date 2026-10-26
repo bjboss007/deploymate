@@ -12,8 +12,11 @@ its apps and services run there. `nodes.Router` (a `runtime.Runtime`) sends each
 copied to the node; published ports bind to the node's private address (`runtime.HostOf` used by the health probe, swap probe and preview proxy);
 `internal/noderoute` writes Traefik file routes for node apps with domains. A node in use cannot be removed. Tested with fakes and with a real second
 Docker daemon (dind). **Not tried: a real two-machine deploy.** Website: new docs page "Run a project on another machine" + home page lines.
-Owner wants everything (remote builds 35bb8de, nodes 0dab150, this) shipped together as one release (v0.9.0) — **ask before tagging; the next useful
-step is a real test on a second machine over Tailscale.**
+Owner wants everything (remote builds 35bb8de, nodes 0dab150, this) shipped together as one release (v0.9.0) — **ask before tagging.**
+Real-machine attempt (same day, the owner's server over their Cloudflare SSH alias): the transport works; found and fixed (a) the misleading
+Docker-client error (now ssh's own message + hint) and (b) images were copied across CPU architectures (arm64 Mac vs x86_64 server; now the node
+pulls its own). The placement run itself is blocked until the SSH user on the server is added to the `docker` group (owner's call: it is a
+root-equivalent privilege; a dedicated user is better). Test: `DEPLOYMATE_REAL_NODE=ssh://habib-muhammad@dm-server DEPLOYMATE_REAL_NODE_KEY=~/.ssh/id_deploymate go test ./internal/nodes -run RealSecondMachine -v`.
 
 **2026-10-26 (shared compute, phase 2a: nodes)** — Nodes can be registered and reached: migration 0026, `internal/nodes` (SSH key, probe, watcher),
 `runtime.NewRemote` (Docker over `ssh … docker system dial-stdio`, our own stdio conn), Nodes page + sidebar item, routes `/nodes*`. Unit tests +

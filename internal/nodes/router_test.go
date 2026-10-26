@@ -22,6 +22,8 @@ type fakeRT struct {
 	calls    []string
 	loaded   []string
 	pulled   []string
+	arch     string // "" = the check is skipped for this side
+	pullErr  error
 }
 
 func newFake(id string, images ...string) *fakeRT {
@@ -33,6 +35,9 @@ func newFake(id string, images ...string) *fakeRT {
 }
 func (f *fakeRT) HasImage(_ context.Context, i string) (bool, error) { return f.images[i], nil }
 func (f *fakeRT) PullImage(_ context.Context, i string) error {
+	if f.pullErr != nil {
+		return f.pullErr
+	}
 	f.pulled = append(f.pulled, i)
 	f.images[i] = true
 	return nil
@@ -75,6 +80,10 @@ func (f *fakeRT) LoadImage(_ context.Context, r io.Reader) error {
 	return nil
 }
 func (f *fakeRT) Close() error { return nil }
+
+// ImageArch and HostArch let the architecture check run against the fakes.
+func (f *fakeRT) ImageArch(context.Context, string) (string, error) { return f.arch, nil }
+func (f *fakeRT) HostArch(context.Context) (string, error)          { return f.arch, nil }
 
 type env struct {
 	st          *store.Store
@@ -235,5 +244,37 @@ func TestNodeAddress(t *testing.T) {
 		if got, err := nodeAddress(in); err != nil || got != want {
 			t.Errorf("%s: %q %v", in, got, err)
 		}
+	}
+}
+
+func TestAnImageBuiltForAnotherCPUIsNotCopiedTheNodePullsItsOwn(t *testing.T) {
+	e := newEnv(t)
+	e.local.arch, e.node.arch = "arm64", "x86_64"
+	_, err := e.r.Create(context.Background(), appSpec("web", "dm-web", "img:1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(e.node.loaded) != 0 {
+		t.Fatalf("an arm64 image must never be copied to an amd64 node: %v", e.node.loaded)
+	}
+	if len(e.node.pulled) != 1 || e.node.pulled[0] != "img:1" {
+		t.Fatalf("the node should pull its own: %v", e.node.pulled)
+	}
+
+	// An image only this server has (built here) cannot be pulled: the error must say what is wrong.
+	e2 := newEnv(t)
+	e2.local.arch, e2.node.arch = "arm64", "amd64"
+	e2.node.pullErr = errors.New("manifest unknown")
+	_, err = e2.r.Create(context.Background(), appSpec("web", "dm-web", "img:1"))
+	if err == nil || !strings.Contains(err.Error(), "built for arm64") || !strings.Contains(err.Error(), "node runs amd64") {
+		t.Fatalf("%v", err)
+	}
+
+	// Same CPU: copied as before.
+	e3 := newEnv(t)
+	e3.local.arch, e3.node.arch = "amd64", "x86_64"
+	_, _ = e3.r.Create(context.Background(), appSpec("web", "dm-web", "img:1"))
+	if len(e3.node.loaded) != 1 {
+		t.Fatalf("matching CPUs copy the image: %v", e3.node.loaded)
 	}
 }
