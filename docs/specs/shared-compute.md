@@ -77,6 +77,10 @@ the owner's Drain survives successful checks. Tested with unit tests, and the SS
   the `docker` group, so the end-to-end placement test there needs that changed first. A reusable test exists:
   `DEPLOYMATE_REAL_NODE=ssh://user@host [DEPLOYMATE_REAL_NODE_KEY=…] go test ./internal/nodes -run RealSecondMachine -v`
   (places an alpine container on the machine, runs `uname -m`, removes it; no network left behind).
+  **Passed on the owner's server (2026-10-26)** after the SSH user was added to the docker group: node reported 4 CPUs, 3.6 GB,
+  Ubuntu 24.04.5, x86_64, Docker 29.1.3; the container (created from an arm64 Mac) ran there (`uname -m` = x86_64) and was removed, leaving
+  no container, image or network. That run also showed that a node endpoint may be an SSH config alias that is not a DNS name:
+  the node's address is now resolved only when a published port needs it (otherwise the error says to use the Tailscale IP).
 - **Tested:** the router with fake runtimes (placement, image copy/pull, drain/offline, rename, restart, unreachable node);
   routes (render, reconcile, only own files); and a **real second Docker daemon** (Docker-in-Docker) as the node: the container
   is created there, the image copied, it runs there, `exec`/`stats`/`inspect` work through the router, and this machine's

@@ -30,9 +30,11 @@ type Router struct {
 }
 
 type remote struct {
-	rt   runtime.Runtime
-	host string // address the node's published ports are reached at
-	name string
+	rt      runtime.Runtime
+	host    string // address the node's published ports are reached at; "" when the endpoint's name does not resolve
+	rawHost string // the endpoint's host as written (an SSH alias or name)
+	hostErr error
+	name    string
 }
 
 var _ runtime.Runtime = (*Router)(nil)
@@ -51,8 +53,8 @@ func NewRouter(local runtime.Runtime, st *store.Store, dataDir string) *Router {
 	return r
 }
 
-// nodeAddress is the address a node's published ports are reached at: the endpoint's host, as an IP.
-func nodeAddress(endpoint string) (string, error) {
+// endpointHost is the host part of an endpoint, as written.
+func endpointHost(endpoint string) string {
 	h := strings.TrimPrefix(strings.TrimPrefix(endpoint, "ssh://"), "tcp://")
 	if i := strings.LastIndex(h, "@"); i >= 0 {
 		h = h[i+1:]
@@ -60,6 +62,12 @@ func nodeAddress(endpoint string) (string, error) {
 	if host, _, err := net.SplitHostPort(h); err == nil {
 		h = host
 	}
+	return h
+}
+
+// nodeAddress is the address a node's published ports are reached at: the endpoint's host, as an IP.
+func nodeAddress(endpoint string) (string, error) {
+	h := endpointHost(endpoint)
 	if ip := net.ParseIP(h); ip != nil {
 		return ip.String(), nil
 	}
@@ -85,15 +93,13 @@ func (r *Router) remoteFor(ctx context.Context, nodeID string) (*remote, error) 
 	if err != nil {
 		return nil, fmt.Errorf("node %s: %w", nodeID, err)
 	}
-	host, err := nodeAddress(n.Endpoint)
-	if err != nil {
-		return nil, err
-	}
+	// The address is only needed to publish ports; an SSH alias that is not a DNS name must not stop everything else.
+	host, hostErr := nodeAddress(n.Endpoint)
 	rt, err := r.dial(ctx, n)
 	if err != nil {
 		return nil, fmt.Errorf("node %s unreachable: %w", n.Name, err)
 	}
-	rem := &remote{rt: rt, host: host, name: n.Name}
+	rem := &remote{rt: rt, host: host, rawHost: endpointHost(n.Endpoint), hostErr: hostErr, name: n.Name}
 	r.remotes[nodeID] = rem
 	return rem, nil
 }
@@ -124,6 +130,9 @@ func (r *Router) runtimeFor(ctx context.Context, name string) (runtime.Runtime, 
 func (r *Router) HostFor(name string) string {
 	if id := r.nodeOf(name); id != "" {
 		if rem, err := r.remoteFor(context.Background(), id); err == nil {
+			if rem.host == "" {
+				return rem.rawHost // best effort: the name as written
+			}
 			return rem.host
 		}
 	}
@@ -232,6 +241,9 @@ func (r *Router) Create(ctx context.Context, spec runtime.Spec) (string, error) 
 		return "", err
 	}
 	if spec.HostPort > 0 && spec.HostIP == "" {
+		if rem.host == "" {
+			return "", fmt.Errorf("node %s: its published ports need an IP address, but %w. Use the machine's Tailscale IP in the node's endpoint", n.Name, rem.hostErr)
+		}
 		spec.HostIP = rem.host // the node's private-network address, never its public one
 	}
 	cid, err := rem.rt.Create(ctx, spec)

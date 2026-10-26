@@ -15,8 +15,8 @@ Docker daemon (dind). **Not tried: a real two-machine deploy.** Website: new doc
 Owner wants everything (remote builds 35bb8de, nodes 0dab150, this) shipped together as one release (v0.9.0) — **ask before tagging.**
 Real-machine attempt (same day, the owner's server over their Cloudflare SSH alias): the transport works; found and fixed (a) the misleading
 Docker-client error (now ssh's own message + hint) and (b) images were copied across CPU architectures (arm64 Mac vs x86_64 server; now the node
-pulls its own). The placement run itself is blocked until the SSH user on the server is added to the `docker` group (owner's call: it is a
-root-equivalent privilege; a dedicated user is better). Test: `DEPLOYMATE_REAL_NODE=ssh://habib-muhammad@dm-server DEPLOYMATE_REAL_NODE_KEY=~/.ssh/id_deploymate go test ./internal/nodes -run RealSecondMachine -v`.
+pulls its own). The placement run then PASSED on the real server once the owner added the SSH user to the `docker` group temporarily (they should remove it again:
+`sudo gpasswd -d habib-muhammad docker`); it also showed that an ssh alias is not a DNS name (fixed: the address is resolved only when a port is published). Test: `DEPLOYMATE_REAL_NODE=ssh://habib-muhammad@dm-server DEPLOYMATE_REAL_NODE_KEY=~/.ssh/id_deploymate go test ./internal/nodes -run RealSecondMachine -v`.
 
 **2026-10-26 (shared compute, phase 2a: nodes)** — Nodes can be registered and reached: migration 0026, `internal/nodes` (SSH key, probe, watcher),
 `runtime.NewRemote` (Docker over `ssh … docker system dial-stdio`, our own stdio conn), Nodes page + sidebar item, routes `/nodes*`. Unit tests +

@@ -278,3 +278,20 @@ func TestAnImageBuiltForAnotherCPUIsNotCopiedTheNodePullsItsOwn(t *testing.T) {
 		t.Fatalf("matching CPUs copy the image: %v", e3.node.loaded)
 	}
 }
+
+func TestANodeWhoseNameDoesNotResolveStillRunsContainersThatPublishNoPort(t *testing.T) {
+	e := newEnv(t)
+	_, _ = e.st.DB().Exec(`UPDATE nodes SET endpoint = 'ssh://u@some-ssh-alias.invalid' WHERE id = ?`, e.n.ID)
+	spec := appSpec("web", "dm-web", "img:1")
+	spec.HostPort, spec.Port = 0, 0
+	if _, err := e.r.Create(context.Background(), spec); err != nil {
+		t.Fatalf("a database or worker with no published port needs no address: %v", err)
+	}
+	spec.HostPort, spec.Port = 20123, 8080
+	if _, err := e.r.Create(context.Background(), spec); err == nil || !strings.Contains(err.Error(), "Tailscale IP") {
+		t.Fatalf("a published port needs an address, and the error must say what to do: %v", err)
+	}
+	if got := e.r.HostFor("dm-web"); got != "some-ssh-alias.invalid" {
+		t.Errorf("HostFor falls back to the name as written: %q", got)
+	}
+}
