@@ -7,6 +7,37 @@
 
 ## Where we stopped
 
+**2026-10-26 — WRAP-UP: state after v0.9.0 (read this entry first; the ones below are the detailed history).**
+
+*Released:* **v0.9.0** (tagged 2026-10-26; CI green, 4 archives + checksums). Since v0.4.x: Security audit page, `deploymate harden` (+ `--trust-ssh-key
+--no-timer --user`, range check on `--ssh-from`), dashboard headers / 7-day sessions / **Sign-ins page** / `login_blocked` alert, Redis passwords + container
+hardening, grouped **sidebar**, backups for MySQL/Redis/MongoDB (+ MongoDB service type), versioned asset URLs, `deploymate token create` / `hash-password` /
+hash-based `setup-admin`, **remote builds** (`DEPLOYMATE_BUILD_HOST`), **worker nodes** (Nodes page, SSH-over-`docker system dial-stdio`, optional port
+address) and **projects pinned to a node** (`nodes.Router`, `noderoute`). Behaviour changes worth knowing: an omitted environment follows the project
+(`defaultEnvironment`); deleting a project now removes its containers; a drained/offline node refuses new containers (no fallback to this server).
+
+*Verified on real machines:* the owner's server as a node from an arm64 Mac (placement, image pull across CPU architectures, LAN reach, preview proxy, service
+discovery, swap, Traefik file route, cleanup to the exact baseline). **Not verified:** a node over real Tailscale; GPU anything; Postgres 18 hardening flags;
+prebuilt apps through the GitHub App on real GitHub; the Security/Sign-ins pages' behaviour behind the owner's Cloudflare tunnel (does `CF-Connecting-IP`
+reach the dashboard?).
+
+*Owner to-dos (not code):* remove `habib-muhammad` from the `docker` group on the server (`sudo gpasswd -d habib-muhammad docker`); fix the firewall SSH range
+(their LAN is 192.168.100.0/24; `harden` was given 192.168.1.0/24: `sudo ufw allow from 192.168.100.0/24 to any port 22 proto tcp` + delete the old rule); run
+`sudo deploymate update` and hard-refresh the dashboard once; turn off GNOME Remote Desktop; `ssh-copy-id`; press "Add a password" on old Redis services;
+rotate the R2 backup keys and the old MCP read token; settle company/country for the legal checklist.
+
+*Next, in the order I would take it:* (1) a node over real Tailscale with the friend's machine (the one unproven link); (2) unattended installer steps 2-4
+(`docs/specs/unattended-install.md`; its end-to-end test needs a VM, e.g. Multipass); (3) optional TOTP 2FA; (4) shared-compute phase 3 (jobs/array jobs,
+GPU-aware placement, availability windows, build on the node, move a project between nodes: `docs/specs/shared-compute.md`); (5) per-project Docker networks
+and the Docker socket proxy (`docs/specs/server-security.md`); (6) the control plane + legal review (`docs/knowledge/legal-checklist.md`) before the first
+paid customer. All are in `docs/improvements.md`.
+
+*Rules learned this stretch:* ship releases **batched and only when the owner says "tag vX.Y.Z"** (verify CI green on the latest commit first); update
+`site/index.html` + `site/tools/build_docs.py` in the same round as any user-visible feature; the **site must not link to the code or mention a license**
+(owner's decision; `/install` still redirects to GitHub, so the repo stays public); gated real-world tests: `DEPLOYMATE_DOCKER_TESTS=1` (real Docker),
+`DEPLOYMATE_REAL_NODE=ssh://user@host [DEPLOYMATE_REAL_NODE_KEY=…]` (a real second machine); Docker disk on the dev Mac is shared with the owner's own
+volumes: never prune volumes; remove only what a test created (`docker rm -fv`); push as `bjboss007`.
+
 **2026-10-26 (website: Nodes section)** — The owner could not find the nodes feature on the site (only a bullet in the "Run" card and a docs page). Home page now has a
 `#nodes` section between Features and Agents ("Borrow a bigger computer for the heavy parts": server → SSH over Tailscale → node diagram, cards for build
 elsewhere / run a project there / built for trust, a "not yet" line), a "Nodes" link in the home and docs top navs, and the Run-card bullet links to it

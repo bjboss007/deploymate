@@ -6,6 +6,22 @@ change.
 
 ## Near-term (high value, low risk)
 
+- [ ] **Open after v0.9.0 (2026-10-26)** — gathered at wrap-up, details in `progress.md`:
+  - [ ] **Try a node over real Tailscale** with a friend's machine (the one link not yet proven; only ssh-through-Cloudflare + LAN address was).
+  - [ ] **Two-factor sign-in (TOTP)** — own round: secret storage, enrolment, recovery codes, login step (`docs/specs/server-security.md` phase C).
+  - [ ] **Sign-in extras** — an alert for a sign-in from a never-seen address; sign-in counts in `GET /api/v1/security` and the MCP `security_status`.
+  - [ ] **Shared compute phase 3** (`docs/specs/shared-compute.md`): run-to-completion jobs and array jobs, GPU-aware placement, node availability
+    windows, **build on the node** (avoid copying multi-GB images), move a project between nodes, pick a node automatically, reserve the host port on the
+    node (today it is chosen free on this server and can collide on the node), image cleanup on nodes.
+  - [ ] **Unattended install steps 2-4** (`docs/specs/unattended-install.md`): installer `--unattended`, provisioning file, profile-aware firewall,
+    cloudflared, `DEPLOYMATE_SUPPORT_KEY`, ready callback, cloud-init templates, VM end-to-end test; then the control plane.
+  - [ ] **Legal review before the first paid customer** (`docs/knowledge/legal-checklist.md`: seller entity, terms, DPA, MongoDB SSPL / Redis licence,
+    trademark, CLA/DCO).
+  - [ ] **Server page for nodes** — CPU/memory/disk of each node next to this server's; node-offline alert.
+  - [ ] **Environment defaults** — consider a visible environment picker on the create-app form and a "move to environment" shortcut from the
+    "not used by any app" hint.
+  - [ ] **Dev-Mac Docker hygiene** — a documented, safe cleanup of test containers/volumes (`docker rm -fv`; never `volume prune` on the owner's machine).
+
 - [ ] **Server security** — 2026-10-12, `docs/specs/server-security.md`. Phase A (read-only Security audit: page,
   API, MCP) done; D's Redis passwords (new services; an "Add a password" button for existing ones) and container
   hardening done 2026-10-12. Still open, in this order: D2 per-project Docker networks, then B `deploymate harden`
