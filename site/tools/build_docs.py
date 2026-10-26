@@ -55,7 +55,7 @@ TEMPLATE = """<!doctype html>
 @@PAGER@@
 </article>
 </div></main>
-<footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad · Apache-2.0</span><span class="links"><a href="../">Home</a></span></div></footer>
+<footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad</span><span class="links"><a href="../">Home</a></span></div></footer>
 <script src="../assets/site.js"></script>
 </body>
 </html>

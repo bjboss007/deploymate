@@ -7,6 +7,10 @@
 
 ## Where we stopped
 
+**2026-10-26 (website: no license mentions)** — Owner asked to drop "Apache-2.0" and "Read it, change it, run it" from the site: home badge, the "Yours" bullet, the meta/og
+descriptions, every footer (`build_docs.py`), `tools/og.html` and the regenerated `assets/og.png` (headless Chrome, command in `site/README.md`). The repo's LICENSE is
+unchanged (Apache-2.0); only the site stopped saying so. Then tagged v0.9.0 (remote builds, nodes, placement, environment default, harden range check).
+
 **2026-10-26 (website: no links to the code)** — Owner asked for the GitHub buttons and links to the code base to be removed before the release: header and
 footer buttons (home and docs), the docs home's "In the repository" list, and the "build from source" snippets (quickstart callout, home page line) are gone
 (`site/index.html`, `site/tools/build_docs.py`, docs rebuilt). Left on purpose: `site/nginx.conf` redirects `/install` to the installer on
