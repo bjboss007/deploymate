@@ -1,0 +1,146 @@
+package httpserver
+
+import (
+	"context"
+	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
+	"github.com/habibmuhammad/deploymate/internal/store"
+)
+
+type nodesEnv struct {
+	*webhookEnv
+	probeErr error
+}
+
+func newNodesEnv(t *testing.T) *nodesEnv {
+	e := &nodesEnv{webhookEnv: newWebhookEnv(t)}
+	e.s.dataDir = t.TempDir()
+	e.s.SetNodeProbe(func(context.Context, string) (runtime.Capacity, error) {
+		if e.probeErr != nil {
+			return runtime.Capacity{}, e.probeErr
+		}
+		return runtime.Capacity{CPUs: 16, MemBytes: 64 << 30, OS: "Ubuntu 24.04", Arch: "x86_64", DockerVersion: "28.5.2", GPURuntime: true}, nil
+	})
+	owner, _ := e.st.CreateUser(store.User{Email: "o@test.dev", PasswordHash: "x", Role: "owner"})
+	e.st.CreateSession(store.Session{UserID: owner.ID, TokenHash: auth.HashToken("tok"), CSRFToken: "csrf", ExpiresAt: time.Now().Add(time.Hour).Format(time.RFC3339Nano)})
+	return e
+}
+
+func (e *nodesEnv) do(method, path string, form url.Values) *httptest.ResponseRecorder {
+	var body *strings.Reader
+	if form != nil {
+		form.Set("csrf_token", "csrf")
+		body = strings.NewReader(form.Encode())
+	} else {
+		body = strings.NewReader("")
+	}
+	req := httptest.NewRequest(method, path, body)
+	if method == http.MethodPost {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	req.AddCookie(&http.Cookie{Name: auth.SessionCookieName, Value: "tok"})
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, req)
+	return rec
+}
+
+func TestNodesAddCheckDrainRemove(t *testing.T) {
+	e := newNodesEnv(t)
+	rec := e.do(http.MethodPost, "/nodes", url.Values{"name": {"friend-pc"}, "endpoint": {"ssh://habib@100.64.0.5"}})
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "reachable") {
+		t.Fatalf("add: %d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	list, _ := e.st.ListNodes()
+	if len(list) != 1 || list[0].State != store.NodeReady || list[0].CPUs != 16 || !list[0].GPURuntime {
+		t.Fatalf("%+v", list)
+	}
+	n := list[0]
+
+	page := e.do(http.MethodGet, "/nodes", nil).Body.String()
+	for _, want := range []string{"friend-pc", "ssh://habib@100.64.0.5", "16 CPUs", "64.0 GB", "Ubuntu 24.04", "Docker 28.5.2", "NVIDIA runtime", "A node sees everything that runs on it", `class="navlink on" href="/nodes"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("page missing %q", want)
+		}
+	}
+
+	if rec := e.do(http.MethodPost, "/nodes/"+n.ID+"/drain", url.Values{}); !strings.Contains(rec.Header().Get("Location"), "draining") {
+		t.Errorf("drain: %s", rec.Header().Get("Location"))
+	}
+	if got, _ := e.st.GetNode(n.ID); got.State != store.NodeDraining {
+		t.Fatalf("state %s", got.State)
+	}
+	e.do(http.MethodPost, "/nodes/"+n.ID+"/drain", url.Values{})
+	if got, _ := e.st.GetNode(n.ID); got.State != store.NodeReady {
+		t.Fatalf("resume: %s", got.State)
+	}
+
+	e.probeErr = errors.New("ssh: Permission denied (publickey)")
+	rec = e.do(http.MethodPost, "/nodes/"+n.ID+"/check", url.Values{})
+	if !strings.Contains(rec.Header().Get("Location"), "not+reachable") {
+		t.Errorf("check: %s", rec.Header().Get("Location"))
+	}
+	if got, _ := e.st.GetNode(n.ID); got.State != store.NodeOffline || !strings.Contains(got.LastError, "Permission denied") {
+		t.Fatalf("%+v", got)
+	}
+	if page := e.do(http.MethodGet, "/nodes", nil).Body.String(); !strings.Contains(page, "Permission denied") {
+		t.Error("the page should show why a node is offline")
+	}
+
+	e.do(http.MethodPost, "/nodes/"+n.ID+"/delete", url.Values{})
+	if list, _ := e.st.ListNodes(); len(list) != 0 {
+		t.Fatalf("%+v", list)
+	}
+}
+
+func TestNodesRefuseBadInput(t *testing.T) {
+	e := newNodesEnv(t)
+	for name, form := range map[string]url.Values{
+		"upper-case name": {"name": {"Friend"}, "endpoint": {"ssh://u@100.64.0.5"}},
+		"option-looking":  {"name": {"x"}, "endpoint": {"ssh://-oProxyCommand=evil@host"}},
+		"no user":         {"name": {"x"}, "endpoint": {"ssh://100.64.0.5"}},
+		"wrong scheme":    {"name": {"x"}, "endpoint": {"http://100.64.0.5"}},
+	} {
+		if rec := e.do(http.MethodPost, "/nodes", form); !strings.Contains(rec.Header().Get("Location"), "flash=") {
+			t.Errorf("%s: %d", name, rec.Code)
+		}
+	}
+	if list, _ := e.st.ListNodes(); len(list) != 0 {
+		t.Fatalf("a refused node must not be stored: %+v", list)
+	}
+	e.do(http.MethodPost, "/nodes", url.Values{"name": {"a"}, "endpoint": {"ssh://u@100.64.0.5"}})
+	if rec := e.do(http.MethodPost, "/nodes", url.Values{"name": {"a"}, "endpoint": {"ssh://u@100.64.0.6"}}); !strings.Contains(rec.Header().Get("Location"), "already+exists") {
+		t.Errorf("duplicate name: %s", rec.Header().Get("Location"))
+	}
+}
+
+func TestNodeKeyIsCreatedOnceAndShown(t *testing.T) {
+	e := newNodesEnv(t)
+	if page := e.do(http.MethodGet, "/nodes", nil).Body.String(); !strings.Contains(page, "Create this server") {
+		t.Fatal("the page should offer to create the key")
+	}
+	e.do(http.MethodPost, "/nodes/key", url.Values{})
+	page := e.do(http.MethodGet, "/nodes", nil).Body.String()
+	if !strings.Contains(page, "ssh-ed25519 ") || strings.Contains(page, "Create this server") {
+		t.Fatal("the public key should be shown once it exists")
+	}
+	if strings.Contains(page, "PRIVATE KEY") {
+		t.Fatal("the private key must never be shown")
+	}
+}
+
+func TestNodesNeedASession(t *testing.T) {
+	e := newNodesEnv(t)
+	rec := httptest.NewRecorder()
+	e.s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nodes", nil))
+	if rec.Code == http.StatusOK {
+		t.Fatal("the Nodes page must need a sign-in")
+	}
+}

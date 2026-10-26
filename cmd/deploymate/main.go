@@ -35,6 +35,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/httpserver"
 	"github.com/habibmuhammad/deploymate/internal/jobs"
 	"github.com/habibmuhammad/deploymate/internal/monitor"
+	"github.com/habibmuhammad/deploymate/internal/nodes"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
@@ -165,6 +166,11 @@ func serve() error {
 	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)
 	worker.SetGitHubAPI(cfg.GitHubAPIURL)
 	go worker.Run(workerCtx)
+
+	// Worker nodes: keep each one's state current.
+	if os.Getenv("DEPLOYMATE_DISABLE_MONITOR") != "1" {
+		go nodes.NewWatcher(st, nodes.RealProbe(cfg.DataDir), time.Minute).Run(workerCtx)
+	}
 
 	// Metrics, health, uptime, restart, and disk sampling.
 	mon := monitor.New(st, rt, dispatcher)

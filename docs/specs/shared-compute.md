@@ -40,6 +40,29 @@ port can run code as root on the build machine. Bind it to the Tailscale address
 with a Tailscale ACL (the DeployMate server only).
 
 ### 2. Nodes and placement
+**Step 2a, built 2026-10-26: nodes exist and can be reached.** Migration `0026_nodes`; `Nodes` page (sidebar, under Server): create this
+server's SSH key (`<data>/keys/node_ed25519`, shown as a public line), add a node (`ssh://user@host[:port]` or `tcp://host:port`,
+strictly validated so a value can never be read by ssh as an option), Check now, Drain/Resume, Remove. `runtime.NewRemote` speaks Docker
+over `ssh user@host docker system dial-stdio` (our own stdio `net.Conn`, no new dependency; `-o BatchMode=yes`, host key
+accept-new, the node's ssh error text surfaces in the page) and `Docker.Capacity` reports CPUs, RAM, OS, Docker version and whether
+the NVIDIA runtime is installed. `nodes.Watcher` re-checks every minute; a node needs three failed checks in a row to show offline;
+the owner's Drain survives successful checks. Tested with unit tests, and the SSH transport against real Docker with a stand-in
+`ssh` (`DEPLOYMATE_SSH`); **not yet tried over a real SSH connection to a second machine.** Nothing is placed on nodes yet.
+
+**Step 2b (next): run an app on a node.** What reading the code showed, and the design it forces:
+- Every consumer takes one `runtime.Runtime`, and its methods address containers by *name*, so a `Router` Runtime that resolves
+  name → node (from a `node_id` on apps and services, default local) fits without changing callers. Image methods (`HasImage`,
+  `PullImage`, `Create` with a built tag) must go to the node that runs the container.
+- **Images:** the build must land in the node's daemon. Railpack and `docker buildx --load` both honour `DOCKER_HOST`, so building
+  for a node means pointing them at it (over the same ssh transport) and, ideally, using that node's BuildKit.
+- **Routing:** Traefik discovers containers through the local Docker socket, so a container on a node is invisible to it. Routes
+  for node apps are written as file-provider entries to `node-address:port` (the mechanism `internal/dashroute` already uses),
+  which needs the app's port published on the node's private address.
+- **Networking:** apps reach services by container name on `deploymate-net`, which is per machine. **A project environment is
+  therefore pinned to one node: its apps and services run together** (cross-node service access is not planned). Volumes are
+  node-local for the same reason.
+- Monitoring, logs, metrics, exec and backups already go through `Runtime`, so they follow the router.
+- Open: whether the first slice pins whole projects to a node (simplest) or individual apps with their dependencies.
 - A **node** is a machine with an address on a private network (WireGuard or Tailscale; a tunnel works for HTTP only),
   Docker, and, optionally, GPUs. Table `nodes`: name, address, token hash, labels, capacity (CPUs, RAM, GPUs with model and
   VRAM), state (`ready`, `draining`, `offline`), last seen.

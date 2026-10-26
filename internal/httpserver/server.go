@@ -19,6 +19,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/backup"
 	"github.com/habibmuhammad/deploymate/internal/dns"
+	"github.com/habibmuhammad/deploymate/internal/nodes"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/sse"
@@ -57,6 +58,7 @@ type Server struct {
 	auth        *gitauth.Resolver
 	loginLimit  *loginLimiter
 	notify      func(event, subject, details string) // alert dispatch; nil = none
+	nodeProbe   nodes.ProbeFunc                      // how nodes are checked; nil = over SSH with this server's key
 	previewRR   sync.Map                             // appID -> *atomic.Uint64: /preview round-robin cursor over replicas
 }
 
@@ -195,6 +197,12 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/server", s.handleServerPage)
 		r.Get("/security", s.handleSecurityPage)
 		r.Get("/signins", s.handleSignInsPage)
+		r.Get("/nodes", s.handleNodesPage)
+		r.Post("/nodes/key", am.CheckCSRF(s.handleNodeKey))
+		r.Post("/nodes", am.CheckCSRF(s.handleNodeCreate))
+		r.Post("/nodes/{id}/check", am.CheckCSRF(s.handleNodeCheck))
+		r.Post("/nodes/{id}/drain", am.CheckCSRF(s.handleNodeDrain))
+		r.Post("/nodes/{id}/delete", am.CheckCSRF(s.handleNodeDelete))
 		r.Post("/logout-all", am.CheckCSRF(s.handleLogoutAll))
 		r.Get("/server/history", s.handleServerHistory)
 		r.Post("/server/cleanup", s.handleServerCleanup)

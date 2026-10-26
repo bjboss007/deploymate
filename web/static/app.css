@@ -999,3 +999,14 @@ select { cursor: pointer; }
 .si-who { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .si-when { flex: none; font-size: 12.5px; white-space: nowrap; }
 @media (max-width: 760px) { .si-split { grid-template-columns: 1fr; gap: 14px; } .si-recent li { flex-wrap: wrap; } }
+
+/* ---- nodes ------------------------------------------------------------ */
+.node-steps { margin: 4px 0 14px; padding-left: 20px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; }
+.node-add { display: flex; gap: 10px; flex-wrap: wrap; }
+.node-add input[type=text] { flex: 1 1 200px; }
+.node-row { display: flex; gap: 16px; justify-content: space-between; align-items: flex-start; padding: 12px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
+.node-main { display: flex; flex-direction: column; gap: 3px; min-width: 0; font-size: 13.5px; }
+.node-name { display: flex; align-items: center; gap: 8px; font-size: 15px; }
+.node-err { color: var(--red); font-size: 13px; overflow-wrap: anywhere; }
+.node-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.node-actions form { margin: 0; }
