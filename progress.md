@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-26 (after v0.9.0: tour refreshed)** — The owner spotted that the website's **tour** was stale: its sidebar had no Nodes item and it had no Nodes page. Recaptured
+(`python3 site/tools/capture.py`, recipe in `site/README.md` / `docs/knowledge/dev-environment.md`) with three fictional nodes seeded in the demo
+(`internal/demo` `nodes()`: garage-nuc ready, friend-pc ready + NVIDIA runtime, old-laptop draining; Storefront pinned to garage-nuc, so the project snapshot says
+"runs on the node garage-nuc"), a new **Nodes** tour tab (`site/index.html`) and `/nodes` in `capture.py`. The Nodes page now shows the list first when nodes
+exist (components `nodesList`/`nodesWarning`/`nodesConnect`, test `TestTheNodeListLeads…`): this is a dashboard change, so it ships with the next release, not v0.9.0.
+Not in the tour on purpose: Security and Sign-ins (the audit would read the capture machine). Rule: recapture the tour whenever the sidebar or a toured page changes.
+
 **2026-10-26 — WRAP-UP: state after v0.9.0 (read this entry first; the ones below are the detailed history).**
 
 *Released:* **v0.9.0** (tagged 2026-10-26; CI green, 4 archives + checksums). Since v0.4.x: Security audit page, `deploymate harden` (+ `--trust-ssh-key

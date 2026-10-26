@@ -56,6 +56,7 @@ def pages():
         "/services/storefront-postgres": "service.html",
         "/settings/tokens": "tokens.html",
         "/server": "server.html",
+        "/nodes": "nodes.html",
     }
 
 

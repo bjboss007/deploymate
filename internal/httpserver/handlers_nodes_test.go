@@ -267,3 +267,19 @@ func TestDeletingAProjectNamesContainersItCouldNotRemove(t *testing.T) {
 		t.Fatalf("the message must name what is left running: %s", loc)
 	}
 }
+
+func TestTheNodeListLeadsOnceThereAreNodesAndTheInstructionsLeadBefore(t *testing.T) {
+	e := newNodesEnv(t)
+	empty := e.do(http.MethodGet, "/nodes", nil).Body.String()
+	if strings.Index(empty, "Connect a machine") > strings.Index(empty, "Your nodes") {
+		t.Error("with no nodes the instructions come first")
+	}
+	_, _ = e.st.CreateNode(store.Node{Name: "friend", Endpoint: "ssh://u@100.64.0.5", State: store.NodeReady})
+	page := e.do(http.MethodGet, "/nodes", nil).Body.String()
+	if strings.Index(page, "Your nodes") > strings.Index(page, "Connect a machine") {
+		t.Error("with nodes the list comes first")
+	}
+	if !strings.Contains(page, "A node sees everything that runs on it") {
+		t.Error("the trust warning stays on the page")
+	}
+}

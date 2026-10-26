@@ -172,6 +172,7 @@ func Seed(st *store.Store, key [32]byte, now time.Time, passwordHash string) err
 
 	_ = metrics
 	s.hostHistory()
+	s.nodes(storefront)
 	return s.err
 }
 
@@ -398,4 +399,21 @@ func (s *seeder) hostHistory() {
 			NetRx: uint64(120<<10 + int(60*day*1024)), NetTx: 40 << 10, TempC: 44 + 4*day,
 		}))
 	}
+}
+
+// nodes adds three fictional worker machines (on made-up tailnet addresses) and runs the Storefront project on one of them,
+// so the tour shows the Nodes page and a project's "where it runs" panel.
+func (s *seeder) nodes(pinned store.Project) {
+	mk := func(name, endpoint, state string, cpus int, memGB uint64, os, docker string, gpu bool, seen time.Duration) store.Node {
+		n, err := s.st.CreateNode(store.Node{
+			Name: name, Endpoint: endpoint, State: state, CPUs: cpus, MemBytes: memGB << 30,
+			OS: os, Arch: "x86_64", DockerVersion: docker, GPURuntime: gpu, LastSeenAt: ts(s.now.Add(-seen)),
+		})
+		s.check(err)
+		return n
+	}
+	garage := mk("garage-nuc", "ssh://deploy@100.64.0.12", store.NodeReady, 8, 32, "Ubuntu 24.04.5 LTS", "28.5.2", false, 22*time.Second)
+	mk("friend-pc", "ssh://deploy@100.64.0.27", store.NodeReady, 16, 64, "Ubuntu 24.04.5 LTS", "28.5.2", true, 41*time.Second)
+	mk("old-laptop", "ssh://deploy@100.64.0.33", store.NodeDraining, 4, 8, "Debian 12", "27.3.1", false, 18*time.Second)
+	s.check(s.st.SetProjectNode(pinned.ID, garage.ID))
 }

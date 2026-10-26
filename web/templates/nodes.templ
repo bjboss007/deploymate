@@ -35,86 +35,15 @@ templ NodesPage(vc ViewCtx, v NodesView) {
 				<p class="muted-text">Other machines that can run containers for this server, reached over SSH on a private network such as Tailscale.</p>
 			</div>
 		</div>
-		<div class="panel panel-warn">
-			<div class="panel-title">A node sees everything that runs on it</div>
-			<p class="muted-text">Its owner can read the code, environment variables and data of whatever you place there. Only add machines whose owner you trust.</p>
-		</div>
-		<div class="panel">
-			<div class="panel-title">Connect a machine</div>
-			<ol class="node-steps">
-				<li>On the machine, install Docker and Tailscale (signed in to the same tailnet as this server), and create a user that may use Docker.</li>
-				<li>
-					Add this server's key to that user's <code>~/.ssh/authorized_keys</code>.
-					if v.PublicKey == "" {
-						<form method="post" action="/nodes/key" class="inline-form">
-							<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-							<button class="btn" type="submit">Create this server's key</button>
-						</form>
-					} else {
-						<pre class="sec-fix"><code>{ v.PublicKey }</code></pre>
-					}
-				</li>
-				<li>Add the node here, using the machine's Tailscale address. If you reach it through an SSH alias or a tunnel instead, also give the private address its apps' ports are reached at.</li>
-			</ol>
-			<form method="post" action="/nodes" class="node-add">
-				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-				<input type="text" name="name" placeholder="name, e.g. friend-pc" required maxlength="31" pattern="[a-z0-9][a-z0-9-]*" autocomplete="off"/>
-				<input type="text" name="endpoint" placeholder="ssh://user@100.64.0.5" required autocomplete="off"/>
-				<input type="text" name="address" placeholder="address for its ports (optional)" autocomplete="off" pattern="[A-Za-z0-9][A-Za-z0-9.\-]*"/>
-				<button class="btn btn-primary" type="submit">Add node</button>
-			</form>
-		</div>
-		<div class="panel">
-			<div class="panel-title">Your nodes</div>
-			if len(v.Nodes) == 0 {
-				<p class="muted-text">None yet. Everything runs on this server.</p>
-			} else {
-				for _, n := range v.Nodes {
-					<div class="node-row">
-						<div class="node-main">
-							<div class="node-name">
-								<span class={ "status-dot", "dot-" + nodeDot(n.State) }></span>
-								<strong>{ n.Name }</strong>
-								<span class={ "badge", templ.KV("badge-running", n.State == "ready"), templ.KV("badge-failed", n.State == "offline") }>{ n.State }</span>
-							</div>
-							<div class="muted-text mono">{ n.Endpoint }</div>
-							if n.Address != "" {
-								<div class="muted-text">Ports reached at <span class="mono">{ n.Address }</span></div>
-							}
-							if nodeSpecs(n) != "" {
-								<div class="muted-text">{ nodeSpecs(n) }</div>
-							}
-							if n.Error != "" {
-								<div class="node-err">{ n.Error }</div>
-							} else if n.LastSeenAt != "" {
-								<div class="muted-text">Seen { ago(n.LastSeenAt) }</div>
-							}
-						</div>
-						<div class="node-actions">
-							<form method="post" action={ "/nodes/" + n.ID + "/check" }>
-								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-								<button class="btn btn-ghost btn-sm" type="submit">Check now</button>
-							</form>
-							<form method="post" action={ "/nodes/" + n.ID + "/drain" }>
-								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-								<button class="btn btn-ghost btn-sm" type="submit">
-									if n.Draining {
-										Resume
-									} else {
-										Drain
-									}
-								</button>
-							</form>
-							<form method="post" action={ "/nodes/" + n.ID + "/delete" } onsubmit="return confirm('Remove this node? Only the entry goes; a node with projects on it cannot be removed.')">
-								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
-								<button class="btn btn-danger btn-sm" type="submit">Remove</button>
-							</form>
-						</div>
-					</div>
-				}
-				<p class="muted-text">{ strconv.Itoa(len(v.Nodes)) } node(s). Draining stops new work from being placed on a node: use it before you need the machine for yourself.</p>
-			}
-		</div>
+		if len(v.Nodes) > 0 {
+			@nodesList(vc, v)
+			@nodesWarning()
+			@nodesConnect(vc, v)
+		} else {
+			@nodesWarning()
+			@nodesConnect(vc, v)
+			@nodesList(vc, v)
+		}
 	}
 }
 
@@ -126,4 +55,93 @@ func nodeDot(state string) string {
 		return "warn"
 	}
 	return "crit"
+}
+
+templ nodesWarning() {
+	<div class="panel panel-warn">
+		<div class="panel-title">A node sees everything that runs on it</div>
+		<p class="muted-text">Its owner can read the code, environment variables and data of whatever you place there. Only add machines whose owner you trust.</p>
+	</div>
+}
+
+templ nodesConnect(vc ViewCtx, v NodesView) {
+	<div class="panel">
+		<div class="panel-title">Connect a machine</div>
+		<ol class="node-steps">
+			<li>On the machine, install Docker and Tailscale (signed in to the same tailnet as this server), and create a user that may use Docker.</li>
+			<li>
+				Add this server's key to that user's <code>~/.ssh/authorized_keys</code>.
+				if v.PublicKey == "" {
+					<form method="post" action="/nodes/key" class="inline-form">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<button class="btn" type="submit">Create this server's key</button>
+					</form>
+				} else {
+					<pre class="sec-fix"><code>{ v.PublicKey }</code></pre>
+				}
+			</li>
+			<li>Add the node here, using the machine's Tailscale address. If you reach it through an SSH alias or a tunnel instead, also give the private address its apps' ports are reached at.</li>
+		</ol>
+		<form method="post" action="/nodes" class="node-add">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<input type="text" name="name" placeholder="name, e.g. friend-pc" required maxlength="31" pattern="[a-z0-9][a-z0-9-]*" autocomplete="off"/>
+			<input type="text" name="endpoint" placeholder="ssh://user@100.64.0.5" required autocomplete="off"/>
+			<input type="text" name="address" placeholder="address for its ports (optional)" autocomplete="off" pattern="[A-Za-z0-9][A-Za-z0-9.\-]*"/>
+			<button class="btn btn-primary" type="submit">Add node</button>
+		</form>
+	</div>
+}
+
+templ nodesList(vc ViewCtx, v NodesView) {
+	<div class="panel">
+		<div class="panel-title">Your nodes</div>
+		if len(v.Nodes) == 0 {
+			<p class="muted-text">None yet. Everything runs on this server.</p>
+		} else {
+			for _, n := range v.Nodes {
+				<div class="node-row">
+					<div class="node-main">
+						<div class="node-name">
+							<span class={ "status-dot", "dot-" + nodeDot(n.State) }></span>
+							<strong>{ n.Name }</strong>
+							<span class={ "badge", templ.KV("badge-running", n.State == "ready"), templ.KV("badge-failed", n.State == "offline") }>{ n.State }</span>
+						</div>
+						<div class="muted-text mono">{ n.Endpoint }</div>
+						if n.Address != "" {
+							<div class="muted-text">Ports reached at <span class="mono">{ n.Address }</span></div>
+						}
+						if nodeSpecs(n) != "" {
+							<div class="muted-text">{ nodeSpecs(n) }</div>
+						}
+						if n.Error != "" {
+							<div class="node-err">{ n.Error }</div>
+						} else if n.LastSeenAt != "" {
+							<div class="muted-text">Seen { ago(n.LastSeenAt) }</div>
+						}
+					</div>
+					<div class="node-actions">
+						<form method="post" action={ "/nodes/" + n.ID + "/check" }>
+							<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+							<button class="btn btn-ghost btn-sm" type="submit">Check now</button>
+						</form>
+						<form method="post" action={ "/nodes/" + n.ID + "/drain" }>
+							<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+							<button class="btn btn-ghost btn-sm" type="submit">
+								if n.Draining {
+									Resume
+								} else {
+									Drain
+								}
+							</button>
+						</form>
+						<form method="post" action={ "/nodes/" + n.ID + "/delete" } onsubmit="return confirm('Remove this node? Only the entry goes; a node with projects on it cannot be removed.')">
+							<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+							<button class="btn btn-danger btn-sm" type="submit">Remove</button>
+						</form>
+					</div>
+				</div>
+			}
+			<p class="muted-text">{ strconv.Itoa(len(v.Nodes)) } node(s). Draining stops new work from being placed on a node: use it before you need the machine for yourself.</p>
+		}
+	</div>
 }
