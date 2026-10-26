@@ -31,6 +31,8 @@ type Config struct {
 	// Defaults to "railpack" (resolved via PATH); set it explicitly in dev
 	// where go/bin etc. is not on the server's PATH.
 	RailpackPath string
+	// BuildHost is another machine's BuildKit (tcp://host:port, e.g. a Tailscale address): builds run there.
+	BuildHost string
 	// DashboardHost, when set (e.g. "dm.example.com"), makes Traefik serve the
 	// dashboard itself on that domain (internal/dashroute). Unset: reach it on
 	// 127.0.0.1 (SSH tunnel, Cloudflare Tunnel).
@@ -83,6 +85,7 @@ func Load() (*Config, error) {
 		SetupHash:          os.Getenv("DEPLOYMATE_SETUP_PASSWORD_HASH"),
 		LEMode:             getenv("DEPLOYMATE_LE_MODE", "staging"),
 		RailpackPath:       getenv("DEPLOYMATE_RAILPACK", "railpack"),
+		BuildHost:          os.Getenv("DEPLOYMATE_BUILD_HOST"),
 		DashboardHost:      getenv("DEPLOYMATE_DASHBOARD_HOST", ""),
 		PreviewHost:        getenv("DEPLOYMATE_PREVIEW_HOST", ""),
 		CloudflareAPIToken: os.Getenv("DEPLOYMATE_CLOUDFLARE_API_TOKEN"),

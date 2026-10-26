@@ -56,7 +56,11 @@ func BuildRailpack(ctx context.Context, railpackPath, appDir, imageTag string, s
 		"--name", imageTag,
 		"--progress", "plain",
 	)
-	cmd.Env = append(os.Environ(), "BUILDKIT_HOST="+BuildKitHost)
+	host := BuildKitHost
+	if h := activeHost(log); h != "" {
+		host = h
+	}
+	cmd.Env = append(os.Environ(), "BUILDKIT_HOST="+host)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {

@@ -45,9 +45,15 @@ func Build(ctx context.Context, checkoutDir, rootDir, imageTag string, log func(
 	buildCtx := filepath.Join(checkoutDir, filepath.Clean("/"+rootDir)) // never leaves the checkout, whatever rootDir holds
 	// The buildx CLI streams BuildKit progress; --load makes the result
 	// available to the local daemon immediately.
-	cmd := exec.CommandContext(ctx, "docker", "buildx", "build",
-		"--progress=plain", "--load", "-t", imageTag, buildCtx,
-	)
+	args := []string{"buildx", "build", "--progress=plain", "--load", "-t", imageTag}
+	if h := activeHost(log); h != "" {
+		if err := ensureRemoteBuilder(ctx, h); err != nil {
+			log(err.Error() + ": building on this server instead")
+		} else {
+			args = append(args, "--builder", remoteBuilder)
+		}
+	}
+	cmd := exec.CommandContext(ctx, "docker", append(args, buildCtx)...)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("build stdout: %w", err)

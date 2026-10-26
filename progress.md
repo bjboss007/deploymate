@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-26 (shared compute, phase 1: remote builds)** — Owner answered the five spec questions (any hardware/workload, Tailscale, availability
+told in advance, trusted friends); recorded in `docs/specs/shared-compute.md`. Built remote builds: `DEPLOYMATE_BUILD_HOST=tcp://<ip>:1234`
+(`internal/builder/remote.go`; Railpack via `BUILDKIT_HOST`, Dockerfile builds via buildx builder `dm-remote`; unreachable host falls back to
+the local build with a log line). Real-Docker test (`DEPLOYMATE_DOCKER_TESTS=1`, `internal/builder/remote_docker_test.go`) passed for the Dockerfile
+path; the Railpack leg did not complete on the dev Mac because the Docker VM disk is full (a 33 GB unused volume from 2022 plus leaked
+BuildKit cache volumes from my own test runs; I was blocked from removing the leaked ones and left everything alone). Test cleanup now uses
+`docker rm -fv`. Docs: new site page "Build on another machine", README config row. Unreleased. Next: phase 2 (nodes and placement).
+
 **2026-10-20 (shared compute: spec only)** — Owner wants to share compute with a friend's stronger machine for ML/AI/video.
 `docs/specs/shared-compute.md`: remote builds, then nodes and GPU-aware placement, then run-to-completion/array jobs; no splitting
 of one process across machines; trust model (a node sees everything that runs on it). Nothing built; five open questions at the

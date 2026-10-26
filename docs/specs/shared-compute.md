@@ -22,11 +22,23 @@ is built. The owner agreed to the staged plan below.
 
 ## Phases (in order)
 
-### 1. Remote builds
+### 1. Remote builds (built 2026-10-26)
 Point the BuildKit step at a stronger machine (`DEPLOYMATE_BUILD_HOST`, an SSH or TCP BuildKit endpoint). Only the build
 moves; the result still has to reach the machine that runs it: stream it back (`docker save | docker load`, slow over a
 WAN for multi-GB ML images) or push it to a small private registry on the server. For large images, phase 2 is better:
 build **and** run on the powerful node, so nothing is shipped.
+
+*As built:* `DEPLOYMATE_BUILD_HOST=tcp://<tailscale-ip>:1234` (`internal/builder/remote.go`). Railpack builds get it as
+`BUILDKIT_HOST`; Dockerfile builds use a buildx builder `dm-remote` (driver `remote`, created or re-pointed before the
+build). Only `tcp://host:port` is accepted (the value ends up in a command line). **An unreachable host never fails a
+deploy:** the build log says so and the build runs on this server. The log also says `building on <host>`. Source and
+build context are sent to the build machine; the finished image is streamed back and loaded locally; the build cache
+stays on the build machine, so repeat builds are fast. Verified on real Docker with a second BuildKit over TCP (Dockerfile
+build, image loaded locally, work visible in the remote cache). The Railpack path went through the same daemon but its
+last run was cut short by a full Docker disk on the dev Mac; rerun `DEPLOYMATE_DOCKER_TESTS=1 go test ./internal/builder`
+with free space. *Security:* the BuildKit daemon runs privileged and, over TCP, unauthenticated: anyone who can reach the
+port can run code as root on the build machine. Bind it to the Tailscale address only and restrict who may reach port 1234
+with a Tailscale ACL (the DeployMate server only).
 
 ### 2. Nodes and placement
 - A **node** is a machine with an address on a private network (WireGuard or Tailscale; a tunnel works for HTTP only),
@@ -72,9 +84,13 @@ Unit tests with a fake node runtime (placement by labels, VRAM and free capacity
 Real tests: two machines or a VM on a private network; a GPU node for the `--gpus` path (CI cannot cover it); an array job
 whose outputs land in object storage; a node going offline mid-job.
 
-## Open questions for the owner
-1. The friend's hardware: NVIDIA GPU on Linux or Windows (WSL), or a Mac? What VRAM?
-2. Network: both machines behind home routers? Is Tailscale or WireGuard acceptable as the link?
-3. First workload: a model server (needs a stable URL), batch video encoding, or training runs?
-4. Is the friend's machine also their daily computer (so it needs availability windows and low priority)?
-5. Is this only for the owner and trusted friends, or is a wider pool the goal? The second multiplies the security work.
+## Decisions (owner, 2026-10-26)
+1. **Hardware and workload are open ("any of them").** Nodes therefore declare what they have (CPUs, RAM, optional GPUs); nothing is
+   assumed to be NVIDIA, and GPU support is a capability, not a requirement.
+2. **Link: Tailscale, probably.** That removes the NAT problem, so phase 2 starts with Docker over SSH on the tailnet and no agent.
+   The outbound worker agent is only needed for machines that cannot join a tailnet.
+3. **Availability is communicated in advance.** Nodes carry an availability window (hours or a "paused until" time), set by the node's
+   owner, which the scheduler respects; `draining` for the immediate case. No automatic idle detection.
+4. **Trusted friends only.** The trust model stands: a node sees everything that runs on it. No untrusted-code isolation work.
+
+First step is phase 1 (remote builds), because it needs only a reachable BuildKit and no scheduler.

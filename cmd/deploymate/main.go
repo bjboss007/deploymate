@@ -25,6 +25,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/alerts"
 	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/backup"
+	"github.com/habibmuhammad/deploymate/internal/builder"
 	"github.com/habibmuhammad/deploymate/internal/config"
 	"github.com/habibmuhammad/deploymate/internal/crypto"
 	"github.com/habibmuhammad/deploymate/internal/dashroute"
@@ -158,6 +159,9 @@ func serve() error {
 	}
 
 	// The deployment worker: one in-process loop, builds serialized.
+	if err := builder.SetRemoteHost(cfg.BuildHost); err != nil {
+		return err
+	}
 	worker := jobs.NewWorker(st, rt, prov, events, encKey, cfg.DataDir, httpserver.NetworkName, cfg.LEMode, cfg.RailpackPath, server.AppEnv, dispatcher)
 	worker.SetGitHubAPI(cfg.GitHubAPIURL)
 	go worker.Run(workerCtx)

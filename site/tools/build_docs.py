@@ -19,7 +19,7 @@ WORKFLOW = (HERE / "workflow.example.yml").read_text()
 NAV = [
     ("Start", [("quickstart.html", "Quickstart"), ("connect-github.html", "Connect GitHub"), ("deploy-on-push.html", "Deploy on every push"), ("concepts.html", "How it fits together")]),
     ("Agents", [("agents.html", "AI agents (MCP)")]),
-    ("Operate", [("secure-your-server.html", "Secure your server")]),
+    ("Operate", [("secure-your-server.html", "Secure your server"), ("build-elsewhere.html", "Build on another machine")]),
     ("Optional", [("cloudflare-tunnel.html", "No open ports? Use a tunnel")]),
 ]
 
@@ -433,6 +433,37 @@ SECURE = """
 </ol>
 """
 
+BUILDHOST = """
+<p class="kicker">Operate</p>
+<h1>Build on another machine</h1>
+<p>Building is the heaviest thing a small server does: compilers and package installs can use more memory than the apps themselves, and a build that runs out of memory fails the deploy. DeployMate can send builds to another computer instead, yours or a friend's, over <a href="https://tailscale.com">Tailscale</a>. The finished image comes back and runs on your server as before.</p>
+
+<div class="callout"><strong>What leaves your server</strong>The source code of the app being built, and its build output. Pick a machine whose owner you trust: it sees your code while building. Runtime secrets (environment variables) are not part of a build.</div>
+
+<h2 id="builder">1. On the strong machine</h2>
+<p>It needs Docker and Tailscale, signed in to the same tailnet as your server. Start a BuildKit daemon that listens <strong>only on its Tailscale address</strong>:</p>
+[[daemon]]
+<p>Note the Tailscale address it prints, such as <code>100.64.0.5</code>.</p>
+<div class="callout warn"><strong>Lock the door</strong>This daemon runs with full privileges and has no password: anyone who can reach port 1234 can run code on that machine. In Tailscale's access controls, allow port 1234 from your DeployMate server only.</div>
+
+<h2 id="server">2. On your DeployMate server</h2>
+[[env]]
+<p>That adds <code>DEPLOYMATE_BUILD_HOST</code> to the service. The next deploy's build log starts with <code>building on tcp://100.64.0.5:1234</code>.</p>
+
+<h2 id="notes">Good to know</h2>
+<ul>
+<li><strong>If the strong machine is off, deploys still work.</strong> The build log says the host isn't reachable and the build runs on your server instead. If your server is the small one, that is the build that may run out of memory, so agree when the machine will be on.</li>
+<li><strong>Repeat builds are quicker.</strong> The cache lives on the build machine.</li>
+<li><strong>The image still has to travel back.</strong> Over a home connection a multi-gigabyte image (many machine-learning images) is slow; that case is better solved by running the app on the stronger machine, which is the next step on the roadmap.</li>
+<li>One build host for now, and only the <code>tcp://</code> form is accepted.</li>
+</ul>
+"""
+
+BUILDHOST_BLOCKS = {
+    "daemon": "docker run -d --name dm-buildkitd --restart unless-stopped --privileged \\\n  -p \"$(tailscale ip -4):1234:1234\" moby/buildkit:latest --addr tcp://0.0.0.0:1234\ntailscale ip -4",
+    "env": "sudo systemctl edit deploymate\n# in the editor, add:\n#   [Service]\n#   Environment=DEPLOYMATE_BUILD_HOST=tcp://100.64.0.5:1234\nsudo systemctl restart deploymate",
+}
+
 SECURE_BLOCKS = {
     "dry": "sudo deploymate harden                                   # public server\nsudo deploymate harden --ssh-from 192.168.1.0/24          # tunnel server\nsudo deploymate harden --apply                            # when the plan looks right",
 }
@@ -507,6 +538,7 @@ INDEX = """
 <tr><th><a href="concepts.html">How it fits together</a></th><td>Zero-downtime deploys, build modes, services and environments, recovery.</td></tr>
 <tr><th><a href="agents.html">AI agents (MCP)</a></th><td>Connect an agent with scoped, audited, delete-free access.</td></tr>
 <tr><th><a href="secure-your-server.html">Secure your server</a></th><td>The Security page, <code>deploymate harden</code>, dashboard protection, and what to rotate after a scare.</td></tr>
+<tr><th><a href="build-elsewhere.html">Build on another machine</a></th><td>Let a stronger computer (yours or a friend's) do the building, over Tailscale, so a small server never runs out of memory.</td></tr>
 <tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
 </table>
 <h2>In the repository</h2>
@@ -537,10 +569,13 @@ def main():
            AGENTS, AGENTS_BLOCKS, ("concepts.html", "How it fits together"), ("secure-your-server.html", "Secure your server"))
     render("secure-your-server.html", "Secure your server",
            "What DeployMate checks and hardens on your server: the Security page, deploymate harden, the dashboard's protections, and what to rotate after a scare.",
-           SECURE, SECURE_BLOCKS, ("agents.html", "AI agents (MCP)"), ("cloudflare-tunnel.html", "No open ports? Use a tunnel"))
+           SECURE, SECURE_BLOCKS, ("agents.html", "AI agents (MCP)"), ("build-elsewhere.html", "Build on another machine"))
+    render("build-elsewhere.html", "Build on another machine",
+           "Let a stronger computer do your builds over Tailscale, so a small server never runs out of memory while building.",
+           BUILDHOST, BUILDHOST_BLOCKS, ("secure-your-server.html", "Secure your server"), ("cloudflare-tunnel.html", "No open ports? Use a tunnel"))
     render("cloudflare-tunnel.html", "No open ports? Use a tunnel",
            "An optional way to run DeployMate on a machine that can't open ports 80 and 443, using a Cloudflare Tunnel.",
-           TUNNEL, TUNNEL_BLOCKS, ("secure-your-server.html", "Secure your server"), None)
+           TUNNEL, TUNNEL_BLOCKS, ("build-elsewhere.html", "Build on another machine"), None)
     render("index.html", "Documentation", "DeployMate documentation: quickstart, concepts and AI agent access.",
            INDEX, {}, None, ("quickstart.html", "Quickstart"))
 
