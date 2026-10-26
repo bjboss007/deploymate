@@ -46,7 +46,6 @@ TEMPLATE = """<!doctype html>
   <nav class="nav" aria-label="Main"><a href="../#how">How it works</a><a href="../#tour">Tour</a><a href="../#features">Features</a><a href="../#agents">Agents</a><a href="../#install">Install</a><a href="./" style="color:var(--text)">Docs</a></nav>
   <div class="top-right">
     <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch between dark and light theme">@@MOON@@@@SUN@@</button>
-    <a class="btn btn-ghost btn-sm" href="https://github.com/bjboss007/deploymate">GitHub</a>
   </div>
 </div></header>
 <main id="main"><div class="wrap doc">
@@ -56,7 +55,7 @@ TEMPLATE = """<!doctype html>
 @@PAGER@@
 </article>
 </div></main>
-<footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad · Apache-2.0</span><span class="links"><a href="../">Home</a><a href="https://github.com/bjboss007/deploymate">GitHub</a></span></div></footer>
+<footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad · Apache-2.0</span><span class="links"><a href="../">Home</a></span></div></footer>
 <script src="../assets/site.js"></script>
 </body>
 </html>
@@ -106,8 +105,6 @@ QUICK = """
 [[install]]
 <p>The installer downloads the release for your CPU and <strong>verifies its SHA-256</strong> against the release's <code>checksums.txt</code> — it stops on a mismatch. Then it installs Docker, opens only SSH, 80 and 443 in the firewall, creates a <code>deploymate</code> service user, starts Traefik (the only thing listening publicly) and a systemd service. It is safe to run again.</p>
 <p>Pin a version with <code>DEPLOYMATE_VERSION=v0.1.0</code>. Your email is used only for Let's Encrypt.</p>
-<div class="callout"><strong id="from-source">Prefer to build it yourself?</strong>You need Go and nothing else:
-[[source]]</div>
 
 <h2 id="login">2. Create your login</h2>
 [[admin]]
@@ -164,7 +161,6 @@ QUICK = """
 QUICK_BLOCKS = {
     "dashdomain": "curl -fsSL https://deploymate.link/install \\\n  | sudo DEPLOYMATE_DASHBOARD_HOST=dm.example.com DEPLOYMATE_LE_MODE=production \\\n       DEPLOYMATE_LE_EMAIL=you@example.com bash",
     "install": "curl -fsSL https://deploymate.link/install \\\n  | sudo DEPLOYMATE_LE_EMAIL=you@example.com bash",
-    "source": "git clone https://github.com/bjboss007/deploymate && cd deploymate\nmake build                                   # bin/deploymate\nGOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o deploymate-linux ./cmd/deploymate\nscp deploymate-linux deploy/ root@your-server:/tmp/   # deploy/ holds the installer files\n# on the server:\nDEPLOYMATE_LE_EMAIL=you@example.com bash /tmp/deploy/bootstrap.sh /tmp/deploymate-linux",
     "update": "sudo deploymate update",
     "admin": "sudo -u deploymate DEPLOYMATE_DATA_DIR=/var/lib/deploymate /usr/local/bin/deploymate setup-admin",
     "tunnel": "ssh -L 8080:127.0.0.1:8080 deploymate@your-server-ip",
@@ -565,7 +561,7 @@ CONNECT = """
 INDEX = """
 <p class="kicker">Docs</p>
 <h1>Documentation</h1>
-<p>Short on purpose: enough to get running and to know why it behaves as it does. The full reference lives next to the code.</p>
+<p>Short on purpose: enough to get running and to know why it behaves as it does.</p>
 <table>
 <tr><th><a href="quickstart.html">Quickstart</a></th><td>Install, first deploy, database, domain.</td></tr>
 <tr><th><a href="connect-github.html">Connect GitHub</a></th><td>Connect once, pick repositories from a list, and every push deploys. No keys or tokens.</td></tr>
@@ -577,12 +573,6 @@ INDEX = """
 <tr><th><a href="worker-nodes.html">Run a project on another machine</a></th><td>Add a friend's or your own stronger computer as a worker node and run a whole project there, over SSH and Tailscale.</td></tr>
 <tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
 </table>
-<h2>In the repository</h2>
-<ul>
-<li><a href="https://github.com/bjboss007/deploymate/blob/main/README.md">README</a> — features, configuration reference</li>
-<li><a href="https://github.com/bjboss007/deploymate/blob/main/docs/knowledge/server-setup.md">Server setup</a> — including turning an old laptop into a server</li>
-<li><a href="https://github.com/bjboss007/deploymate/tree/main/docs/specs">Specifications</a> and <a href="https://github.com/bjboss007/deploymate/tree/main/docs/decisions">decision records</a></li>
-</ul>
 """
 
 

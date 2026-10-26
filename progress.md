@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-26 (website: no links to the code)** — Owner asked for the GitHub buttons and links to the code base to be removed before the release: header and
+footer buttons (home and docs), the docs home's "In the repository" list, and the "build from source" snippets (quickstart callout, home page line) are gone
+(`site/index.html`, `site/tools/build_docs.py`, docs rebuilt). Left on purpose: `site/nginx.conf` redirects `/install` to the installer on
+raw.githubusercontent.com and the installer and `deploymate update` download releases from GitHub, so the repo must stay public (or those need a new
+home); the "Apache-2.0" badge and "Read it, change it, run it" line still say open source with no link.
+
 **2026-10-26 (shared compute, phase 2b: projects on nodes)** — A project can be pinned to a node (project page, "Where it runs"; only while empty) and then
 its apps and services run there. `nodes.Router` (a `runtime.Runtime`) sends each call to the right machine by remembered container name; images are
 copied to the node; published ports bind to the node's private address (`runtime.HostOf` used by the health probe, swap probe and preview proxy);
