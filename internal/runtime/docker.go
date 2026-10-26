@@ -157,7 +157,7 @@ func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 	}
 	if spec.HostPort > 0 && spec.Port > 0 {
 		hostCfg.PortBindings = nat.PortMap{
-			nat.Port(fmt.Sprintf("%d/tcp", spec.Port)): {{HostIP: "127.0.0.1", HostPort: fmt.Sprintf("%d", spec.HostPort)}},
+			nat.Port(fmt.Sprintf("%d/tcp", spec.Port)): {{HostIP: hostIP(spec), HostPort: fmt.Sprintf("%d", spec.HostPort)}},
 		}
 	}
 	if spec.MemLimitMB > 0 {

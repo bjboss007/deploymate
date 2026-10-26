@@ -450,7 +450,7 @@ func (m *Monitor) probeAppHealth(ctx context.Context, app store.App) {
 	slots := appspec.Slots(app, rows)
 	anyOK, healedAny := false, false
 	for _, sl := range slots {
-		url := fmt.Sprintf("http://127.0.0.1:%d%s", sl.HostPort, appspec.HealthPath(app))
+		url := fmt.Sprintf("http://%s:%d%s", runtime.HostOf(m.rt, sl.Name), sl.HostPort, appspec.HealthPath(app))
 		if m.probeURLFn != nil {
 			url = m.probeURLFn(app.Slug, sl.Slot)
 		}

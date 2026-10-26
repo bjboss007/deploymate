@@ -108,7 +108,7 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 	excl := s.exclusionsFor(apps)
 	applyResourceHealth(rows, svcs, excl)
 	cards, unused := buildAppCards(rows, svcs, excl, s.serviceUsage(r.Context(), apps, svcs, excl))
-	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, cards, unused, len(svcs) > 0))
+	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, cards, unused, len(svcs) > 0, s.placement(project)))
 }
 
 func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {

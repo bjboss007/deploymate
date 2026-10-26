@@ -291,7 +291,20 @@ templ ProjectsPage(vc ViewCtx, groups []ProjectGroup, sm FleetSummary) {
 	}
 }
 
-templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []ResourceChip, anyServices bool) {
+// Placement is the "where it runs" choice on a project page.
+type Placement struct {
+	Current string       // the node's name, "" = this server
+	Locked  bool         // has services or deploys, so it stays where it is
+	Nodes   []NodeOption // ready nodes to choose from
+}
+
+// NodeOption is one node in the picker.
+type NodeOption struct {
+	ID, Name string
+	Selected bool
+}
+
+templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []ResourceChip, anyServices bool, place Placement) {
 	@Layout(vc, p.Name, "", []Crumb{{Label: p.Name}}) {
 		<div class="page-head">
 			<div>
@@ -362,6 +375,33 @@ templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resourc
 					}
 				</div>
 			}
+		</section>
+		<section class="fleet-group">
+			<div class="group-bar"><h2>Where it runs</h2></div>
+			<div class="panel">
+				if place.Current != "" {
+					<p>Everything in this project runs on the node <strong>{ place.Current }</strong>: its apps and its databases together.</p>
+				} else {
+					<p>This project runs on this server.</p>
+				}
+				if place.Locked {
+					<p class="muted-text">It already has services or deploys, so it stays where it is. To use a node, create a new project and choose the node before adding anything.</p>
+				} else if len(place.Nodes) == 0 {
+					<p class="muted-text">Add a worker machine on the <a href="/nodes">Nodes page</a> to run a project somewhere else.</p>
+				} else {
+					<form method="post" action={ "/projects/" + p.Slug + "/node" } class="node-add">
+						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+						<select name="node">
+							<option value="">This server</option>
+							for _, n := range place.Nodes {
+								<option value={ n.ID } selected?={ n.Selected }>{ n.Name }</option>
+							}
+						</select>
+						<button class="btn" type="submit">Save</button>
+					</form>
+					<p class="muted-text">A node can read everything that runs on it. Apps and their databases always stay on the same machine.</p>
+				}
+			</div>
 		</section>
 		<section class="fleet-group danger-bar">
 			<form method="post" action={ "/projects/" + p.Slug + "/delete" } onsubmit="return confirm('Delete this project and everything in it?')">

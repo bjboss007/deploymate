@@ -101,7 +101,7 @@ templ NodesPage(vc ViewCtx, v NodesView) {
 									}
 								</button>
 							</form>
-							<form method="post" action={ "/nodes/" + n.ID + "/delete" } onsubmit="return confirm('Remove this node? Nothing runs on it yet, so only the entry goes.')">
+							<form method="post" action={ "/nodes/" + n.ID + "/delete" } onsubmit="return confirm('Remove this node? Only the entry goes; a node with projects on it cannot be removed.')">
 								<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 								<button class="btn btn-danger btn-sm" type="submit">Remove</button>
 							</form>

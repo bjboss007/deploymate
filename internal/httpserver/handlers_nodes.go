@@ -12,6 +12,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/habibmuhammad/deploymate/internal/auth"
 	"github.com/habibmuhammad/deploymate/internal/nodes"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
@@ -126,8 +127,71 @@ func (s *Server) handleNodeDrain(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleNodeDelete(w http.ResponseWriter, r *http.Request) {
 	n, err := s.store.GetNode(chi.URLParam(r, "id"))
-	if err == nil {
-		_ = s.store.DeleteNode(n.ID)
+	if err != nil {
+		s.nodeFlash(w, r, "Node removed.")
+		return
 	}
+	if used, _ := s.store.NodeInUse(n.ID); used {
+		s.nodeFlash(w, r, n.Name+" still has a project pinned to it or containers on it. Delete that project first; removing the node would orphan them.")
+		return
+	}
+	_ = s.store.DeleteNode(n.ID)
 	s.nodeFlash(w, r, "Node removed.")
+}
+
+// placement builds the "where it runs" panel of a project page.
+func (s *Server) placement(p store.Project) templates.Placement {
+	pl := templates.Placement{}
+	cur, _ := s.store.ProjectNodeID(p.ID)
+	pl.Locked, _ = s.store.ProjectHasWorkloads(p.ID)
+	list, _ := s.store.ListNodes()
+	for _, n := range list {
+		if n.ID == cur {
+			pl.Current = n.Name
+		}
+		if n.State == store.NodeReady {
+			pl.Nodes = append(pl.Nodes, templates.NodeOption{ID: n.ID, Name: n.Name, Selected: n.ID == cur})
+		}
+	}
+	return pl
+}
+
+// handleProjectNode pins a project to a node (or back to this server). Only a project with nothing deployed can be
+// pinned: its containers would otherwise end up on two machines whose networks cannot see each other.
+func (s *Server) handleProjectNode(w http.ResponseWriter, r *http.Request) {
+	user, _ := auth.UserFromContext(r.Context())
+	p, err := s.store.GetProjectBySlug(user.ID, chi.URLParam(r, "slug"))
+	if err != nil {
+		notFoundPage(w, r)
+		return
+	}
+	back := func(msg string) {
+		http.Redirect(w, r, "/projects/"+p.Slug+"?flash="+flashURL(msg), http.StatusSeeOther)
+	}
+	if locked, _ := s.store.ProjectHasWorkloads(p.ID); locked {
+		back("This project already has services or deploys, so it cannot move. Create a new project on the node instead.")
+		return
+	}
+	id := r.FormValue("node")
+	if id != "" {
+		n, err := s.store.GetNode(id)
+		if err != nil {
+			back("That node no longer exists.")
+			return
+		}
+		if n.State != store.NodeReady {
+			back(n.Name + " is " + n.State + ", so nothing can be placed on it now.")
+			return
+		}
+	}
+	if err := s.store.SetProjectNode(p.ID, id); err != nil {
+		slog.Error("projects: set node", "err", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if id == "" {
+		back("This project runs on this server.")
+		return
+	}
+	back("This project will run on the node. Add a database or deploy an app to start there.")
 }

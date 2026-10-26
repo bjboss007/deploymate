@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-26 (shared compute, phase 2b: projects on nodes)** — A project can be pinned to a node (project page, "Where it runs"; only while empty) and then
+its apps and services run there. `nodes.Router` (a `runtime.Runtime`) sends each call to the right machine by remembered container name; images are
+copied to the node; published ports bind to the node's private address (`runtime.HostOf` used by the health probe, swap probe and preview proxy);
+`internal/noderoute` writes Traefik file routes for node apps with domains. A node in use cannot be removed. Tested with fakes and with a real second
+Docker daemon (dind). **Not tried: a real two-machine deploy.** Website: new docs page "Run a project on another machine" + home page lines.
+Owner wants everything (remote builds 35bb8de, nodes 0dab150, this) shipped together as one release (v0.9.0) — **ask before tagging; the next useful
+step is a real test on a second machine over Tailscale.**
+
 **2026-10-26 (shared compute, phase 2a: nodes)** — Nodes can be registered and reached: migration 0026, `internal/nodes` (SSH key, probe, watcher),
 `runtime.NewRemote` (Docker over `ssh … docker system dial-stdio`, our own stdio conn), Nodes page + sidebar item, routes `/nodes*`. Unit tests +
 real-Docker test of the stdio transport via a stand-in ssh (`DEPLOYMATE_SSH`); checked in the browser (a node added through the stand-in showed the

@@ -49,7 +49,32 @@ the NVIDIA runtime is installed. `nodes.Watcher` re-checks every minute; a node 
 the owner's Drain survives successful checks. Tested with unit tests, and the SSH transport against real Docker with a stand-in
 `ssh` (`DEPLOYMATE_SSH`); **not yet tried over a real SSH connection to a second machine.** Nothing is placed on nodes yet.
 
-**Step 2b (next): run an app on a node.** What reading the code showed, and the design it forces:
+**Step 2b, built 2026-10-26: a project can run on a node.** As built:
+- **Whole projects are pinned** (`projects.node_id`, set on the project page, only while it has no services and nothing was ever
+  deployed; a node with a project on it cannot be removed). Apps and their databases then share the node's own `deploymate-net`,
+  so the existing connection URLs keep working. Cross-node service access is not planned.
+- **`nodes.Router`** is a `runtime.Runtime` that sends each call to the machine the container lives on. A new container's
+  node comes from its `deploymate.app` / `deploymate.service` label; the placement is remembered by container name
+  (`container_nodes`, survives restarts; a swap's rename moves it). No caller changed except `main`, which hands everyone the
+  router. A draining or offline node takes **no new containers, including redeploys of what already runs there**, and the
+  work never falls back to this server.
+- **Images** are copied from this server's daemon to the node (`docker save | docker load` over the same ssh transport) when the
+  node lacks them, and pulled by the node when this server lacks them too. Every deploy of a new tag copies the whole image:
+  slow for multi-GB images over a home link; building on the node is the later optimisation.
+- **Ports** an app publishes bind to the node's private-network address (the endpoint's host), never its public one.
+  `runtime.HostOf` gives the address to reach a container at; the health probe, the swap probe and the preview proxy use it.
+  The staged container's port is chosen free on **this** server, so on the node it can collide with another process (the deploy
+  then fails with Docker's message).
+- **Traefik:** `internal/noderoute` reconciles one file route per running app with domains (every 15 s) to
+  `node-address:port` per replica, with the same health check; stale files are removed. The preview subdomains and `/preview/`
+  go through the dashboard proxy and need no route.
+- **Tested:** the router with fake runtimes (placement, image copy/pull, drain/offline, rename, restart, unreachable node);
+  routes (render, reconcile, only own files); and a **real second Docker daemon** (Docker-in-Docker) as the node: the container
+  is created there, the image copied, it runs there, `exec`/`stats`/`inspect` work through the router, and this machine's
+  daemon never sees it (`DEPLOYMATE_DOCKER_TESTS=1`). **Not tried: a real two-machine deploy end to end** (SSH key
+  authentication, the node's private address, Traefik reaching it), which one Mac cannot reproduce.
+
+What reading the code showed, and the design it forced:
 - Every consumer takes one `runtime.Runtime`, and its methods address containers by *name*, so a `Router` Runtime that resolves
   name → node (from a `node_id` on apps and services, default local) fits without changing callers. Image methods (`HasImage`,
   `PullImage`, `Create` with a built tag) must go to the node that runs the container.
@@ -62,7 +87,7 @@ the owner's Drain survives successful checks. Tested with unit tests, and the SS
   therefore pinned to one node: its apps and services run together** (cross-node service access is not planned). Volumes are
   node-local for the same reason.
 - Monitoring, logs, metrics, exec and backups already go through `Runtime`, so they follow the router.
-- Open: whether the first slice pins whole projects to a node (simplest) or individual apps with their dependencies.
+- Decided: whole projects (see above).
 - A **node** is a machine with an address on a private network (WireGuard or Tailscale; a tunnel works for HTTP only),
   Docker, and, optionally, GPUs. Table `nodes`: name, address, token hash, labels, capacity (CPUs, RAM, GPUs with model and
   VRAM), state (`ready`, `draining`, `offline`), last seen.

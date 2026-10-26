@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 
 	"github.com/habibmuhammad/deploymate/internal/appspec"
+	"github.com/habibmuhammad/deploymate/internal/runtime"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -124,7 +125,7 @@ func (s *Server) previewHosts(app store.App) []string {
 		if sl.HostPort <= 0 {
 			continue
 		}
-		h := "127.0.0.1:" + strconv.Itoa(sl.HostPort)
+		h := runtime.HostOf(s.rt, sl.Name) + ":" + strconv.Itoa(sl.HostPort)
 		if sl.Status == "unhealthy" {
 			sick = append(sick, h)
 		} else {
@@ -134,7 +135,7 @@ func (s *Server) previewHosts(app store.App) []string {
 	hosts := append(healthy, sick...)
 	if len(hosts) == 0 {
 		// No recorded port at all: the pre-replicas resolution.
-		hosts = []string{"127.0.0.1:" + strconv.Itoa(appspec.ResolvedPreviewPort(app))}
+		hosts = []string{runtime.HostOf(s.rt, appspec.CanonicalName(app.Slug)) + ":" + strconv.Itoa(appspec.ResolvedPreviewPort(app))}
 	}
 	return hosts
 }

@@ -144,3 +144,74 @@ func TestNodesNeedASession(t *testing.T) {
 		t.Fatal("the Nodes page must need a sign-in")
 	}
 }
+
+func TestAProjectCanBePinnedToAReadyNodeOnlyBeforeAnythingIsDeployed(t *testing.T) {
+	e := newNodesEnv(t)
+	owner, _ := e.st.GetUserByEmail("o@test.dev")
+	proj, _ := e.st.CreateProject(store.Project{UserID: owner.ID, Name: "P", Slug: "p"})
+	n, _ := e.st.CreateNode(store.Node{Name: "friend", Endpoint: "ssh://u@100.64.0.5", State: store.NodeReady})
+
+	page := e.do(http.MethodGet, "/projects/p", nil).Body.String()
+	for _, want := range []string{"Where it runs", "This project runs on this server", `<option value="` + n.ID + `"`, "can read everything that runs on it"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("project page missing %q", want)
+		}
+	}
+
+	rec := e.do(http.MethodPost, "/projects/p/node", url.Values{"node": {n.ID}})
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "will+run+on+the+node") {
+		t.Fatalf("%d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	if id, _ := e.st.ProjectNodeID(proj.ID); id != n.ID {
+		t.Fatalf("pinned to %q", id)
+	}
+	if page := e.do(http.MethodGet, "/projects/p", nil).Body.String(); !strings.Contains(page, "runs on the node <strong>friend</strong>") {
+		t.Error("the page should say where the project runs")
+	}
+
+	// Back to this server is allowed while it is still empty.
+	e.do(http.MethodPost, "/projects/p/node", url.Values{"node": {""}})
+	if id, _ := e.st.ProjectNodeID(proj.ID); id != "" {
+		t.Fatalf("unpinned to %q", id)
+	}
+
+	// An offline node cannot be chosen.
+	_ = e.st.SetNodeProbe(n.ID, false, store.Node{}, "down")
+	if rec := e.do(http.MethodPost, "/projects/p/node", url.Values{"node": {n.ID}}); !strings.Contains(rec.Header().Get("Location"), "offline") {
+		t.Errorf("offline: %s", rec.Header().Get("Location"))
+	}
+	_ = e.st.SetNodeProbe(n.ID, true, store.Node{CPUs: 4}, "")
+
+	// Once there is a service the project is locked where it is.
+	_, _ = e.st.CreateService(store.Service{ProjectID: proj.ID, Type: "redis", Name: "cache", Slug: "cache", Image: "redis:7", Status: "stopped", Environment: "dev", Port: 6379})
+	rec = e.do(http.MethodPost, "/projects/p/node", url.Values{"node": {n.ID}})
+	if !strings.Contains(rec.Header().Get("Location"), "cannot+move") {
+		t.Fatalf("a project with services must not move: %s", rec.Header().Get("Location"))
+	}
+	if id, _ := e.st.ProjectNodeID(proj.ID); id != "" {
+		t.Fatal("it must stay where it was")
+	}
+	if page := e.do(http.MethodGet, "/projects/p", nil).Body.String(); !strings.Contains(page, "stays where it is") {
+		t.Error("the page should explain why it cannot move")
+	}
+}
+
+func TestANodeWithAProjectOnItCannotBeRemoved(t *testing.T) {
+	e := newNodesEnv(t)
+	owner, _ := e.st.GetUserByEmail("o@test.dev")
+	proj, _ := e.st.CreateProject(store.Project{UserID: owner.ID, Name: "P", Slug: "p"})
+	n, _ := e.st.CreateNode(store.Node{Name: "friend", Endpoint: "ssh://u@100.64.0.5", State: store.NodeReady})
+	_ = e.st.SetProjectNode(proj.ID, n.ID)
+	rec := e.do(http.MethodPost, "/nodes/"+n.ID+"/delete", url.Values{})
+	if !strings.Contains(rec.Header().Get("Location"), "still+has+a+project") {
+		t.Fatalf("%s", rec.Header().Get("Location"))
+	}
+	if list, _ := e.st.ListNodes(); len(list) != 1 {
+		t.Fatal("the node must stay")
+	}
+	_ = e.st.SetProjectNode(proj.ID, "")
+	e.do(http.MethodPost, "/nodes/"+n.ID+"/delete", url.Values{})
+	if list, _ := e.st.ListNodes(); len(list) != 0 {
+		t.Fatal("an unused node can go")
+	}
+}

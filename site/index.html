@@ -157,6 +157,7 @@
         <ul>
           <li><strong>Zero-downtime swaps</strong> — the old version serves until the new one is healthy.</li>
           <li><strong>1–5 replicas</strong> per app, load-balanced, rolled one at a time.</li>
+          <li><strong>More than one machine:</strong> run a project on a friend's or your own stronger computer over Tailscale, or just send the builds there.</li>
           <li><strong>Postgres, MySQL, Redis and MongoDB</strong> in a click; apps in the same project and environment get the connection URL automatically.</li>
           <li><strong>dev, staging, production</strong>, each with its own services. A <code>deploymate.yml</code> in the repo provisions them for you.</li>
         </ul>
@@ -297,7 +298,7 @@ curl -fsSL https://deploymate.link/install \
       <div class="card no">
         <h3>Not yet</h3><p class="tag">on purpose, or not built</p>
         <ul>
-          <li><strong>One server, one owner.</strong> No clustering, no teams or roles yet.</li>
+          <li><strong>One owner.</strong> No teams or roles yet, and a project lives on one machine (no spreading it over several).</li>
           <li><strong>No two-factor sign-in yet</strong> for the dashboard (use an access policy in front of it).</li>
           <li><strong>Prebuilt mode is GitHub + Java</strong> (Gradle or Maven) for now.</li>
           <li>No built-in metrics export yet, and no per-branch preview deploys.</li>

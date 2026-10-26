@@ -165,3 +165,40 @@ func (d *Docker) Capacity(ctx context.Context) (Capacity, error) {
 	_, gpu := info.Runtimes["nvidia"]
 	return Capacity{CPUs: info.NCPU, MemBytes: uint64(info.MemTotal), OS: info.OperatingSystem, Arch: info.Architecture, DockerVersion: info.ServerVersion, GPURuntime: gpu}, nil
 }
+
+func hostIP(spec Spec) string {
+	if spec.HostIP != "" {
+		return spec.HostIP
+	}
+	return "127.0.0.1"
+}
+
+// Locator is implemented by runtimes whose containers may live on other machines: HostFor is the address at which a
+// container's published ports can be reached ("127.0.0.1" for a local one).
+type Locator interface {
+	HostFor(name string) string
+}
+
+// HostOf is the address to use for a container's published ports on rt.
+func HostOf(rt Runtime, name string) string {
+	if l, ok := rt.(Locator); ok {
+		return l.HostFor(name)
+	}
+	return "127.0.0.1"
+}
+
+// SaveImage streams an image as a tar (docker save).
+func (d *Docker) SaveImage(ctx context.Context, ref string) (io.ReadCloser, error) {
+	return d.cli.ImageSave(ctx, []string{ref})
+}
+
+// LoadImage loads a tar produced by SaveImage (docker load).
+func (d *Docker) LoadImage(ctx context.Context, tar io.Reader) error {
+	resp, err := d.cli.ImageLoad(ctx, tar)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	_, err = io.Copy(io.Discard, resp.Body)
+	return err
+}

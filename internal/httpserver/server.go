@@ -210,6 +210,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/alerts/{id}/delete", am.CheckCSRF(s.handleAlertDelete))
 		r.Get("/projects/{slug}", s.handleProjectDetail)
 		r.Post("/projects/{slug}/delete", am.CheckCSRF(s.handleProjectDelete))
+		r.Post("/projects/{slug}/node", am.CheckCSRF(s.handleProjectNode))
 		r.Post("/projects/{slug}/apps", am.CheckCSRF(s.handleAppCreate))
 		r.Post("/projects/{slug}/services", am.CheckCSRF(s.handleServiceCreate))
 		r.Get("/apps/{slug}", s.handleAppPage)

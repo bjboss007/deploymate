@@ -86,7 +86,8 @@ func Swap(ctx context.Context, rt runtime.Runtime, canonical string, spec runtim
 	}
 	probeURL := o.ProbeURL
 	if probeURL == nil {
-		probeURL = func(port int) string { return fmt.Sprintf("http://127.0.0.1:%d/", port) }
+		host := runtime.HostOf(rt, spec.Name) // a container on a worker node is probed at the node's address
+		probeURL = func(port int) string { return fmt.Sprintf("http://%s:%d/", host, port) }
 	}
 
 	if err := rt.Start(ctx, spec.Name); err != nil {

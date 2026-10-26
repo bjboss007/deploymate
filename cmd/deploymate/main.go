@@ -35,6 +35,7 @@ import (
 	"github.com/habibmuhammad/deploymate/internal/httpserver"
 	"github.com/habibmuhammad/deploymate/internal/jobs"
 	"github.com/habibmuhammad/deploymate/internal/monitor"
+	"github.com/habibmuhammad/deploymate/internal/noderoute"
 	"github.com/habibmuhammad/deploymate/internal/nodes"
 	"github.com/habibmuhammad/deploymate/internal/proxy"
 	"github.com/habibmuhammad/deploymate/internal/runtime"
@@ -100,10 +101,12 @@ func serve() error {
 		return err
 	}
 
-	rt, err := runtime.NewDocker()
+	local, err := runtime.NewDocker()
 	if err != nil {
 		return err
 	}
+	// rt is the local daemon plus any worker nodes: every call goes to the machine the container lives on.
+	rt := nodes.NewRouter(local, st, cfg.DataDir)
 	defer rt.Close()
 
 	if cfg.SetupEmail != "" && (cfg.SetupPassword != "" || cfg.SetupHash != "") {
@@ -167,9 +170,12 @@ func serve() error {
 	worker.SetGitHubAPI(cfg.GitHubAPIURL)
 	go worker.Run(workerCtx)
 
-	// Worker nodes: keep each one's state current.
+	// Worker nodes: keep each one's state current, and Traefik's routes for apps that run on them.
 	if os.Getenv("DEPLOYMATE_DISABLE_MONITOR") != "1" {
 		go nodes.NewWatcher(st, nodes.RealProbe(cfg.DataDir), time.Minute).Run(workerCtx)
+		routes := &noderoute.Reconciler{St: st, Locator: rt, Dir: filepath.Join(cfg.DataDir, "traefik-dynamic"),
+			Resolver: proxy.ResolverForLEMode(cfg.LEMode), Interval: 15 * time.Second}
+		go routes.Run(workerCtx.Done())
 	}
 
 	// Metrics, health, uptime, restart, and disk sampling.
