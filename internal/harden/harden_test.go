@@ -3,6 +3,7 @@ package harden
 import (
 	"context"
 	"errors"
+	"net"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -229,5 +230,28 @@ func TestTrustKeyNeedsOnlyAKeyNotALoggedLogin(t *testing.T) {
 	}
 	if HasAuthorizedKey(f, "../etc") || HasAuthorizedKey(f, "") {
 		t.Fatal("user names are validated")
+	}
+}
+
+func TestSSHFromARangeTheMachineIsNotOnIsRefused(t *testing.T) {
+	_, home, _ := net.ParseCIDR("192.168.100.0/24")
+	f := newFake()
+	f.out["ufw status verbose"] = ufwOpen
+	opts := Options{Tunnel: true, SSHFrom: "192.168.1.0/24", LocalNets: []*net.IPNet{home}}
+	st := firewallStep(context.Background(), f, opts)
+	if strings.Contains(descs(st), "only from") || !strings.Contains(st.Note, "not a network this machine is on") || !strings.Contains(st.Note, "192.168.100.0/24") {
+		t.Fatalf("a wrong range must not plan the lock-out: %s / %s", descs(st), st.Note)
+	}
+	opts.SSHFrom = "192.168.100.0/24"
+	if st = firewallStep(context.Background(), f, opts); !strings.Contains(descs(st), "only from 192.168.100.0/24") {
+		t.Fatalf("the right range is accepted: %s", descs(st))
+	}
+	opts.SSHFrom = "192.168.0.0/16" // contains the machine's network
+	if st = firewallStep(context.Background(), f, opts); !strings.Contains(descs(st), "only from") {
+		t.Fatalf("a wider range that contains it is fine: %s", descs(st))
+	}
+	opts.SSHFrom, opts.ForceRange = "203.0.113.0/24", true
+	if st = firewallStep(context.Background(), f, opts); !strings.Contains(descs(st), "only from 203.0.113.0/24") {
+		t.Fatalf("--force-range allows a network elsewhere: %s", descs(st))
 	}
 }

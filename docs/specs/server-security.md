@@ -58,6 +58,9 @@ login audit or alerts; 30-day sessions; no 2FA.
     fail2ban with an sshd jail.
   - *Tunnel:* close 80/443; port 22 is closed to everyone but `--ssh-from <CIDR>` (left alone without it); no
     fail2ban (every connection looks local). The tunnel path itself comes in over loopback, which ufw does not filter.
+  - *Range check (added 2026-10-26):* `--ssh-from` must overlap a network the machine is actually on, otherwise `harden` refuses to close
+    port 22 and names the networks it is on (`--force-range` overrides). The owner's first run used 192.168.1.0/24 on a 192.168.100.0/24
+    network, which silently blocked SSH from home; Cloudflare SSH kept working.
   - *Safety:* firewall and SSH changes are "risky": before applying, `systemd-run` starts a timer
     (`deploymate-harden-revert`, `--timeout` minutes, default 5) that runs `harden --revert`; the timer lives in
     systemd, so it fires even if the SSH session dies. `--confirm` stops it (keep), `--undo` reverses everything.

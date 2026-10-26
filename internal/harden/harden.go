@@ -30,6 +30,10 @@ type Options struct {
 	// TrustKey: an authorized key is enough to turn passwords off, without a logged key login (unattended
 	// installs have no login history; the provider put the key there).
 	TrustKey bool
+	// LocalNets are the networks this machine is on. A --ssh-from range that overlaps none of them would lock SSH out
+	// from the very network the owner meant, so it is refused unless ForceRange is set. Empty = not checked.
+	LocalNets  []*net.IPNet
+	ForceRange bool
 }
 
 // Undo is one reversible step: restore a file (Prev nil = it did not exist) or run a command.
@@ -301,8 +305,14 @@ func firewallStep(ctx context.Context, s System, o Options) Step {
 			}
 			return st
 		}
-		if _, _, err := net.ParseCIDR(o.SSHFrom); err != nil {
+		_, want, err := net.ParseCIDR(o.SSHFrom)
+		if err != nil {
 			st.Note = "--ssh-from " + o.SSHFrom + " is not a network such as 192.168.1.0/24"
+			st.Ops = nil
+			return st
+		}
+		if len(o.LocalNets) > 0 && !o.ForceRange && !overlapsAny(want, o.LocalNets) {
+			st.Note = fmt.Sprintf("--ssh-from %s is not a network this machine is on (it is on %s), so SSH from there would be locked out. Pass the right range, or --force-range if you mean a network elsewhere", o.SSHFrom, joinNets(o.LocalNets))
 			st.Ops = nil
 			return st
 		}
@@ -461,3 +471,35 @@ func (OS) Write(path, content string) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 func (OS) Remove(path string) error { return os.Remove(path) }
+
+func overlapsAny(n *net.IPNet, nets []*net.IPNet) bool {
+	for _, m := range nets {
+		if n.Contains(m.IP) || m.Contains(n.IP) {
+			return true
+		}
+	}
+	return false
+}
+
+func joinNets(nets []*net.IPNet) string {
+	var s []string
+	for _, n := range nets {
+		s = append(s, n.String())
+	}
+	return strings.Join(s, ", ")
+}
+
+// LocalNetworks lists this machine's IPv4 networks (loopback and link-local left out), for Options.LocalNets.
+func LocalNetworks() []*net.IPNet {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return nil
+	}
+	var out []*net.IPNet
+	for _, a := range addrs {
+		if n, ok := a.(*net.IPNet); ok && n.IP.To4() != nil && !n.IP.IsLoopback() && !n.IP.IsLinkLocalUnicast() {
+			out = append(out, &net.IPNet{IP: n.IP.Mask(n.Mask), Mask: n.Mask})
+		}
+	}
+	return out
+}

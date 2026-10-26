@@ -215,3 +215,18 @@ func TestANodeWithAProjectOnItCannotBeRemoved(t *testing.T) {
 		t.Fatal("an unused node can go")
 	}
 }
+
+func TestANodeCanCarryAPrivateAddressForItsPorts(t *testing.T) {
+	e := newNodesEnv(t)
+	e.do(http.MethodPost, "/nodes", url.Values{"name": {"home"}, "endpoint": {"ssh://habib@dm-server"}, "address": {"192.168.100.94"}})
+	list, _ := e.st.ListNodes()
+	if len(list) != 1 || list[0].Address != "192.168.100.94" {
+		t.Fatalf("%+v", list)
+	}
+	if page := e.do(http.MethodGet, "/nodes", nil).Body.String(); !strings.Contains(page, "Ports reached at") || !strings.Contains(page, "192.168.100.94") {
+		t.Error("the page should show where the ports are reached")
+	}
+	if rec := e.do(http.MethodPost, "/nodes", url.Values{"name": {"bad"}, "endpoint": {"ssh://u@100.64.0.5"}, "address": {"1.2.3.4; rm -rf"}}); !strings.Contains(rec.Header().Get("Location"), "address+for+ports") {
+		t.Errorf("a bad address must be refused: %s", rec.Header().Get("Location"))
+	}
+}

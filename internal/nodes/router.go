@@ -94,12 +94,16 @@ func (r *Router) remoteFor(ctx context.Context, nodeID string) (*remote, error) 
 		return nil, fmt.Errorf("node %s: %w", nodeID, err)
 	}
 	// The address is only needed to publish ports; an SSH alias that is not a DNS name must not stop everything else.
-	host, hostErr := nodeAddress(n.Endpoint)
+	addrSource := n.Endpoint
+	if n.Address != "" {
+		addrSource = n.Address // set when the endpoint is an alias or a tunnel, not the private network the ports are on
+	}
+	host, hostErr := nodeAddress(addrSource)
 	rt, err := r.dial(ctx, n)
 	if err != nil {
 		return nil, fmt.Errorf("node %s unreachable: %w", n.Name, err)
 	}
-	rem := &remote{rt: rt, host: host, rawHost: endpointHost(n.Endpoint), hostErr: hostErr, name: n.Name}
+	rem := &remote{rt: rt, host: host, rawHost: endpointHost(addrSource), hostErr: hostErr, name: n.Name}
 	r.remotes[nodeID] = rem
 	return rem, nil
 }
@@ -242,7 +246,7 @@ func (r *Router) Create(ctx context.Context, spec runtime.Spec) (string, error) 
 	}
 	if spec.HostPort > 0 && spec.HostIP == "" {
 		if rem.host == "" {
-			return "", fmt.Errorf("node %s: its published ports need an IP address, but %w. Use the machine's Tailscale IP in the node's endpoint", n.Name, rem.hostErr)
+			return "", fmt.Errorf("node %s: its published ports need an IP address, but %w. Set the node's private address (for example its Tailscale IP) on the Nodes page", n.Name, rem.hostErr)
 		}
 		spec.HostIP = rem.host // the node's private-network address, never its public one
 	}

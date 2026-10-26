@@ -40,7 +40,7 @@
 <h2 id="add">2. Add it in DeployMate</h2>
 <ol>
 <li>Open <strong>Nodes</strong> in the sidebar and press <strong>Create this server's key</strong>. Add the public key it shows to that user's <code>~/.ssh/authorized_keys</code> on the machine.</li>
-<li>Enter a name and the machine's Tailscale address, such as <code>ssh://habib@100.64.0.5</code>, then <strong>Add node</strong>. DeployMate checks it straight away and shows its CPUs, memory and Docker version, or the reason it can't connect.</li>
+<li>Enter a name and the machine's Tailscale address, such as <code>ssh://habib@100.64.0.5</code>, then <strong>Add node</strong>. If you reach the machine through an SSH alias or a tunnel instead, also fill in <em>address for its ports</em>: the private address its apps will be reached at. DeployMate checks it straight away and shows its CPUs, memory and Docker version, or the reason it can't connect.</li>
 </ol>
 <p>A node is checked every minute. It shows offline after three failed checks in a row. <strong>Drain</strong> stops anything new from being placed on it, use it before you need the machine yourself.</p>
 

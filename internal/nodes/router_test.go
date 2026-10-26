@@ -295,3 +295,14 @@ func TestANodeWhoseNameDoesNotResolveStillRunsContainersThatPublishNoPort(t *tes
 		t.Errorf("HostFor falls back to the name as written: %q", got)
 	}
 }
+
+func TestAPrivateAddressOverridesTheEndpointForPorts(t *testing.T) {
+	e := newEnv(t)
+	_, _ = e.st.DB().Exec(`UPDATE nodes SET endpoint = 'ssh://u@some-ssh-alias.invalid', address = '192.168.100.94' WHERE id = ?`, e.n.ID)
+	if _, err := e.r.Create(context.Background(), appSpec("web", "dm-web", "img:1")); err != nil {
+		t.Fatalf("with a private address an ssh alias is fine: %v", err)
+	}
+	if got := e.node.created[0].HostIP; got != "192.168.100.94" || e.r.HostFor("dm-web") != "192.168.100.94" {
+		t.Fatalf("ports bind and are reached at the private address, got %q / %q", got, e.r.HostFor("dm-web"))
+	}
+}

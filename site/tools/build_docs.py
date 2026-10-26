@@ -407,7 +407,7 @@ SECURE = """
 <table>
 <tr><th>Both</th><td>Automatic security updates. SSH settings: at most 4 tries per connection, no root login, and password login off, but only when you have a key installed <em>and</em> SSH has logged you in with it before. The new SSH config is checked with <code>sshd -t</code> before it takes effect.</td></tr>
 <tr><th>Public</th><td>Firewall: SSH rate-limited, 80 and 443 open, everything else denied. fail2ban for SSH.</td></tr>
-<tr><th>Tunnel</th><td>Ports 80 and 443 closed (the tunnel connects out). Port 22 closed to everyone except the network you give with <code>--ssh-from</code>. No fail2ban: behind a tunnel every connection looks local, so it couldn't tell attackers apart. Protect SSH with the tunnel's access policy instead.</td></tr>
+<tr><th>Tunnel</th><td>Ports 80 and 443 closed (the tunnel connects out). Port 22 closed to everyone except the network you give with <code>--ssh-from</code> (it must be a network the machine is on, or <code>harden</code> refuses). No fail2ban: behind a tunnel every connection looks local, so it couldn't tell attackers apart. Protect SSH with the tunnel's access policy instead.</td></tr>
 </table>
 <div class="callout warn"><strong>Keep a way in</strong>Changes to the firewall and SSH start a five-minute revert timer inside systemd, so it fires even if your session drops. Open a <em>second</em> terminal and log in; if it works, run <code>sudo deploymate harden --confirm</code>. If you don't, the old settings come back by themselves. <code>sudo deploymate harden --undo</code> reverses everything later. If the server is only reachable through a tunnel, make sure you can still reach the machine another way (keyboard, or your provider's console) before closing port 22.</div>
 
@@ -475,7 +475,7 @@ NODES = """
 <h2 id="add">2. Add it in DeployMate</h2>
 <ol>
 <li>Open <strong>Nodes</strong> in the sidebar and press <strong>Create this server's key</strong>. Add the public key it shows to that user's <code>~/.ssh/authorized_keys</code> on the machine.</li>
-<li>Enter a name and the machine's Tailscale address, such as <code>ssh://habib@100.64.0.5</code>, then <strong>Add node</strong>. DeployMate checks it straight away and shows its CPUs, memory and Docker version, or the reason it can't connect.</li>
+<li>Enter a name and the machine's Tailscale address, such as <code>ssh://habib@100.64.0.5</code>, then <strong>Add node</strong>. If you reach the machine through an SSH alias or a tunnel instead, also fill in <em>address for its ports</em>: the private address its apps will be reached at. DeployMate checks it straight away and shows its CPUs, memory and Docker version, or the reason it can't connect.</li>
 </ol>
 <p>A node is checked every minute. It shows offline after three failed checks in a row. <strong>Drain</strong> stops anything new from being placed on it, use it before you need the machine yourself.</p>
 

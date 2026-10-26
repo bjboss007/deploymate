@@ -10,7 +10,7 @@ type NodesView struct {
 
 // NodeRow is one node, already formatted.
 type NodeRow struct {
-	ID, Name, Endpoint, State, OS, DockerVersion, LastSeenAt, Error string
+	ID, Name, Endpoint, Address, State, OS, DockerVersion, LastSeenAt, Error string
 	CPUs                                                           int
 	MemBytes                                                       uint64
 	GPU, Draining                                                  bool
@@ -54,12 +54,13 @@ templ NodesPage(vc ViewCtx, v NodesView) {
 						<pre class="sec-fix"><code>{ v.PublicKey }</code></pre>
 					}
 				</li>
-				<li>Add the node here, using the machine's Tailscale address.</li>
+				<li>Add the node here, using the machine's Tailscale address. If you reach it through an SSH alias or a tunnel instead, also give the private address its apps' ports are reached at.</li>
 			</ol>
 			<form method="post" action="/nodes" class="node-add">
 				<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 				<input type="text" name="name" placeholder="name, e.g. friend-pc" required maxlength="31" pattern="[a-z0-9][a-z0-9-]*" autocomplete="off"/>
 				<input type="text" name="endpoint" placeholder="ssh://user@100.64.0.5" required autocomplete="off"/>
+				<input type="text" name="address" placeholder="address for its ports (optional)" autocomplete="off" pattern="[A-Za-z0-9][A-Za-z0-9.\-]*"/>
 				<button class="btn btn-primary" type="submit">Add node</button>
 			</form>
 		</div>
@@ -77,6 +78,9 @@ templ NodesPage(vc ViewCtx, v NodesView) {
 								<span class={ "badge", templ.KV("badge-running", n.State == "ready"), templ.KV("badge-failed", n.State == "offline") }>{ n.State }</span>
 							</div>
 							<div class="muted-text mono">{ n.Endpoint }</div>
+							if n.Address != "" {
+								<div class="muted-text">Ports reached at <span class="mono">{ n.Address }</span></div>
+							}
 							if nodeSpecs(n) != "" {
 								<div class="muted-text">{ nodeSpecs(n) }</div>
 							}

@@ -20,6 +20,7 @@ import (
 )
 
 var nodeNameRe = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,30}$`)
+var nodeAddrRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9.-]{0,252}$`)
 
 // SetNodeProbe replaces how nodes are checked (tests).
 func (s *Server) SetNodeProbe(p nodes.ProbeFunc) { s.nodeProbe = p }
@@ -43,7 +44,7 @@ func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
 		v.PublicKey = strings.TrimSpace(string(raw))
 	}
 	for _, n := range list {
-		row := templates.NodeRow{ID: n.ID, Name: n.Name, Endpoint: n.Endpoint, State: n.State, Draining: n.State == store.NodeDraining, Error: n.LastError,
+		row := templates.NodeRow{ID: n.ID, Name: n.Name, Endpoint: n.Endpoint, Address: n.Address, State: n.State, Draining: n.State == store.NodeDraining, Error: n.LastError,
 			CPUs: n.CPUs, MemBytes: n.MemBytes, OS: n.OS, DockerVersion: n.DockerVersion, GPU: n.GPURuntime, LastSeenAt: n.LastSeenAt}
 		v.Nodes = append(v.Nodes, row)
 	}
@@ -73,7 +74,12 @@ func (s *Server) handleNodeCreate(w http.ResponseWriter, r *http.Request) {
 		s.nodeFlash(w, r, err.Error())
 		return
 	}
-	n, err := s.store.CreateNode(store.Node{Name: name, Endpoint: endpoint})
+	address := strings.TrimSpace(r.FormValue("address"))
+	if address != "" && !nodeAddrRe.MatchString(address) {
+		s.nodeFlash(w, r, "The address for ports must be an IP address or a host name.")
+		return
+	}
+	n, err := s.store.CreateNode(store.Node{Name: name, Endpoint: endpoint, Address: address})
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			s.nodeFlash(w, r, "A node called "+name+" already exists.")

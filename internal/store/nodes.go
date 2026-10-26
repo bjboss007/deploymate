@@ -14,20 +14,20 @@ const (
 
 // Node is another machine that can run containers for this DeployMate.
 type Node struct {
-	ID, Name, Endpoint, State        string
-	CPUs                             int
-	MemBytes                         uint64
-	OS, Arch, DockerVersion          string
-	GPURuntime                       bool
-	LastSeenAt, LastError, CreatedAt string
+	ID, Name, Endpoint, Address, State string
+	CPUs                               int
+	MemBytes                           uint64
+	OS, Arch, DockerVersion            string
+	GPURuntime                         bool
+	LastSeenAt, LastError, CreatedAt   string
 }
 
-const nodeColumns = `id, name, endpoint, state, cpus, mem_bytes, os, arch, docker_version, gpu_runtime, last_seen_at, last_error, created_at`
+const nodeColumns = `id, name, endpoint, address, state, cpus, mem_bytes, os, arch, docker_version, gpu_runtime, last_seen_at, last_error, created_at`
 
 func (n *Node) scan(r interface{ Scan(...any) error }) error {
 	var mem int64
 	var gpu int
-	if err := r.Scan(&n.ID, &n.Name, &n.Endpoint, &n.State, &n.CPUs, &mem, &n.OS, &n.Arch, &n.DockerVersion, &gpu, &n.LastSeenAt, &n.LastError, &n.CreatedAt); err != nil {
+	if err := r.Scan(&n.ID, &n.Name, &n.Endpoint, &n.Address, &n.State, &n.CPUs, &mem, &n.OS, &n.Arch, &n.DockerVersion, &gpu, &n.LastSeenAt, &n.LastError, &n.CreatedAt); err != nil {
 		return err
 	}
 	n.MemBytes, n.GPURuntime = uint64(mem), gpu != 0
@@ -40,8 +40,8 @@ func (s *Store) CreateNode(n Node) (Node, error) {
 	if n.State == "" {
 		n.State = NodeOffline
 	}
-	_, err := s.db.Exec(`INSERT INTO nodes (`+nodeColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		n.ID, n.Name, n.Endpoint, n.State, n.CPUs, int64(n.MemBytes), n.OS, n.Arch, n.DockerVersion, boolInt(n.GPURuntime), n.LastSeenAt, n.LastError, n.CreatedAt)
+	_, err := s.db.Exec(`INSERT INTO nodes (`+nodeColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		n.ID, n.Name, n.Endpoint, n.Address, n.State, n.CPUs, int64(n.MemBytes), n.OS, n.Arch, n.DockerVersion, boolInt(n.GPURuntime), n.LastSeenAt, n.LastError, n.CreatedAt)
 	return n, err
 }
 

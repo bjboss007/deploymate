@@ -26,6 +26,7 @@ func hardenCmd(args []string) error {
 	undo := fs.Bool("undo", false, "undo everything harden changed")
 	trustKey := fs.Bool("trust-ssh-key", false, "unattended installs: an authorized key is enough to turn password login off")
 	noTimer := fs.Bool("no-timer", false, "unattended installs: no revert timer (nobody is there to confirm)")
+	forceRange := fs.Bool("force-range", false, "accept an --ssh-from range this machine is not on")
 	user := fs.String("user", os.Getenv("SUDO_USER"), "the login user whose authorized_keys count (default: who ran sudo)")
 	_ = fs.Parse(args)
 	if os.Geteuid() != 0 {
@@ -54,7 +55,7 @@ func hardenCmd(args []string) error {
 	if (*trustKey || *noTimer) && !harden.HasAuthorizedKey(s, *user) {
 		return fmt.Errorf("refusing --trust-ssh-key/--no-timer: %q has no authorized key, so password login could be the only way in (pass --user, and install a key first)", *user)
 	}
-	steps := harden.Plan(ctx, s, harden.Options{Tunnel: tunnel, SSHFrom: *sshFrom, User: *user, TrustKey: *trustKey})
+	steps := harden.Plan(ctx, s, harden.Options{Tunnel: tunnel, SSHFrom: *sshFrom, User: *user, TrustKey: *trustKey, LocalNets: harden.LocalNetworks(), ForceRange: *forceRange})
 	kind := "public server"
 	if tunnel {
 		kind = "tunnel server"
