@@ -525,14 +525,14 @@ func TestServicePageListsConsumersWithUsageAndOptOut(t *testing.T) {
 	}
 }
 
-// Hand-created services pick their environment; an unspecified one stays
-// production (the old behaviour) and an unknown one is refused.
+// Hand-created services pick their environment; an unspecified one follows the project (see defaultEnvironment: here the
+// project is mixed, so dev, the same default an app gets) and an unknown one is refused.
 func TestServiceCreateEnvironment(t *testing.T) {
 	e := newPrebuiltEnv(t)
 	for _, tc := range []struct{ name, env, want string }{
 		{"Dev Cache", "dev", "dev"},
 		{"Stage DB", "staging", "staging"},
-		{"Old Client", "", "production"},
+		{"Old Client", "", "dev"},
 	} {
 		form := url.Values{"name": {tc.name}, "type": {"redis"}}
 		if tc.env != "" {

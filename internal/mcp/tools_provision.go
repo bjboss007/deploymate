@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	envProp := strProp("dev, staging or production (default: dev for apps, production for services). Only apps and services in the same project AND environment are wired together.")
+	envProp := strProp("dev, staging or production (default: the environment the project already uses, otherwise dev). Only apps and services in the same project AND environment are wired together.")
 	provisionTools = []tool{
 		{
 			Name: "create_project", Scope: store.ScopeProvision,

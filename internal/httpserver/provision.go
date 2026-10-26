@@ -22,6 +22,29 @@ func validEnvironment(env string) bool {
 	return env == store.EnvDev || env == store.EnvStaging || env == store.EnvProduction
 }
 
+// defaultEnvironment is where a new app or service goes when the caller did not say: the environment the project already
+// uses (one distinct value across its apps and services), otherwise dev. Without this, an API client or an AI agent that
+// omits the environment got a dev app and a production database, which never find each other.
+func (s *Server) defaultEnvironment(project store.Project) string {
+	seen := map[string]bool{}
+	if apps, err := s.store.ListApps(project.ID); err == nil {
+		for _, a := range apps {
+			seen[a.Environment] = true
+		}
+	}
+	if svcs, err := s.store.ListServices(project.ID); err == nil {
+		for _, v := range svcs {
+			seen[v.Environment] = true
+		}
+	}
+	if len(seen) == 1 {
+		for env := range seen {
+			return env
+		}
+	}
+	return store.EnvDev
+}
+
 func (s *Server) createProjectCore(userID, name string) (store.Project, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" || len(name) > 64 {
@@ -50,7 +73,10 @@ func (s *Server) createAppCore(ctx context.Context, project store.Project, name,
 	if slug == "" {
 		return app, "", "App name has no usable characters.", nil
 	}
-	if env != "" && !validEnvironment(env) {
+	if env == "" {
+		env = s.defaultEnvironment(project)
+	}
+	if !validEnvironment(env) {
 		return app, "", "Unknown environment — use dev, staging or production.", nil
 	}
 	app, err = s.store.CreateApp(store.App{
@@ -95,7 +121,7 @@ func (s *Server) createServiceCore(project store.Project, name, svcType, env str
 		return store.Service{}, "Service name has no usable characters.", nil
 	}
 	if env == "" {
-		env = store.EnvProduction // forms and clients that don't send one keep the old behaviour
+		env = s.defaultEnvironment(project)
 	}
 	if !validEnvironment(env) {
 		return store.Service{}, "Unknown environment.", nil

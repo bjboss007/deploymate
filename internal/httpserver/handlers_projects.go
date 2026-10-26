@@ -109,7 +109,7 @@ func (s *Server) handleProjectDetail(w http.ResponseWriter, r *http.Request) {
 	excl := s.exclusionsFor(apps)
 	applyResourceHealth(rows, svcs, excl)
 	cards, unused := buildAppCards(rows, svcs, excl, s.serviceUsage(r.Context(), apps, svcs, excl))
-	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, cards, unused, len(svcs) > 0, s.placement(project)))
+	render(w, r, http.StatusOK, templates.ProjectPage(s.viewCtx(r), project, cards, unused, len(svcs) > 0, s.placement(project), envMismatchHint(apps, unused)))
 }
 
 func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {
@@ -149,4 +149,31 @@ func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	redirectHome(w, r, "Project deleted.")
+}
+
+// envMismatchHint explains why a database is not used: apps only get the databases of their own environment, so a database in
+// another environment than every app is the usual reason. "" when that is not the situation.
+func envMismatchHint(apps []store.App, unused []templates.ResourceChip) string {
+	if len(apps) == 0 || len(unused) == 0 {
+		return ""
+	}
+	appEnvs := map[string]bool{}
+	var appList []string
+	for _, a := range apps {
+		if !appEnvs[a.Environment] {
+			appList = append(appList, a.Environment)
+		}
+		appEnvs[a.Environment] = true
+	}
+	var off []string
+	for _, c := range unused {
+		if !appEnvs[c.Service.Environment] {
+			off = append(off, c.Service.Name+" ("+c.Service.Environment+")")
+		}
+	}
+	if len(off) == 0 {
+		return ""
+	}
+	return "Apps get the databases of their own environment. Your apps run in " + strings.Join(appList, " and ") + "; " +
+		strings.Join(off, ", ") + " is in another one. Change the app's environment in its settings, or create the database in the app's environment."
 }

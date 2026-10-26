@@ -93,7 +93,9 @@ the owner's Drain survives successful checks. Tested with unit tests, and the SS
   were applied on the node. The server was returned to its exact earlier state (containers, networks, volumes, images identical).
   Findings: (a) **deleting a project never removed its containers**, on a single server too: fixed (`removeAppContainers` /
   `removeServiceContainer`, project delete names any it could not remove); (b) apps only receive services of their own environment, and a
-  new service defaults to production while a new app defaults to dev (by design, but easy to trip over). Not re-run since: the throwaway
+  new service omitted-environment defaulted to production while a new app defaulted to dev (the form always sends one, so only the API/MCP
+  tripped; **fixed 2026-10-26**: an omitted environment now joins the one the project already uses, else dev, and the project page explains a
+  database that sits in another environment than every app). Not re-run since: the throwaway
   script (it used `curl` against the forms and `docker` over ssh); the steps above are the procedure.
 - **Tested:** the router with fake runtimes (placement, image copy/pull, drain/offline, rename, restart, unreachable node);
   routes (render, reconcile, only own files); and a **real second Docker daemon** (Docker-in-Docker) as the node: the container
