@@ -449,3 +449,31 @@ document.addEventListener("click", (e) => {
   }
 });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") document.body.classList.remove("nav-open"); });
+
+
+// --- tables as cards on phones --------------------------------------------
+// On a narrow screen CSS turns every .deploy-table row into a card ("LABEL ... value"); the label of a cell is its
+// column's heading, copied here so no template has to repeat it. Runs again after htmx swaps new rows in.
+(() => {
+  function label(root) {
+    (root || document).querySelectorAll("table.deploy-table").forEach((t) => {
+      const heads = [...t.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+      if (!heads.length) return;
+      t.querySelectorAll("tbody tr").forEach((tr) => {
+        [...tr.children].forEach((td, i) => {
+          if (td.tagName === "TD" && td.colSpan === 1 && !td.hasAttribute("data-label")) td.setAttribute("data-label", heads[i] || "");
+        });
+        // How the card lays itself out depends on what is in it: up to three short values sit in one row, longer ones
+        // wrap two to a row, and a long value takes the whole width.
+        const vals = [...tr.children].slice(1).filter((td) => td.dataset.label);
+        const text = (td) => td.textContent.trim().length;
+        vals.forEach((td) => td.classList.toggle("wide", text(td) > 20));
+        const tight = vals.length > 0 && vals.length <= 3 && vals.every((td) => text(td) <= 11);
+        tr.classList.toggle("cards-tight", tight);
+        if (tight) tr.style.setProperty("--n", vals.length);
+      });
+    });
+  }
+  label();
+  document.addEventListener("htmx:afterSwap", (e) => label(e.target));
+})();

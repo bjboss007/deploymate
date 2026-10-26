@@ -125,3 +125,25 @@
     } catch (e) {}
   });
 })();
+
+// ---- docs tables as cards on phones -------------------------------------------------------------------------------
+// A table's heading row (a <thead>, or a first row made only of <th>) becomes the label of every cell below it, so the CSS can
+// show each row as a small card on a narrow screen.
+(function () {
+  document.querySelectorAll(".doc table").forEach(function (t) {
+    var head = t.querySelector("thead tr");
+    var rows = Array.prototype.slice.call(t.querySelectorAll("tbody tr, :scope > tr"));
+    if (!head && rows.length > 1 && rows[0].querySelector("th") && !rows[0].querySelector("td") && rows[1].querySelector("td")) {
+      head = rows.shift();
+      head.classList.add("head-row");
+    }
+    if (!head) return;
+    var heads = Array.prototype.map.call(head.children, function (c) { return c.textContent.trim(); });
+    rows.forEach(function (tr) {
+      Array.prototype.forEach.call(tr.children, function (c, i) {
+        if (c.tagName === "TD" && heads[i]) c.setAttribute("data-label", heads[i]);
+      });
+    });
+  });
+})();
+

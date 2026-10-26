@@ -263,7 +263,36 @@ footer a { color: var(--muted); }
   body { font-size: 16px; }
   section { padding: 64px 0; }
   .hero { padding: 40px 0 24px; }
-  .nav { display: none; }
+
+  /* header: brand and theme button on the first row, the links as a swipeable row underneath (they used to vanish) */
+  .top .wrap { flex-wrap: wrap; height: auto; gap: 0 12px; padding-top: 6px; padding-bottom: 0; }
+  .top .brand { order: 1; height: 44px; }
+  .top-right { order: 2; height: 44px; }
+  .nav { order: 3; flex: 0 0 100%; margin: 0 -24px; padding: 0 24px 8px; gap: 4px; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .nav::-webkit-scrollbar { display: none; }
+  .nav a { flex: none; padding: 8px 13px; border-radius: 999px; font-size: 14.5px; white-space: nowrap; }
+  .nav a:hover, .nav a:focus-visible { background: var(--panel); }
+  section[id] { scroll-margin-top: 108px; }
+
+  /* the tour's tabs: one swipeable row instead of three wrapped ones */
+  .tour-tabs { flex-wrap: nowrap; overflow-x: auto; margin-inline: -24px; padding: 0 24px 4px; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .tour-tabs::-webkit-scrollbar { display: none; }
+  .tour-tabs button { flex: none; padding: 11px 16px; }
+
+  /* tables in the docs become cards: a heading row is hidden and its words label each cell (site.js); a table whose rows start
+     with a heading cell shows that cell as the card's title */
+  .doc table, .doc tbody { display: block; width: 100%; }
+  .doc thead, .doc tr.head-row { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .doc tr { display: block; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin: 0 0 10px; }
+  .doc th, .doc td { display: block; border: 0; padding: 0; text-align: left; }
+  .doc td { padding: 3px 0; }
+  .doc tbody th { font: 600 15px/1.35 var(--sans); color: var(--text); text-transform: none; letter-spacing: 0; padding-bottom: 4px; }
+  .doc td[data-label]::before { content: attr(data-label); display: block; margin-top: 4px; font: 500 11.5px/1.4 var(--mono); color: var(--faint); text-transform: uppercase; letter-spacing: 0.05em; }
+
+  /* fingers need more than 28 px */
+  .icon-btn { width: 42px; height: 42px; }
+  .btn-sm { padding: 11px 15px; }
+  .copy, .term-head button { min-height: 36px; padding-inline: 14px; }
   .grid, .limits { grid-template-columns: 1fr; }
   .row { grid-template-columns: 12px minmax(0, 1fr) 46px; }
   .row .strip { grid-column: 2 / 3; grid-row: 2; }

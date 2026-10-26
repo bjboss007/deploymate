@@ -7,6 +7,14 @@
 
 ## Where we stopped
 
+**2026-10-26 (mobile responsiveness)** — The owner asked for the product to be "really responsive on mobile" and suggested tables should be neat labelled cards. Audited every
+dashboard and site page at 375/320 px. Dashboard: three pages scrolled sideways (stats 764 px, tokens 655, an app 499: bare tables, a stretched `<select>`, the 24-hour
+dots), the "New project" pop-over hung off the left edge, and the bottom action bar squeezed its main label. Site: the nav vanished under 680 px, docs tables overflowed. Fixes: one
+phone block at the end of `web/static/app.css` (cards for tables via `app.js` labelling, wrapping uptime dots, full-width form fields and pop-overs, 40/36 px buttons, 16 px inputs),
+the same card idea for docs tables (`site/assets/site.js`), a two-row site header with a swipeable link row, swipeable tour tabs. Every page now measures exactly the phone width with
+the `overflow-x: clip` safety net switched off; desktop unchanged; light theme checked. Method and traps: `docs/knowledge/responsive.md`. Tour recaptured. Dashboard changes ship with the next release.
+Not done: a real phone (only emulation), landscape/tablet widths, and no automated test for the layout (the label script has no unit test).
+
 **2026-10-26 (after v0.9.0: tour refreshed)** — The owner spotted that the website's **tour** was stale: its sidebar had no Nodes item and it had no Nodes page. Recaptured
 (`python3 site/tools/capture.py`, recipe in `site/README.md` / `docs/knowledge/dev-environment.md`) with three fictional nodes seeded in the demo
 (`internal/demo` `nodes()`: garage-nuc ready, friend-pc ready + NVIDIA runtime, old-laptop draining; Storefront pinned to garage-nuc, so the project snapshot says

@@ -1010,3 +1010,62 @@ select { cursor: pointer; }
 .node-err { color: var(--red); font-size: 13px; overflow-wrap: anywhere; }
 .node-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .node-actions form { margin: 0; }
+
+/* ==========================================================================
+   Phones: nothing may be wider than the screen
+   Each rule below fixes one measured cause of sideways scrolling; `overflow-x: clip` on <html> is only the last line of
+   defence (unlike `hidden` it keeps position: sticky working).
+   ========================================================================== */
+html { overflow-x: clip; }
+@media (max-width: 640px) {
+  img, svg, canvas, video { max-width: 100%; }
+  code, .mono { overflow-wrap: anywhere; }
+  pre, .sec-fix { max-width: 100%; overflow-x: auto; }
+
+  /* tables become cards: one per row, the first cell as the title, the other cells as small "label over value" pairs that sit
+     side by side while they fit and wrap when they do not. The labels are the column headings, copied onto the cells by app.js;
+     the heading row itself stays for screen readers but is not drawn. */
+  table.deploy-table, .deploy-table tbody { display: block; width: 100%; }
+  .deploy-table thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .deploy-table tr {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: end;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-bottom: 10px;
+  }
+  .deploy-table tr:last-child { margin-bottom: 0; }
+  .deploy-table tr.cards-tight { grid-template-columns: repeat(var(--n, 3), minmax(0, 1fr)); gap: 10px 10px; }  /* up to three short values share a row */
+  .deploy-table td { display: block; min-width: 0; padding: 0; border: 0; text-align: left; white-space: normal; overflow-wrap: break-word; font-size: 14.5px; }
+  .deploy-table td.wide { grid-column: 1 / -1; }  /* a long value (a message, a path) gets the whole width */
+  .deploy-table td::before { content: attr(data-label); display: block; margin-bottom: 2px; color: var(--muted); font: 500 10.5px/1.3 var(--font-mono); text-transform: uppercase; letter-spacing: 0.03em; }
+  .deploy-table td:not([data-label])::before, .deploy-table td[data-label=""]::before { display: none; }
+  /* the first cell is the card's title; a cell with no heading (buttons) or a long one takes the whole width */
+  .deploy-table td:first-child { grid-column: 1 / -1; align-self: start; font-weight: 600; font-size: 15.5px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  .deploy-table td:first-child::before { display: none; }
+  .deploy-table td[data-label=""], .deploy-table td:not([data-label]) { grid-column: 1 / -1; }
+  .deploy-table td .btn, .deploy-table td form { margin: 0; }
+  .deploy-table code, .deploy-table .mono { overflow-wrap: anywhere; }
+  .table-wrap { max-width: 100%; }
+
+  /* the 24-hour strips wrap rather than run off the screen */
+  .uptime-row { flex-wrap: wrap; row-gap: 6px; }
+  .uptime-dots { flex-wrap: wrap; row-gap: 3px; }
+
+  /* forms: every field is as wide as the screen allows, never wider */
+  .git-form { align-items: stretch; }
+  .git-form label, .git-form input[type="text"], .git-form select, .git-form .branch-input { min-width: 0; width: 100%; max-width: 100%; }
+  select, input, textarea { max-width: 100%; }
+  input, select, textarea { font-size: 16px; } /* iOS zooms the whole page when a smaller field gets focus */
+
+  /* the "New project" style pop-overs fill the width instead of hanging off the left edge */
+  .disclose, .disclose-inline { position: static; }
+  .page-head .disclose .disclose-form, .disclose-inline .disclose-form { position: absolute; left: 16px; right: 16px; width: auto; max-width: none; }
+
+  /* fingers need more than 28 px */
+  .btn { min-height: 40px; }
+  .btn-sm { min-height: 36px; padding: 8px 12px; }
+  .navlink { padding-top: 11px; padding-bottom: 11px; }
+  .node-actions { width: 100%; }
+
+  /* the bottom action bar: the main action gets more room than the others, and a long label may wrap rather than touch the edges */
+  .sticky-actions > :first-child { flex-grow: 1.7; }
+  .sticky-actions .btn { padding-left: 10px; padding-right: 10px; white-space: normal; line-height: 1.15; }
+}
