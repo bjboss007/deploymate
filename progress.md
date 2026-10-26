@@ -7,6 +7,13 @@
 
 ## Where we stopped
 
+**2026-10-26 (shared compute, phase 2a: nodes)** — Nodes can be registered and reached: migration 0026, `internal/nodes` (SSH key, probe, watcher),
+`runtime.NewRemote` (Docker over `ssh … docker system dial-stdio`, our own stdio conn), Nodes page + sidebar item, routes `/nodes*`. Unit tests +
+real-Docker test of the stdio transport via a stand-in ssh (`DEPLOYMATE_SSH`); checked in the browser (a node added through the stand-in showed the
+local Docker's real CPUs/RAM). **Not yet tried over real SSH to a second machine.** Nothing is scheduled onto nodes yet; design for step 2b (router
+runtime, image build into the node's daemon, file-provider routes, project pinned to one node) is in `docs/specs/shared-compute.md`. Unreleased with
+remote builds (35bb8de): both could ship as v0.9.0.
+
 **2026-10-26 (shared compute, phase 1: remote builds)** — Owner answered the five spec questions (any hardware/workload, Tailscale, availability
 told in advance, trusted friends); recorded in `docs/specs/shared-compute.md`. Built remote builds: `DEPLOYMATE_BUILD_HOST=tcp://<ip>:1234`
 (`internal/builder/remote.go`; Railpack via `BUILDKIT_HOST`, Dockerfile builds via buildx builder `dm-remote`; unreachable host falls back to
