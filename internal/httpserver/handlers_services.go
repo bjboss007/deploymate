@@ -152,16 +152,23 @@ func (s *Server) handleServiceKeep(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/services/"+svc.Slug+"?flash="+flashURL("Kept. This service is now managed manually and won't be flagged by deploys."), http.StatusSeeOther)
 }
 
+// removeServiceContainer stops and removes a service's container; false means it could not be removed.
+func (s *Server) removeServiceContainer(ctx context.Context, svc store.Service) bool {
+	name := services.ContainerName(svc.Slug)
+	_ = s.rt.Stop(ctx, name, 5)
+	if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
+		slog.Error("services: remove container", "container", name, "err", err)
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleServiceDelete(w http.ResponseWriter, r *http.Request) {
 	svc, ok := s.serviceFromRequest(w, r)
 	if !ok {
 		return
 	}
-	name := services.ContainerName(svc.Slug)
-	_ = s.rt.Stop(r.Context(), name, 5)
-	if err := s.rt.Remove(r.Context(), name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
-		slog.Error("services: remove container", "err", err)
-	}
+	s.removeServiceContainer(r.Context(), svc)
 	if err := s.store.DeleteService(svc.ID); err != nil {
 		slog.Error("services: delete", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

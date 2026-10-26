@@ -11,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/habibmuhammad/deploymate/internal/auth"
+	"github.com/habibmuhammad/deploymate/internal/services"
 	"github.com/habibmuhammad/deploymate/internal/store"
 	"github.com/habibmuhammad/deploymate/web/templates"
 )
@@ -123,9 +124,28 @@ func (s *Server) handleProjectDelete(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return
 	}
+	// The containers go first: once the rows are gone nothing would find them again, and on a node they would run on
+	// someone else's machine for good. A container that cannot be removed (an unreachable node) is named in the message.
+	var stuck []string
+	if apps, err := s.store.ListApps(project.ID); err == nil {
+		for _, app := range apps {
+			stuck = append(stuck, s.removeAppContainers(r.Context(), app)...)
+		}
+	}
+	if svcs, err := s.store.ListServices(project.ID); err == nil {
+		for _, svc := range svcs {
+			if !s.removeServiceContainer(r.Context(), svc) {
+				stuck = append(stuck, services.ContainerName(svc.Slug))
+			}
+		}
+	}
 	if err := s.store.DeleteProject(project.ID); err != nil {
 		slog.Error("projects: delete", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if len(stuck) > 0 {
+		redirectHome(w, r, "Project deleted, but these containers could not be removed and may still be running: "+strings.Join(stuck, ", ")+". Remove them by hand.")
 		return
 	}
 	redirectHome(w, r, "Project deleted.")

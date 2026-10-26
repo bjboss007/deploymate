@@ -13,6 +13,9 @@ copied to the node; published ports bind to the node's private address (`runtime
 `internal/noderoute` writes Traefik file routes for node apps with domains. A node in use cannot be removed. Tested with fakes and with a real second
 Docker daemon (dind). **Not tried: a real two-machine deploy.** Website: new docs page "Run a project on another machine" + home page lines.
 Owner wants everything (remote builds 35bb8de, nodes 0dab150, this) shipped together as one release (v0.9.0) — **ask before tagging.**
+**Full deploy verified on two real machines the same day** (Mac control, owner's server as node): see the spec. It found that project deletion never
+removed containers (fixed). The owner must still: remove `habib-muhammad` from the docker group on the server, and fix the firewall SSH range
+(their LAN is 192.168.100.0/24, `harden` had been given 192.168.1.0/24).
 Real-machine attempt (same day, the owner's server over their Cloudflare SSH alias): the transport works; found and fixed (a) the misleading
 Docker-client error (now ssh's own message + hint) and (b) images were copied across CPU architectures (arm64 Mac vs x86_64 server; now the node
 pulls its own). The placement run then PASSED on the real server once the owner added the SSH user to the `docker` group temporarily (they should remove it again:

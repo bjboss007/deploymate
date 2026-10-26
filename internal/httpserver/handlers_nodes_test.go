@@ -230,3 +230,40 @@ func TestANodeCanCarryAPrivateAddressForItsPorts(t *testing.T) {
 		t.Errorf("a bad address must be refused: %s", rec.Header().Get("Location"))
 	}
 }
+
+func TestDeletingAProjectRemovesItsContainers(t *testing.T) {
+	e := newNodesEnv(t)
+	rt := &fakeRuntime{}
+	e.s.rt = rt
+	owner, _ := e.st.GetUserByEmail("o@test.dev")
+	proj, _ := e.st.CreateProject(store.Project{UserID: owner.ID, Name: "P", Slug: "p"})
+	_, _ = e.st.CreateApp(store.App{ProjectID: proj.ID, Name: "web", Slug: "web", Port: 8080, Status: "running", Environment: "dev"})
+	_, _ = e.st.CreateService(store.Service{ProjectID: proj.ID, Type: "redis", Name: "cache", Slug: "cache", Image: "redis:7", Status: "running", Environment: "dev", Port: 6379})
+
+	rec := e.do(http.MethodPost, "/projects/p/delete", url.Values{})
+	if rec.Code != http.StatusSeeOther || !strings.Contains(rec.Header().Get("Location"), "Project deleted.") {
+		t.Fatalf("%d %s", rec.Code, rec.Header().Get("Location"))
+	}
+	got := strings.Join(rt.removed, ",")
+	for _, want := range []string{"dm-web", "dm-svc-cache"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("deleting a project must remove its container %s, removed: %s", want, got)
+		}
+	}
+	if _, err := e.st.GetProjectBySlug(owner.ID, "p"); err == nil {
+		t.Error("the project should be gone")
+	}
+}
+
+func TestDeletingAProjectNamesContainersItCouldNotRemove(t *testing.T) {
+	e := newNodesEnv(t)
+	e.s.rt = &fakeRuntime{removeErr: errors.New("node unreachable")}
+	owner, _ := e.st.GetUserByEmail("o@test.dev")
+	proj, _ := e.st.CreateProject(store.Project{UserID: owner.ID, Name: "P", Slug: "p"})
+	_, _ = e.st.CreateService(store.Service{ProjectID: proj.ID, Type: "redis", Name: "cache", Slug: "cache", Image: "redis:7", Status: "running", Environment: "dev", Port: 6379})
+	rec := e.do(http.MethodPost, "/projects/p/delete", url.Values{})
+	loc := rec.Header().Get("Location")
+	if !strings.Contains(loc, "could not be removed") || !strings.Contains(loc, "dm-svc-cache") {
+		t.Fatalf("the message must name what is left running: %s", loc)
+	}
+}

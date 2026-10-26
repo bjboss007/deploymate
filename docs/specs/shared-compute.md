@@ -83,6 +83,18 @@ the owner's Drain survives successful checks. Tested with unit tests, and the SS
   the node's address is now resolved only when a published port needs it (otherwise the error says to use the Tailscale IP).
 - **Private address:** a node can carry an optional `address` (migration 0028) at which its published ports are bound and reached,
   used when the SSH endpoint is an alias or goes through a tunnel (the owner's server: ssh through Cloudflare, ports on the LAN).
+- **Verified end to end on two real machines (2026-10-26):** this Mac ran DeployMate (LE mode off) and the owner's server was the node
+  (ssh through Cloudflare, `address` = its LAN IP). Through the dashboard's own forms: node added and ready; project pinned; Redis started
+  (container on the node, image pulled there, nothing on the Mac); an `nginx:alpine` app deployed in 16 s (the node pulled its own amd64 image
+  because the Mac's is arm64); it answered over the LAN at `node-ip:port` and through `/preview/`; its container resolved the Redis by name on
+  the node's `deploymate-net`; after moving the app to the Redis's environment and redeploying, `REDIS_URL/HOST/PORT/PASSWORD` were injected and
+  the Redis was reachable; the swap replaced the container on a new port with the old one removed; a domain produced the Traefik file route
+  (current port, health check) and a real Traefik container serving it returned the app for that Host and 404 for another; hardening flags
+  were applied on the node. The server was returned to its exact earlier state (containers, networks, volumes, images identical).
+  Findings: (a) **deleting a project never removed its containers**, on a single server too: fixed (`removeAppContainers` /
+  `removeServiceContainer`, project delete names any it could not remove); (b) apps only receive services of their own environment, and a
+  new service defaults to production while a new app defaults to dev (by design, but easy to trip over). Not re-run since: the throwaway
+  script (it used `curl` against the forms and `docker` over ssh); the steps above are the procedure.
 - **Tested:** the router with fake runtimes (placement, image copy/pull, drain/offline, rename, restart, unreachable node);
   routes (render, reconcile, only own files); and a **real second Docker daemon** (Docker-in-Docker) as the node: the container
   is created there, the image copied, it runs there, `exec`/`stats`/`inspect` work through the router, and this machine's

@@ -565,14 +565,9 @@ func (s *Server) lifecycleHandler(w http.ResponseWriter, r *http.Request, action
 	http.Redirect(w, r, "/apps/"+app.Slug, http.StatusSeeOther)
 }
 
-func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
-	app, ok := s.appFromRequest(w, r)
-	if !ok {
-		return
-	}
-	ctx := r.Context()
-	// Every replica goes, plus any slot container the table does not know
-	// about (a crashed rollout's leftovers above the recorded set).
+// removeAppContainers stops and removes every container of an app: each replica, plus any slot container the table does
+// not know about (a crashed rollout's leftovers above the recorded set). It returns the names it could not remove.
+func (s *Server) removeAppContainers(ctx context.Context, app store.App) (failed []string) {
 	names := map[string]bool{}
 	for _, sl := range s.appSlots(app) {
 		names[sl.Name] = true
@@ -584,8 +579,19 @@ func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
 		_ = s.rt.Stop(ctx, name, 5)
 		if err := s.rt.Remove(ctx, name); err != nil && !errors.Is(err, runtime.ErrContainerNotFound) {
 			slog.Error("apps: remove container", "container", name, "err", err)
+			failed = append(failed, name)
 		}
 	}
+	return failed
+}
+
+func (s *Server) handleAppDelete(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	ctx := r.Context()
+	s.removeAppContainers(ctx, app)
 	if err := s.store.DeleteApp(app.ID); err != nil {
 		slog.Error("apps: delete", "err", err)
 		http.Error(w, "internal error", http.StatusInternalServerError)

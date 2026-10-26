@@ -23,6 +23,8 @@ import (
 // fakeRuntime records calls for the start/heal path; everything else is a
 // no-op success.
 type fakeRuntime struct {
+	removed   []string // names passed to Remove
+	removeErr error
 	started    int
 	created    int
 	lastSpec   runtime.Spec
@@ -43,7 +45,10 @@ func (f *fakeRuntime) Create(_ context.Context, spec runtime.Spec) (string, erro
 }
 func (f *fakeRuntime) Start(context.Context, string) error     { f.started++; return nil }
 func (f *fakeRuntime) Stop(context.Context, string, int) error { return nil }
-func (f *fakeRuntime) Remove(context.Context, string) error    { return nil }
+func (f *fakeRuntime) Remove(_ context.Context, name string) error {
+	f.removed = append(f.removed, name)
+	return f.removeErr
+}
 func (f *fakeRuntime) Rename(context.Context, string, string) error { return nil }
 func (f *fakeRuntime) Inspect(context.Context, string) (runtime.Info, error) {
 	return f.info, f.inspectErr
