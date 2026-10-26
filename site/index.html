@@ -8,7 +8,7 @@
 <meta property="og:title" content="DeployMate — your own Heroku, on a server you own">
 <meta property="og:description" content="Zero-downtime deploys, databases, certificates, rollbacks and monitoring on your own server. One Go binary.">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://deploymate.link/assets/og.png">
+<meta property="og:image" content="https://deploymate.link/assets/og.png?v=2">
 <meta property="og:url" content="https://deploymate.link/">
 <link rel="canonical" href="https://deploymate.link/">
 <meta name="twitter:card" content="summary_large_image">
@@ -28,6 +28,7 @@
       <a href="#how">How it works</a>
       <a href="#tour">Tour</a>
       <a href="#features">Features</a>
+      <a href="#nodes">Nodes</a>
       <a href="#agents">Agents</a>
       <a href="#install">Install</a>
       <a href="docs/">Docs</a>
@@ -156,7 +157,7 @@
         <ul>
           <li><strong>Zero-downtime swaps</strong> — the old version serves until the new one is healthy.</li>
           <li><strong>1–5 replicas</strong> per app, load-balanced, rolled one at a time.</li>
-          <li><strong>More than one machine:</strong> run a project on a friend's or your own stronger computer over Tailscale, or just send the builds there.</li>
+          <li><strong>More than one machine:</strong> run a project on a friend's or your own stronger computer over Tailscale, or just send the builds there. <a href="#nodes">How →</a></li>
           <li><strong>Postgres, MySQL, Redis and MongoDB</strong> in a click; apps in the same project and environment get the connection URL automatically.</li>
           <li><strong>dev, staging, production</strong>, each with its own services. A <code>deploymate.yml</code> in the repo provisions them for you.</li>
         </ul>
@@ -203,6 +204,61 @@
 </section>
 
 <!-- ============ agents ============ -->
+<!-- ============ nodes ============ -->
+<section id="nodes">
+  <div class="wrap">
+    <p class="kicker">More than one machine</p>
+    <h2>Borrow a bigger computer for the heavy parts.</h2>
+    <p class="sec-lede">Add a friend's PC or a stronger server as a <strong>node</strong>. DeployMate stays on your small server and decides; the node does the work. Machines join over SSH on a private network such as Tailscale, and nothing new is opened to the internet.</p>
+
+    <div class="nodeflow" role="img" aria-label="Your small server running DeployMate connects over SSH on Tailscale to a node, a stronger machine that runs a project's apps and databases.">
+      <div class="nf-box">
+        <span class="nf-tag">your server</span>
+        <strong>DeployMate</strong>
+        <span>dashboard, domains, monitoring, backups</span>
+      </div>
+      <div class="nf-link"><span>SSH over Tailscale</span></div>
+      <div class="nf-box nf-node">
+        <span class="nf-tag"><i class="nf-dot" aria-hidden="true"></i>node · ready</span>
+        <strong>friend-pc</strong>
+        <span>16 CPUs · 64 GB · Ubuntu 24.04 · Docker</span>
+        <span class="nf-run">runs the project's apps and databases</span>
+      </div>
+    </div>
+    <p class="fine nf-example">An example. The Nodes page shows each machine's real CPUs, memory and state.</p>
+
+    <div class="grid">
+      <div class="card" style="--c: var(--sky)">
+        <h3>Build elsewhere</h3><p class="tag">the lightest way in</p>
+        <ul>
+          <li><strong>Send builds to a stronger machine</strong> and keep your small server out of memory trouble.</li>
+          <li>The finished image comes back and runs on your server as before.</li>
+          <li>If that machine is off, the build <strong>quietly runs on your server</strong> instead.</li>
+        </ul>
+        <p class="fine"><a href="docs/build-elsewhere.html">Set it up →</a></p>
+      </div>
+      <div class="card" style="--c: var(--teal)">
+        <h3>Run a project there</h3><p class="tag">apps and databases together</p>
+        <ul>
+          <li><strong>Pin a project to a node</strong>: its apps and databases run on that machine side by side.</li>
+          <li>Images are copied over, or the node pulls its own. Ports stay on the private network.</li>
+          <li>Logs, metrics, backups, deploys and your domains work as usual, through your server.</li>
+        </ul>
+        <p class="fine"><a href="docs/worker-nodes.html">Add a node →</a></p>
+      </div>
+      <div class="card" style="--c: var(--amber)">
+        <h3>Built for trust</h3><p class="tag">friends, not strangers</p>
+        <ul>
+          <li><strong>A node can see everything that runs on it</strong>, so use machines whose owner you trust.</li>
+          <li><strong>Drain a node</strong> before you need your computer back: nothing new is placed on it.</li>
+          <li>A key just for this, revocable by removing one line on the node.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="fine" style="margin-top:20px">Not yet: moving a project between machines, GPU scheduling, spreading one project over several machines, and picking a node automatically.</p>
+  </div>
+</section>
+
 <section id="agents">
   <div class="wrap agents">
     <div>

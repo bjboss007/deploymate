@@ -43,7 +43,7 @@ TEMPLATE = """<!doctype html>
 <a class="skip" href="#main">Skip to content</a>
 <header class="top"><div class="wrap">
   <a class="brand" href="../"><span class="led" aria-hidden="true"></span>deploymate</a>
-  <nav class="nav" aria-label="Main"><a href="../#how">How it works</a><a href="../#tour">Tour</a><a href="../#features">Features</a><a href="../#agents">Agents</a><a href="../#install">Install</a><a href="./" style="color:var(--text)">Docs</a></nav>
+  <nav class="nav" aria-label="Main"><a href="../#how">How it works</a><a href="../#tour">Tour</a><a href="../#features">Features</a><a href="../#nodes">Nodes</a><a href="../#agents">Agents</a><a href="../#install">Install</a><a href="./" style="color:var(--text)">Docs</a></nav>
   <div class="top-right">
     <button class="icon-btn" type="button" data-theme-toggle aria-label="Switch between dark and light theme">@@MOON@@@@SUN@@</button>
   </div>

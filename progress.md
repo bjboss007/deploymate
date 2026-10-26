@@ -7,6 +7,12 @@
 
 ## Where we stopped
 
+**2026-10-26 (website: Nodes section)** — The owner could not find the nodes feature on the site (only a bullet in the "Run" card and a docs page). Home page now has a
+`#nodes` section between Features and Agents ("Borrow a bigger computer for the heavy parts": server → SSH over Tailscale → node diagram, cards for build
+elsewhere / run a project there / built for trust, a "not yet" line), a "Nodes" link in the home and docs top navs, and the Run-card bullet links to it
+(`site/index.html`, `site/assets/site.css`, `site/tools/build_docs.py`). `og:image` is now `og.png?v=2` (nginx caches .png for 30 days and the image was
+regenerated under the same name). Checked in the browser at desktop and 375 px. Note: a plain `python -m http.server` preview caches CSS; use a cache-busting reload.
+
 **2026-10-26 (website: no license mentions)** — Owner asked to drop "Apache-2.0" and "Read it, change it, run it" from the site: home badge, the "Yours" bullet, the meta/og
 descriptions, every footer (`build_docs.py`), `tools/og.html` and the regenerated `assets/og.png` (headless Chrome, command in `site/README.md`). The repo's LICENSE is
 unchanged (Apache-2.0); only the site stopped saying so. Then tagged v0.9.0 (remote builds, nodes, placement, environment default, harden range check).
