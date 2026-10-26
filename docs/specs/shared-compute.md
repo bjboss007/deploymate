@@ -33,10 +33,9 @@ build **and** run on the powerful node, so nothing is shipped.
 build). Only `tcp://host:port` is accepted (the value ends up in a command line). **An unreachable host never fails a
 deploy:** the build log says so and the build runs on this server. The log also says `building on <host>`. Source and
 build context are sent to the build machine; the finished image is streamed back and loaded locally; the build cache
-stays on the build machine, so repeat builds are fast. Verified on real Docker with a second BuildKit over TCP (Dockerfile
-build, image loaded locally, work visible in the remote cache). The Railpack path went through the same daemon but its
-last run was cut short by a full Docker disk on the dev Mac; rerun `DEPLOYMATE_DOCKER_TESTS=1 go test ./internal/builder`
-with free space. *Security:* the BuildKit daemon runs privileged and, over TCP, unauthenticated: anyone who can reach the
+stays on the build machine, so repeat builds are fast. Verified on real Docker with a second BuildKit over TCP: a Dockerfile
+build and a Railpack static-site build (`staticfile`) both ran on the remote daemon, the images were loaded locally, and the remote
+cache changed (`DEPLOYMATE_DOCKER_TESTS=1 go test ./internal/builder -run RemoteBuildKit`, about 4 minutes, needs several GB of Docker disk). *Security:* the BuildKit daemon runs privileged and, over TCP, unauthenticated: anyone who can reach the
 port can run code as root on the build machine. Bind it to the Tailscale address only and restrict who may reach port 1234
 with a Tailscale ACL (the DeployMate server only).
 
