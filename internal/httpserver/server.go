@@ -230,6 +230,7 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/apps/{slug}/replicas", am.CheckCSRF(s.handleAppReplicas))
 		r.Post("/apps/{slug}/health-path", am.CheckCSRF(s.handleAppHealthPath))
 		r.Post("/apps/{slug}/gpu", am.CheckCSRF(s.handleAppGPU))
+		r.Post("/apps/{slug}/volumes", am.CheckCSRF(s.handleAppVolumes))
 		r.Post("/apps/{slug}/delete", am.CheckCSRF(s.handleAppDelete))
 		r.Post("/apps/{slug}/env", am.CheckCSRF(s.handleEnvVarCreate))
 		r.Post("/apps/{slug}/env/bulk", am.CheckCSRF(s.handleEnvVarBulk))

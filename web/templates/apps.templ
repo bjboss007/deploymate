@@ -79,6 +79,7 @@ type ReplicasInfo struct {
 	HealthPath string
 	GPU        bool
 	GPUNote    string // where the GPU would come from, or why it cannot
+	Volumes    string // persistent folders, one per line
 }
 
 // Degraded reports some-but-not-all replicas answering the probe.
@@ -988,6 +989,14 @@ templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
 			if ri.GPUNote != "" {
 				<p class="muted">{ ri.GPUNote }</p>
 			}
+		</form>
+		<form method="post" action={ "/apps/" + app.Slug + "/volumes" } class="deploy-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<label>Persistent folders
+				<textarea name="paths" rows="2" placeholder="/data" spellcheck="false">{ ri.Volumes }</textarea>
+			</label>
+			<button class="btn btn-ghost" type="submit">Save</button>
+			<p class="muted">One folder per line. Their contents survive deploys and are kept if the app is deleted. With several replicas they share the folder. Not part of backups yet.</p>
 		</form>
 		if len(ri.Slots) > 0 {
 			<table class="deploy-table replica-table">

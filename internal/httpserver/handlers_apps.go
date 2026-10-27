@@ -414,6 +414,7 @@ func (s *Server) replicasInfo(app store.App) templates.ReplicasInfo {
 		Target:     app.CurrentDeploymentID,
 		HealthPath: appspec.HealthPath(app),
 		GPU:        app.GPU,
+		Volumes:    app.Volumes,
 		GPUNote:    s.gpuNote(app),
 	}
 	rows, err := s.store.ListAppReplicas(app.ID)

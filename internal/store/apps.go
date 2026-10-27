@@ -48,6 +48,8 @@ type App struct {
 	Stack  string
 	// GPU: the containers get every GPU on their machine (migration 0029).
 	GPU bool
+	// Volumes: one absolute path per line, each kept on a named volume across deploys (migration 0030).
+	Volumes string
 }
 
 // Deploy modes (apps.deploy_mode).
@@ -63,7 +65,7 @@ const (
 )
 
 // appColumns is the column list every app SELECT reads, in scan order.
-const appColumns = `id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name, logo, accent, stack, gpu`
+const appColumns = `id, project_id, name, slug, git_source_id, build_type, root_directory, status, current_deployment_id, image, port, runtime, environment, health, mem_limit_mb, cpu_limit, preview_host_port, entrypoint, command, created_at, replicas, health_path, deploy_mode, workflow_path, artifact_name, logo, accent, stack, gpu, volumes`
 
 // ErrSlugTaken is returned when a slug is already in use.
 var ErrSlugTaken = errors.New("store: slug already exists")
@@ -128,7 +130,7 @@ func (s *Store) GetAppBySlug(slug string) (App, error) {
 		 FROM apps WHERE slug = ?`,
 		slug,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack, &a.GPU)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack, &a.GPU, &a.Volumes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -228,7 +230,7 @@ func (s *Store) GetAppByID(id string) (App, error) {
 		 FROM apps WHERE id = ?`,
 		id,
 	).Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType, &a.RootDirectory,
-		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack, &a.GPU)
+		&a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack, &a.GPU, &a.Volumes)
 	if errors.Is(err, sql.ErrNoRows) {
 		return a, ErrNotFound
 	}
@@ -281,7 +283,7 @@ func scanApps(rows *sql.Rows) ([]App, error) {
 		var a App
 		var gitSourceID sql.NullString
 		if err := rows.Scan(&a.ID, &a.ProjectID, &a.Name, &a.Slug, &gitSourceID, &a.BuildType,
-			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack, &a.GPU); err != nil {
+			&a.RootDirectory, &a.Status, &a.CurrentDeploymentID, &a.Image, &a.Port, &a.Runtime, &a.Environment, &a.Health, &a.MemLimitMB, &a.CPULimit, &a.PreviewHostPort, &a.Entrypoint, &a.Command, &a.CreatedAt, &a.Replicas, &a.HealthPath, &a.DeployMode, &a.WorkflowPath, &a.ArtifactName, &a.Logo, &a.Accent, &a.Stack, &a.GPU, &a.Volumes); err != nil {
 			return nil, err
 		}
 		a.GitSourceID = gitSourceID.String
@@ -307,5 +309,11 @@ func (s *Store) UpdateAppStack(id, stack string) error {
 // SetAppGPU turns GPU access on or off for the app's containers (takes effect on the next deploy).
 func (s *Store) SetAppGPU(id string, on bool) error {
 	_, err := s.db.Exec(`UPDATE apps SET gpu = ? WHERE id = ?`, on, id)
+	return err
+}
+
+// SetAppVolumes replaces the app's persistent folders (one absolute path per line; "" = none).
+func (s *Store) SetAppVolumes(id, volumes string) error {
+	_, err := s.db.Exec(`UPDATE apps SET volumes = ? WHERE id = ?`, volumes, id)
 	return err
 }

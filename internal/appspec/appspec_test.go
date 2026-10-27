@@ -233,3 +233,28 @@ func TestBuildSpecSlotAndHealthcheck(t *testing.T) {
 		t.Error("empty health path must default to /")
 	}
 }
+
+func TestParseVolumesAndBinds(t *testing.T) {
+	got, err := ParseVolumes("/root/.ollama\n\n /data/ \n/root/.ollama\n")
+	if err != nil || len(got) != 2 || got[0] != "/root/.ollama" || got[1] != "/data" {
+		t.Fatalf("got %v, %v", got, err)
+	}
+	for _, bad := range []string{"data", "/", "/a b", "/a:b", "/a/../b", "/proc", "/run/secrets", "/var/run/docker.sock", "/a,b",
+		"/1\n/2\n/3\n/4\n/5\n/6\n/7\n/8\n/9"} {
+		if _, err := ParseVolumes(bad); err == nil {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+	app := testApp()
+	app.Volumes = "/root/.ollama\n/data"
+	binds := BuildSpec(app, Options{Image: "img", Name: CanonicalName("web")}).Binds
+	if len(binds) != 2 || binds[0] != VolumeName("web", "/root/.ollama")+":/root/.ollama" || binds[1] != VolumeName("web", "/data")+":/data" {
+		t.Errorf("binds = %v", binds)
+	}
+	if VolumeName("web", "/a") == VolumeName("web", "/b") || VolumeName("web", "/a") == VolumeName("api", "/a") {
+		t.Error("volume names must differ by app and by path")
+	}
+	if len(BuildSpec(testApp(), Options{Image: "img", Name: CanonicalName("web")}).Binds) != 0 {
+		t.Error("an app without volumes has no binds")
+	}
+}

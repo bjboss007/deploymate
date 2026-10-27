@@ -172,6 +172,7 @@ func BuildSpec(app store.App, o Options) runtime.Spec {
 		Env:     env,
 		Labels:  labels,
 		Network: network,
+		Binds:   volumeBinds(app.Slug, app.Volumes),
 	}
 	if o.Port > 0 && o.HostPort > 0 {
 		spec.Port = o.Port

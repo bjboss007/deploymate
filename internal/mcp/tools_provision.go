@@ -102,10 +102,12 @@ func init() {
 		},
 		{
 			Name: "configure_app", Scope: store.ScopeProvision,
-			Description: "Set the container image and/or port an image-based app runs, and/or the repository subfolder a git app builds from (root_directory). Then deploy_app.",
+			Description: "Set the container image and/or port an image-based app runs, the repository subfolder a git app builds from (root_directory), whether it uses the machine's NVIDIA GPUs (gpu), and/or the folders that must survive deploys (volumes, e.g. ['/root/.ollama']; an empty list removes them). Then deploy_app.",
 			Schema: schema(map[string]any{
 				"app": strProp("the app's slug"), "image": strProp("e.g. nginx:1.27 or ghcr.io/acme/web:1.2"), "port": intProp("the port the app listens on"),
 				"root_directory": strProp("the repository subfolder the app builds from, e.g. site (empty = repository root)"),
+				"gpu":            map[string]any{"type": "boolean", "description": "give the app every NVIDIA GPU on its machine (the node must have the NVIDIA runtime)"},
+				"volumes":        map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "absolute folder paths inside the container kept on persistent volumes, shared by the app's replicas"},
 			}, "app"),
 			Build: func(a args) (string, string, any, error) {
 				v, err := a.need("app")
@@ -121,6 +123,18 @@ func init() {
 				}
 				if rd, ok := a["root_directory"].(string); ok {
 					body["root_directory"] = rd
+				}
+				if g, ok := a["gpu"].(bool); ok {
+					body["gpu"] = g
+				}
+				if vs, ok := a["volumes"].([]any); ok {
+					list := []string{}
+					for _, v := range vs {
+						if str, ok := v.(string); ok {
+							list = append(list, str)
+						}
+					}
+					body["volumes"] = list
 				}
 				return http.MethodPatch, "/apps/" + esc(v[0]) + "/config", body, nil
 			},

@@ -81,6 +81,9 @@ jobs:
   - redis:7-alpine</pre>
 <p>Each deploy creates what's missing and reuses what's there. A <code>deploymate.staging.yml</code> (or <code>.dev</code>, <code>.production</code>) <em>replaces</em> the list for that environment. In prebuilt mode the generated workflow ships these files inside the artifact, so the same manifest works there too.</p>
 
+<h2 id="folders">Persistent folders</h2>
+<p>A container starts fresh on every deploy, so anything it wrote to its own disk is gone. For files that must stay (uploads, a SQLite file, downloaded models), open the app and list the folders under <strong>Persistent folders</strong>, one per line, such as <code>/data</code>. Each one is kept on a named volume that survives deploys, rollbacks and even deleting the app; it lives on the machine the project runs on. If the image already has files in that folder, they are copied into the volume the first time. With several replicas they all share the folder. Persistent folders are not part of backups yet, and they apply from the next deploy.</p>
+
 <h2 id="recover">Retry, redeploy, roll back, restart</h2>
 <table>
 <tr><th>Retry</th><td>The last deploy failed (a flaky build, a service that was down). Runs the same commit again. Only the app's newest deploy can be retried.</td></tr>

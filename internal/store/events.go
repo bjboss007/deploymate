@@ -30,6 +30,7 @@ const (
 	EventRuntimeChanged  = "runtime_changed"
 	EventRootDirChanged  = "root_directory_changed"
 	EventGPUChanged      = "gpu_changed"
+	EventVolumesChanged  = "volumes_changed"
 	// EventDeploySkipped: a push arrived but changed nothing in the app's build folder.
 	EventDeploySkipped   = "deploy_skipped"
 	// EventServerCleanup: the owner pruned build cache and unused images from the Server page.

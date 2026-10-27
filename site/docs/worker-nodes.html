@@ -102,10 +102,10 @@ docker run --rm --gpus all ubuntu nvidia-smi</pre>
 <p>An app gets <em>all</em> the GPUs on its machine. GPU memory is not shared out between apps: two apps on one card compete for its memory.</p>
 <h3>Example: your own AI model server</h3>
 <ol>
-<li>Create a project on the GPU node and an app in it. Set its image to <code>ollama/ollama</code> and its port to <code>11434</code>, and turn on the GPU.</li>
+<li>Create a project on the GPU node and an app in it. Set its image to <code>ollama/ollama</code> and its port to <code>11434</code>, turn on the GPU, and add <code>/root/.ollama</code> under <strong>Persistent folders</strong> so downloaded models are kept.</li>
 <li>Deploy, add a domain, then load a model with <code>curl https://your-domain/api/pull -d '{"model":"llama3.1"}'</code>.</li>
 </ol>
-<p>Apps do not have a persistent disk yet, so the model is downloaded again after every redeploy. That is fine for trying it out; keep large models in mind until volumes for apps exist.</p>
+<p>Persistent folders are described in <a href="concepts.html">How it fits together</a>; the short version: they live on the node, survive redeploys and are kept if you delete the app. They are not part of backups yet.</p>
 
 <h2 id="notes">Good to know</h2>
 <ul>

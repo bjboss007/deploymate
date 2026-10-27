@@ -179,3 +179,10 @@ the project's node has none. Nodes record their cards (`nodes.gpu_info`, from `n
 shown on the Nodes page and as `gpus` in `list_nodes`). Placement stays manual: the owner pins the project to the GPU
 node. Verified: unit tests, and the refusal against this Mac's real Docker. **Not verified on a real NVIDIA machine.**
 Not built: automatic node choice by free GPU/VRAM, a GPU count, GPU in `configure_app`, jobs.
+
+### Follow-up (same day): persistent folders for apps
+`apps.volumes` (migration 0030): absolute paths, one per line, each a named volume `dm-app-<slug>-<crc32 of path>`
+mounted by `appspec.BuildSpec`; the volume lives on whichever machine the container runs, survives deploys and app
+deletion (like a service's volume), and is shared by replicas. Validation in `appspec.ParseVolumes` (absolute, no `..`,
+no reserved paths, at most 8). Dashboard form on the app page; `volumes` and `gpu` accepted by `configure_app` and shown
+in the API app output. Not built: backups of these volumes, removing orphaned volumes, per-replica volumes.

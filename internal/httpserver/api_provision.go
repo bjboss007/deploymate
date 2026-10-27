@@ -271,9 +271,11 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in struct {
-		Image         *string `json:"image"`
-		Port          *int    `json:"port"`
-		RootDirectory *string `json:"root_directory"`
+		Image         *string   `json:"image"`
+		Port          *int      `json:"port"`
+		RootDirectory *string   `json:"root_directory"`
+		GPU           *bool     `json:"gpu"`
+		Volumes       *[]string `json:"volumes"`
 	}
 	if !apiBody(w, r, &in) {
 		return
@@ -293,9 +295,33 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if in.Image == nil && in.Port == nil && in.RootDirectory == nil {
-		s.actionRefused(w, r, "configure_app", app.Slug, "Send an image, a port and/or a root_directory.", app.ID)
+	if in.Image == nil && in.Port == nil && in.RootDirectory == nil && in.GPU == nil && in.Volumes == nil {
+		s.actionRefused(w, r, "configure_app", app.Slug, "Send an image, a port, a root_directory, gpu and/or volumes.", app.ID)
 		return
+	}
+	if in.GPU != nil && *in.GPU {
+		if why := s.gpuRefusal(app); why != "" {
+			s.actionRefused(w, r, "configure_app", app.Slug, why, app.ID)
+			return
+		}
+	}
+	if in.Volumes != nil {
+		refusal, err := s.applyVolumes(app, strings.Join(*in.Volumes, "\n"))
+		if err != nil {
+			s.actionFailed(w, "configure_app", err)
+			return
+		}
+		if refusal != "" {
+			s.actionRefused(w, r, "configure_app", app.Slug, refusal, app.ID)
+			return
+		}
+	}
+	if in.GPU != nil && *in.GPU != app.GPU {
+		if err := s.store.SetAppGPU(app.ID, *in.GPU); err != nil {
+			s.actionFailed(w, "configure_app", err)
+			return
+		}
+		_ = s.store.RecordEvent(app.ID, store.EventGPUChanged, map[bool]string{true: "GPU access on", false: "GPU access off"}[*in.GPU])
 	}
 	if in.RootDirectory != nil {
 		dir, why := cleanRootDirectory(*in.RootDirectory)

@@ -257,6 +257,7 @@ func (s *Server) handleAPIApp(w http.ResponseWriter, r *http.Request) {
 		"app":         s.toAPIApp(r, row, project.Name),
 		"node":        s.projectNodeName(project),
 		"gpu":         app.GPU,
+		"volumes":     strings.Fields(app.Volumes),
 		"image":       app.Image,
 		"port":        app.Port,
 		"replicas":    app.Replicas,

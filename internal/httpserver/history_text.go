@@ -42,6 +42,8 @@ func describeEvent(kind string) (title, category, tone string) {
 		return "Environment variable removed", "config", "neutral"
 	case store.EventRootDirChanged:
 		return "Build folder changed", "config", "neutral"
+	case store.EventVolumesChanged:
+		return "Persistent folders changed", "config", "neutral"
 	case store.EventGPUChanged:
 		return "GPU access changed", "config", "neutral"
 	case store.EventRuntimeChanged:

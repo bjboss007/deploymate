@@ -405,8 +405,12 @@ func (s *seeder) hostHistory() {
 // so the tour shows the Nodes page and a project's "where it runs" panel.
 func (s *seeder) nodes(pinned store.Project) {
 	mk := func(name, endpoint, state string, cpus int, memGB uint64, os, docker string, gpu bool, seen time.Duration) store.Node {
+		info := ""
+		if gpu {
+			info = "NVIDIA GeForce RTX 4090 24 GB"
+		}
 		n, err := s.st.CreateNode(store.Node{
-			Name: name, Endpoint: endpoint, State: state, CPUs: cpus, MemBytes: memGB << 30,
+			GPUInfo: info, Name: name, Endpoint: endpoint, State: state, CPUs: cpus, MemBytes: memGB << 30,
 			OS: os, Arch: "x86_64", DockerVersion: docker, GPURuntime: gpu, LastSeenAt: ts(s.now.Add(-seen)),
 		})
 		s.check(err)

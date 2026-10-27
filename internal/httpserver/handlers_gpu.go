@@ -2,7 +2,9 @@ package httpserver
 
 import (
 	"net/http"
+	"strings"
 
+	"github.com/habibmuhammad/deploymate/internal/appspec"
 	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
@@ -72,4 +74,47 @@ func (s *Server) gpuNote(app store.App) string {
 		return n.Name + ": " + n.GPUInfo + "."
 	}
 	return n.Name + " has an NVIDIA runtime."
+}
+
+// applyVolumes validates and saves the app's persistent folders; refusal is a plain sentence when the text is wrong.
+func (s *Server) applyVolumes(app store.App, raw string) (refusal string, err error) {
+	paths, perr := appspec.ParseVolumes(raw)
+	if perr != nil {
+		return strings.ToUpper(perr.Error()[:1]) + perr.Error()[1:] + ".", nil
+	}
+	joined := strings.Join(paths, "\n")
+	if joined == app.Volumes {
+		return "", nil
+	}
+	if err := s.store.SetAppVolumes(app.ID, joined); err != nil {
+		return "", err
+	}
+	_ = s.store.RecordEvent(app.ID, store.EventVolumesChanged, "persistent folders: "+orNone(strings.Join(paths, ", ")))
+	return "", nil
+}
+
+func orNone(s string) string {
+	if s == "" {
+		return "none"
+	}
+	return s
+}
+
+// handleAppVolumes saves the persistent folders; they apply from the next deploy.
+func (s *Server) handleAppVolumes(w http.ResponseWriter, r *http.Request) {
+	app, ok := s.appFromRequest(w, r)
+	if !ok {
+		return
+	}
+	back := "/apps/" + app.Slug
+	refusal, err := s.applyVolumes(app, r.FormValue("paths"))
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	if refusal != "" {
+		http.Redirect(w, r, back+"?flash="+flashURL(refusal), http.StatusSeeOther)
+		return
+	}
+	http.Redirect(w, r, back+"?flash="+flashURL("Persistent folders saved. They apply from the next deploy."), http.StatusSeeOther)
 }

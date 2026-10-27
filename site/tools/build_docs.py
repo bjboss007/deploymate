@@ -256,6 +256,9 @@ CONCEPTS = """
 [[manifest]]
 <p>Each deploy creates what's missing and reuses what's there. A <code>deploymate.staging.yml</code> (or <code>.dev</code>, <code>.production</code>) <em>replaces</em> the list for that environment. In prebuilt mode the generated workflow ships these files inside the artifact, so the same manifest works there too.</p>
 
+<h2 id="folders">Persistent folders</h2>
+<p>A container starts fresh on every deploy, so anything it wrote to its own disk is gone. For files that must stay (uploads, a SQLite file, downloaded models), open the app and list the folders under <strong>Persistent folders</strong>, one per line, such as <code>/data</code>. Each one is kept on a named volume that survives deploys, rollbacks and even deleting the app; it lives on the machine the project runs on. If the image already has files in that folder, they are copied into the volume the first time. With several replicas they all share the folder. Persistent folders are not part of backups yet, and they apply from the next deploy.</p>
+
 <h2 id="recover">Retry, redeploy, roll back, restart</h2>
 <table>
 <tr><th>Retry</th><td>The last deploy failed (a flaky build, a service that was down). Runs the same commit again. Only the app's newest deploy can be retried.</td></tr>
@@ -309,7 +312,7 @@ AGENTS = """
 <table>
 <tr><th>Read</th><td><code>fleet_status</code> <code>server_status</code> <code>security_status</code> <code>list_nodes</code> <code>list_projects</code> <code>get_project</code> <code>get_app</code> <code>list_deployments</code> <code>get_deployment</code> <code>get_deployment_log</code> <code>get_app_logs</code> <code>get_app_activity</code> <code>get_service</code> <code>wait_for_deployment</code></td></tr>
 <tr><th>Deploy</th><td><code>deploy_app</code> <code>redeploy_app</code> <code>run_workflow</code> <code>retry_deployment</code> <code>rollback_deployment</code> <code>restart_app</code> <code>start_app</code> <code>stop_app</code></td></tr>
-<tr><th>Provision</th><td><code>create_project</code> (optionally on a worker node) <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code></td></tr>
+<tr><th>Provision</th><td><code>create_project</code> (optionally on a worker node) <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code> (image, port, GPU, persistent folders)</td></tr>
 </table>
 
 <h2 id="safety">What it can never do</h2>
@@ -519,10 +522,10 @@ NODES = """
 <p>An app gets <em>all</em> the GPUs on its machine. GPU memory is not shared out between apps: two apps on one card compete for its memory.</p>
 <h3>Example: your own AI model server</h3>
 <ol>
-<li>Create a project on the GPU node and an app in it. Set its image to <code>ollama/ollama</code> and its port to <code>11434</code>, and turn on the GPU.</li>
+<li>Create a project on the GPU node and an app in it. Set its image to <code>ollama/ollama</code> and its port to <code>11434</code>, turn on the GPU, and add <code>/root/.ollama</code> under <strong>Persistent folders</strong> so downloaded models are kept.</li>
 <li>Deploy, add a domain, then load a model with <code>curl https://your-domain/api/pull -d '{"model":"llama3.1"}'</code>.</li>
 </ol>
-<p>Apps do not have a persistent disk yet, so the model is downloaded again after every redeploy. That is fine for trying it out; keep large models in mind until volumes for apps exist.</p>
+<p>Persistent folders are described in <a href="concepts.html">How it fits together</a>; the short version: they live on the node, survive redeploys and are kept if you delete the app. They are not part of backups yet.</p>
 
 <h2 id="notes">Good to know</h2>
 <ul>

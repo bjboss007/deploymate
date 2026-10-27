@@ -218,18 +218,19 @@ h1 {
 .btn-danger:hover { background: color-mix(in srgb, var(--red) 10%, transparent); border-color: var(--red); }
 
 /* ---- forms ----------------------------------------------------------- */
-input[type="text"], input[type="email"], input[type="password"], input[type="number"], select {
+input[type="text"], input[type="email"], input[type="password"], input[type="number"], select, .deploy-form textarea {
   background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
   padding: 9px 12px; color: var(--text);
   font-family: var(--font-sans); font-size: 14px;
   transition: border-color 0.15s;
 }
 /* machine-ish values read better in mono */
+.deploy-form textarea { font-family: var(--font-mono); font-size: 13px; width: min(420px, 100%); resize: vertical; }
 input[name="image"], input[name="repo_url"], input[name="hostname"], input[name="health_path"],
 input[name="api_token"], input[name="entrypoint"], input[name="command"], input[name="workflow_path"],
 input[name="artifact_name"], input[name^="key_"], input[name^="value_"], input[name="port"] { font-family: var(--font-mono); font-size: 13px; }
 input::placeholder, textarea::placeholder { color: var(--faint); }
-input:focus, select:focus { outline: none; border-color: var(--accent); }
+input:focus, select:focus, .deploy-form textarea:focus { outline: none; border-color: var(--accent); }
 select { cursor: pointer; }
 .inline-form { display: flex; gap: 10px; margin-bottom: 28px; }
 .inline-form input[type="text"] { flex: 1; max-width: 420px; }
@@ -969,7 +970,7 @@ select { cursor: pointer; }
 .sec-head .status-dot { margin-right: 0; }
 .sec-title { font-weight: 600; }
 .sec-label { margin-left: auto; font-size: 12.5px; }
-.sec-detail { margin: 6px 0 0 15px; color: var(--muted); font-size: 14px; }
+.sec-detail { margin: 6px 0 0 15px; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
 .sec-fix { margin: 8px 0 0 15px; padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; overflow-x: auto; font-size: 12.5px; white-space: pre-wrap; word-break: break-word; }
 
 /* ---- sign-in activity (Security page) -------------------------------- */

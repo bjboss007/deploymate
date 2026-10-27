@@ -71,3 +71,37 @@ func TestGPUSwitchAndNodeWithoutRuntime(t *testing.T) {
 		t.Errorf("note = %q", note)
 	}
 }
+
+// Persistent folders are validated, saved, shown in the API, and settable through configure_app together with the GPU.
+func TestPersistentFoldersAndAgentConfig(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	tok := e.createToken(t, "agent", "provision", "90")
+	code, _, body := e.send(t, http.MethodPost, "/api/v1/projects/test/apps", tok, map[string]string{"name": "Llm"})
+	if code != http.StatusCreated {
+		t.Fatalf("create app = %d %s", code, body)
+	}
+	for _, c := range []struct {
+		in   map[string]any
+		code int
+		want string
+	}{
+		{map[string]any{"volumes": []string{"relative"}}, http.StatusConflict, "not an absolute path"},
+		{map[string]any{"volumes": []string{"/proc/x"}}, http.StatusConflict, "used by the container itself"},
+		{map[string]any{"volumes": []string{"/root/.ollama"}, "gpu": true}, http.StatusOK, ""},
+	} {
+		code, _, body := e.send(t, http.MethodPatch, "/api/v1/apps/llm/config", tok, c.in)
+		if code != c.code || !strings.Contains(body, c.want) {
+			t.Errorf("%v = %d %s", c.in, code, body)
+		}
+	}
+	_, res, _ := e.send(t, http.MethodGet, "/api/v1/apps/llm", tok, nil)
+	vols, _ := res["volumes"].([]any)
+	if res["gpu"] != true || len(vols) != 1 || vols[0] != "/root/.ollama" {
+		t.Errorf("app = gpu %v volumes %v", res["gpu"], res["volumes"])
+	}
+	// An empty list clears them.
+	e.send(t, http.MethodPatch, "/api/v1/apps/llm/config", tok, map[string]any{"volumes": []string{}})
+	if _, res, _ := e.send(t, http.MethodGet, "/api/v1/apps/llm", tok, nil); len(res["volumes"].([]any)) != 0 {
+		t.Errorf("volumes not cleared: %v", res["volumes"])
+	}
+}
