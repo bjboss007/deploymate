@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Run a project on another machine — DeployMate docs</title>
+<title>Worker nodes: run a project on another machine — DeployMate docs</title>
 <meta name="description" content="Add another computer as a worker node and run a whole project on it, over SSH on a private network such as Tailscale.">
 <meta name="theme-color" content="#0d1219">
 <link rel="canonical" href="https://deploymate.link/docs/worker-nodes.html">
@@ -21,37 +21,72 @@
   </div>
 </div></header>
 <main id="main"><div class="wrap doc">
-<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Operate</div><a href="secure-your-server.html">Secure your server</a><a href="build-elsewhere.html">Build on another machine</a><a href="worker-nodes.html" aria-current="page">Run a project on another machine</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
+<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Operate</div><a href="secure-your-server.html">Secure your server</a><a href="build-elsewhere.html">Build on another machine</a><a href="worker-nodes.html" aria-current="page">Worker nodes</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
 <article>
 
 <p class="kicker">Operate</p>
-<h1>Run a project on another machine</h1>
-<p>A small server doesn't have to run everything. Add another computer, yours or a friend's, as a <strong>worker node</strong>, and run a whole project on it: its apps and its databases together. DeployMate still builds, routes and monitors from your server; the containers run on the node.</p>
+<h1>Worker nodes</h1>
+<p>A small server doesn't have to run everything. Add another computer, yours or a friend's, as a <strong>worker node</strong>, and run a whole project on it: its apps and its databases together. DeployMate still builds, routes and monitors from your server; the containers run on the node. Use it for something heavy (a machine-learning model, video processing) or just to get more memory than your server has.</p>
 
 <div class="callout warn"><strong>A node sees everything that runs on it</strong>Its owner can read the code, environment variables and data of what you place there. Only add machines whose owner you trust.</div>
 
-<h2 id="prepare">1. Prepare the machine</h2>
-<ul>
-<li>Install Docker and <a href="https://tailscale.com">Tailscale</a>, signed in to the same tailnet as your server.</li>
-<li>Create a user that may use Docker (in the <code>docker</code> group) and can be reached over SSH.</li>
-</ul>
+<h2 id="need">What you need</h2>
+<table>
+<tr><th>The node</th><td>Any Linux machine you can reach over SSH: a friend's PC, a mini PC, another VPS. It can have a different CPU type from your server.</td></tr>
+<tr><th>A private route</th><td><a href="https://tailscale.com">Tailscale</a> on both machines (free for personal use) is the easy way: each gets a private <code>100.x.x.x</code> address that works from anywhere. A shared home or office network works too. Nothing on the node is opened to the internet.</td></tr>
+<tr><th>On the node</th><td>Docker, and a user that may run it.</td></tr>
+</table>
+
+<h2 id="prepare">1. Prepare the node</h2>
+<p>On the node, as a user with sudo. Skip what is already there.</p>
+<pre class="code">curl -fsSL https://get.docker.com | sudo sh
+curl -fsSL https://tailscale.com/install.sh | sh
+sudo tailscale up
+
+# a user DeployMate will log in as, allowed to run Docker
+sudo adduser --disabled-password --gecos &quot;&quot; dmnode
+sudo usermod -aG docker dmnode</pre>
+<p>Note the node's Tailscale address (<code>tailscale ip -4</code>). Install Tailscale on your DeployMate server the same way and sign in to the same account.</p>
 
 <h2 id="add">2. Add it in DeployMate</h2>
 <ol>
-<li>Open <strong>Nodes</strong> in the sidebar and press <strong>Create this server's key</strong>. Add the public key it shows to that user's <code>~/.ssh/authorized_keys</code> on the machine.</li>
-<li>Enter a name and the machine's Tailscale address, such as <code>ssh://habib@100.64.0.5</code>, then <strong>Add node</strong>. If you reach the machine through an SSH alias or a tunnel instead, also fill in <em>address for its ports</em>: the private address its apps will be reached at. DeployMate checks it straight away and shows its CPUs, memory and Docker version, or the reason it can't connect.</li>
+<li>Open <strong>Nodes</strong> in the sidebar and press <strong>Create this server's key</strong>. It shows a public key.</li>
+<li>On the node, add that key to the user from step 1:</li>
 </ol>
-<p>A node is checked every minute. It shows offline after three failed checks in a row. <strong>Drain</strong> stops anything new from being placed on it, use it before you need the machine yourself.</p>
+<pre class="code">sudo -u dmnode mkdir -p -m 700 /home/dmnode/.ssh
+echo &#x27;PASTE THE PUBLIC KEY HERE&#x27; | sudo -u dmnode tee -a /home/dmnode/.ssh/authorized_keys
+sudo chmod 600 /home/dmnode/.ssh/authorized_keys</pre>
+<ol start="3">
+<li>Back in DeployMate, enter a name (say <em>friend-pc</em>) and the address <code>ssh://dmnode@100.64.0.5</code> (the user, then the node's address; add <code>:2222</code> for a different SSH port), then press <strong>Add node</strong>.</li>
+</ol>
+<p>DeployMate connects straight away and shows the node's CPUs, memory and Docker version, or the reason it couldn't. Reach the machine through an SSH alias or a tunnel instead of a plain address? Then also fill in <em>address for its ports</em>: the private address its apps will be reached at.</p>
+<p>A node is checked every minute and shows <strong>offline</strong> after three failed checks in a row. It returns to <strong>ready</strong> by itself when it answers again.</p>
 
 <h2 id="pin">3. Choose where a project runs</h2>
-<p>On a project's page, under <strong>Where it runs</strong>, pick the node. Do this before adding anything: a project that already has a database or a deploy stays where it is, because its apps and databases must share one machine's network. To use a node for existing work, create a new project on it.</p>
-<p>From then on, deploys, databases, logs, metrics, backups and restarts of that project work as usual and happen on the node. The preview address and your domains reach it through your server.</p>
+<p>Open the project and, under <strong>Where it runs</strong>, pick the node. Do this <em>before</em> adding anything: a project that already has a database or a deploy stays where it is, because its apps and databases must share one machine's network. To use a node for existing work, create a new project on it.</p>
+<p>From then on, deploys, databases, logs, metrics, backups and restarts of that project work as usual and happen on the node. The preview address and your domains reach it through your server, so DNS stays pointed at the server.</p>
+
+<h2 id="manage">Taking a node out of use</h2>
+<ul>
+<li><strong>Drain</strong> stops anything new from being placed on it. Use it before you need the machine yourself; what already runs there keeps running.</li>
+<li><strong>Remove</strong> works only when no project uses the node. Removing a node never deletes anything on the machine.</li>
+</ul>
+
+<h2 id="problems">If it won't connect</h2>
+<p>The Nodes page shows the reason. The usual ones:</p>
+<table>
+<tr><th>It says</th><th>What to do</th></tr>
+<tr><th>Permission denied (publickey)</th><td>The key from step 2 is not in that user's <code>~/.ssh/authorized_keys</code>, or the file's permissions are too open (<code>chmod 600</code>).</td></tr>
+<tr><th>Permission denied … docker</th><td>The user isn't allowed to use Docker. Run <code>sudo usermod -aG docker dmnode</code> on the node, then try again.</td></tr>
+<tr><th>Connection timed out, no route to host</th><td>Tailscale is down on one of the machines, or they are signed in to different accounts. Check <code>tailscale status</code> on both.</td></tr>
+<tr><th>Host key verification failed</th><td>The node was reinstalled, so its SSH identity changed. If that is expected, remove the old line for it from the <code>known_hosts</code> of the user that runs DeployMate.</td></tr>
+</table>
 
 <h2 id="notes">Good to know</h2>
 <ul>
-<li><strong>Images are copied.</strong> The build runs on your server (or on a <a href="build-elsewhere.html">build machine</a>) and the image is sent to the node. A multi-gigabyte image takes a while over a home connection.</li>
-<li><strong>Ports stay private.</strong> What an app publishes on the node is bound to the node's Tailscale address, not to its public interface.</li>
-<li><strong>A drained or offline node blocks deploys</strong> to it, including redeploying something that already runs there. Nothing falls back to your server.</li>
+<li><strong>Images travel to the node.</strong> The build runs on your server (or on a <a href="build-elsewhere.html">build machine</a>) and the image is sent over. A multi-gigabyte image takes a while over a home connection. If the node has a different CPU type from where the image was built, the node downloads its own copy instead.</li>
+<li><strong>Ports stay private.</strong> What an app publishes on the node is bound to the node's private address, not to its public interface.</li>
+<li><strong>A drained or offline node blocks deploys</strong> to it, including redeploying something that already runs there. Nothing quietly falls back to your server.</li>
 <li><strong>Not yet:</strong> moving a project between machines, GPU scheduling, spreading one project over several machines, and picking a node automatically.</li>
 </ul>
 

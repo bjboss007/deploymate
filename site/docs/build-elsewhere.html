@@ -21,7 +21,7 @@
   </div>
 </div></header>
 <main id="main"><div class="wrap doc">
-<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Operate</div><a href="secure-your-server.html">Secure your server</a><a href="build-elsewhere.html" aria-current="page">Build on another machine</a><a href="worker-nodes.html">Run a project on another machine</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
+<nav aria-label="Docs"><div class="group">Start</div><a href="quickstart.html">Quickstart</a><a href="connect-github.html">Connect GitHub</a><a href="deploy-on-push.html">Deploy on every push</a><a href="concepts.html">How it fits together</a><div class="group">Agents</div><a href="agents.html">AI agents (MCP)</a><div class="group">Operate</div><a href="secure-your-server.html">Secure your server</a><a href="build-elsewhere.html" aria-current="page">Build on another machine</a><a href="worker-nodes.html">Worker nodes</a><div class="group">Optional</div><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></nav>
 <article>
 
 <p class="kicker">Operate</p>
@@ -50,11 +50,11 @@ sudo systemctl restart deploymate</pre>
 <ul>
 <li><strong>If the strong machine is off, deploys still work.</strong> The build log says the host isn't reachable and the build runs on your server instead. If your server is the small one, that is the build that may run out of memory, so agree when the machine will be on.</li>
 <li><strong>Repeat builds are quicker.</strong> The cache lives on the build machine.</li>
-<li><strong>The image still has to travel back.</strong> Over a home connection a multi-gigabyte image (many machine-learning images) is slow; that case is better solved by running the app on the stronger machine: see <a href="worker-nodes.html">Run a project on another machine</a>.</li>
+<li><strong>The image still has to travel back.</strong> Over a home connection a multi-gigabyte image (many machine-learning images) is slow; that case is better solved by running the app on the stronger machine: see <a href="worker-nodes.html">Worker nodes</a>.</li>
 <li>One build host for now, and only the <code>tcp://</code> form is accepted.</li>
 </ul>
 
-<div class="pager"><a href="secure-your-server.html">← Secure your server</a><a href="worker-nodes.html">Run a project on another machine →</a></div>
+<div class="pager"><a href="secure-your-server.html">← Secure your server</a><a href="worker-nodes.html">Worker nodes →</a></div>
 </article>
 </div></main>
 <footer><div class="wrap"><span class="brand" style="font-size:16px"><span class="led" aria-hidden="true"></span>deploymate</span><span>© 2026 Habib Muhammad</span><span class="links"><a href="../">Home</a></span></div></footer>

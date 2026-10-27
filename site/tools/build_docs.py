@@ -19,7 +19,7 @@ WORKFLOW = (HERE / "workflow.example.yml").read_text()
 NAV = [
     ("Start", [("quickstart.html", "Quickstart"), ("connect-github.html", "Connect GitHub"), ("deploy-on-push.html", "Deploy on every push"), ("concepts.html", "How it fits together")]),
     ("Agents", [("agents.html", "AI agents (MCP)")]),
-    ("Operate", [("secure-your-server.html", "Secure your server"), ("build-elsewhere.html", "Build on another machine"), ("worker-nodes.html", "Run a project on another machine")]),
+    ("Operate", [("secure-your-server.html", "Secure your server"), ("build-elsewhere.html", "Build on another machine"), ("worker-nodes.html", "Worker nodes")]),
     ("Optional", [("cloudflare-tunnel.html", "No open ports? Use a tunnel")]),
 ]
 
@@ -450,45 +450,75 @@ BUILDHOST = """
 <ul>
 <li><strong>If the strong machine is off, deploys still work.</strong> The build log says the host isn't reachable and the build runs on your server instead. If your server is the small one, that is the build that may run out of memory, so agree when the machine will be on.</li>
 <li><strong>Repeat builds are quicker.</strong> The cache lives on the build machine.</li>
-<li><strong>The image still has to travel back.</strong> Over a home connection a multi-gigabyte image (many machine-learning images) is slow; that case is better solved by running the app on the stronger machine: see <a href="worker-nodes.html">Run a project on another machine</a>.</li>
+<li><strong>The image still has to travel back.</strong> Over a home connection a multi-gigabyte image (many machine-learning images) is slow; that case is better solved by running the app on the stronger machine: see <a href="worker-nodes.html">Worker nodes</a>.</li>
 <li>One build host for now, and only the <code>tcp://</code> form is accepted.</li>
 </ul>
 """
 
 NODES = """
 <p class="kicker">Operate</p>
-<h1>Run a project on another machine</h1>
-<p>A small server doesn't have to run everything. Add another computer, yours or a friend's, as a <strong>worker node</strong>, and run a whole project on it: its apps and its databases together. DeployMate still builds, routes and monitors from your server; the containers run on the node.</p>
+<h1>Worker nodes</h1>
+<p>A small server doesn't have to run everything. Add another computer, yours or a friend's, as a <strong>worker node</strong>, and run a whole project on it: its apps and its databases together. DeployMate still builds, routes and monitors from your server; the containers run on the node. Use it for something heavy (a machine-learning model, video processing) or just to get more memory than your server has.</p>
 
 <div class="callout warn"><strong>A node sees everything that runs on it</strong>Its owner can read the code, environment variables and data of what you place there. Only add machines whose owner you trust.</div>
 
-<h2 id="prepare">1. Prepare the machine</h2>
-<ul>
-<li>Install Docker and <a href="https://tailscale.com">Tailscale</a>, signed in to the same tailnet as your server.</li>
-<li>Create a user that may use Docker (in the <code>docker</code> group) and can be reached over SSH.</li>
-</ul>
+<h2 id="need">What you need</h2>
+<table>
+<tr><th>The node</th><td>Any Linux machine you can reach over SSH: a friend's PC, a mini PC, another VPS. It can have a different CPU type from your server.</td></tr>
+<tr><th>A private route</th><td><a href="https://tailscale.com">Tailscale</a> on both machines (free for personal use) is the easy way: each gets a private <code>100.x.x.x</code> address that works from anywhere. A shared home or office network works too. Nothing on the node is opened to the internet.</td></tr>
+<tr><th>On the node</th><td>Docker, and a user that may run it.</td></tr>
+</table>
+
+<h2 id="prepare">1. Prepare the node</h2>
+<p>On the node, as a user with sudo. Skip what is already there.</p>
+[[prepare]]
+<p>Note the node's Tailscale address (<code>tailscale ip -4</code>). Install Tailscale on your DeployMate server the same way and sign in to the same account.</p>
 
 <h2 id="add">2. Add it in DeployMate</h2>
 <ol>
-<li>Open <strong>Nodes</strong> in the sidebar and press <strong>Create this server's key</strong>. Add the public key it shows to that user's <code>~/.ssh/authorized_keys</code> on the machine.</li>
-<li>Enter a name and the machine's Tailscale address, such as <code>ssh://habib@100.64.0.5</code>, then <strong>Add node</strong>. If you reach the machine through an SSH alias or a tunnel instead, also fill in <em>address for its ports</em>: the private address its apps will be reached at. DeployMate checks it straight away and shows its CPUs, memory and Docker version, or the reason it can't connect.</li>
+<li>Open <strong>Nodes</strong> in the sidebar and press <strong>Create this server's key</strong>. It shows a public key.</li>
+<li>On the node, add that key to the user from step 1:</li>
 </ol>
-<p>A node is checked every minute. It shows offline after three failed checks in a row. <strong>Drain</strong> stops anything new from being placed on it, use it before you need the machine yourself.</p>
+[[authorize]]
+<ol start="3">
+<li>Back in DeployMate, enter a name (say <em>friend-pc</em>) and the address <code>ssh://dmnode@100.64.0.5</code> (the user, then the node's address; add <code>:2222</code> for a different SSH port), then press <strong>Add node</strong>.</li>
+</ol>
+<p>DeployMate connects straight away and shows the node's CPUs, memory and Docker version, or the reason it couldn't. Reach the machine through an SSH alias or a tunnel instead of a plain address? Then also fill in <em>address for its ports</em>: the private address its apps will be reached at.</p>
+<p>A node is checked every minute and shows <strong>offline</strong> after three failed checks in a row. It returns to <strong>ready</strong> by itself when it answers again.</p>
 
 <h2 id="pin">3. Choose where a project runs</h2>
-<p>On a project's page, under <strong>Where it runs</strong>, pick the node. Do this before adding anything: a project that already has a database or a deploy stays where it is, because its apps and databases must share one machine's network. To use a node for existing work, create a new project on it.</p>
-<p>From then on, deploys, databases, logs, metrics, backups and restarts of that project work as usual and happen on the node. The preview address and your domains reach it through your server.</p>
+<p>Open the project and, under <strong>Where it runs</strong>, pick the node. Do this <em>before</em> adding anything: a project that already has a database or a deploy stays where it is, because its apps and databases must share one machine's network. To use a node for existing work, create a new project on it.</p>
+<p>From then on, deploys, databases, logs, metrics, backups and restarts of that project work as usual and happen on the node. The preview address and your domains reach it through your server, so DNS stays pointed at the server.</p>
+
+<h2 id="manage">Taking a node out of use</h2>
+<ul>
+<li><strong>Drain</strong> stops anything new from being placed on it. Use it before you need the machine yourself; what already runs there keeps running.</li>
+<li><strong>Remove</strong> works only when no project uses the node. Removing a node never deletes anything on the machine.</li>
+</ul>
+
+<h2 id="problems">If it won't connect</h2>
+<p>The Nodes page shows the reason. The usual ones:</p>
+<table>
+<tr><th>It says</th><th>What to do</th></tr>
+<tr><th>Permission denied (publickey)</th><td>The key from step 2 is not in that user's <code>~/.ssh/authorized_keys</code>, or the file's permissions are too open (<code>chmod 600</code>).</td></tr>
+<tr><th>Permission denied … docker</th><td>The user isn't allowed to use Docker. Run <code>sudo usermod -aG docker dmnode</code> on the node, then try again.</td></tr>
+<tr><th>Connection timed out, no route to host</th><td>Tailscale is down on one of the machines, or they are signed in to different accounts. Check <code>tailscale status</code> on both.</td></tr>
+<tr><th>Host key verification failed</th><td>The node was reinstalled, so its SSH identity changed. If that is expected, remove the old line for it from the <code>known_hosts</code> of the user that runs DeployMate.</td></tr>
+</table>
 
 <h2 id="notes">Good to know</h2>
 <ul>
-<li><strong>Images are copied.</strong> The build runs on your server (or on a <a href="build-elsewhere.html">build machine</a>) and the image is sent to the node. A multi-gigabyte image takes a while over a home connection.</li>
-<li><strong>Ports stay private.</strong> What an app publishes on the node is bound to the node's Tailscale address, not to its public interface.</li>
-<li><strong>A drained or offline node blocks deploys</strong> to it, including redeploying something that already runs there. Nothing falls back to your server.</li>
+<li><strong>Images travel to the node.</strong> The build runs on your server (or on a <a href="build-elsewhere.html">build machine</a>) and the image is sent over. A multi-gigabyte image takes a while over a home connection. If the node has a different CPU type from where the image was built, the node downloads its own copy instead.</li>
+<li><strong>Ports stay private.</strong> What an app publishes on the node is bound to the node's private address, not to its public interface.</li>
+<li><strong>A drained or offline node blocks deploys</strong> to it, including redeploying something that already runs there. Nothing quietly falls back to your server.</li>
 <li><strong>Not yet:</strong> moving a project between machines, GPU scheduling, spreading one project over several machines, and picking a node automatically.</li>
 </ul>
 """
 
-NODES_BLOCKS = {}
+NODES_BLOCKS = {
+    "prepare": "curl -fsSL https://get.docker.com | sudo sh\ncurl -fsSL https://tailscale.com/install.sh | sh\nsudo tailscale up\n\n# a user DeployMate will log in as, allowed to run Docker\nsudo adduser --disabled-password --gecos \"\" dmnode\nsudo usermod -aG docker dmnode",
+    "authorize": "sudo -u dmnode mkdir -p -m 700 /home/dmnode/.ssh\necho 'PASTE THE PUBLIC KEY HERE' | sudo -u dmnode tee -a /home/dmnode/.ssh/authorized_keys\nsudo chmod 600 /home/dmnode/.ssh/authorized_keys",
+}
 
 BUILDHOST_BLOCKS = {
     "daemon": "docker run -d --name dm-buildkitd --restart unless-stopped --privileged \\\n  -p \"$(tailscale ip -4):1234:1234\" moby/buildkit:latest --addr tcp://0.0.0.0:1234\ntailscale ip -4",
@@ -570,7 +600,7 @@ INDEX = """
 <tr><th><a href="agents.html">AI agents (MCP)</a></th><td>Connect an agent with scoped, audited, delete-free access.</td></tr>
 <tr><th><a href="secure-your-server.html">Secure your server</a></th><td>The Security page, <code>deploymate harden</code>, dashboard protection, and what to rotate after a scare.</td></tr>
 <tr><th><a href="build-elsewhere.html">Build on another machine</a></th><td>Let a stronger computer (yours or a friend's) do the building, over Tailscale, so a small server never runs out of memory.</td></tr>
-<tr><th><a href="worker-nodes.html">Run a project on another machine</a></th><td>Add a friend's or your own stronger computer as a worker node and run a whole project there, over SSH and Tailscale.</td></tr>
+<tr><th><a href="worker-nodes.html">Worker nodes</a></th><td>Add a friend's or your own stronger computer as a worker node and run a whole project there, over SSH and Tailscale.</td></tr>
 <tr><th><a href="cloudflare-tunnel.html">No open ports? Use a tunnel</a></th><td>Optional: run DeployMate on a home or office machine through a Cloudflare Tunnel.</td></tr>
 </table>
 """
@@ -598,13 +628,13 @@ def main():
            SECURE, SECURE_BLOCKS, ("agents.html", "AI agents (MCP)"), ("build-elsewhere.html", "Build on another machine"))
     render("build-elsewhere.html", "Build on another machine",
            "Let a stronger computer do your builds over Tailscale, so a small server never runs out of memory while building.",
-           BUILDHOST, BUILDHOST_BLOCKS, ("secure-your-server.html", "Secure your server"), ("worker-nodes.html", "Run a project on another machine"))
-    render("worker-nodes.html", "Run a project on another machine",
+           BUILDHOST, BUILDHOST_BLOCKS, ("secure-your-server.html", "Secure your server"), ("worker-nodes.html", "Worker nodes"))
+    render("worker-nodes.html", "Worker nodes: run a project on another machine",
            "Add another computer as a worker node and run a whole project on it, over SSH on a private network such as Tailscale.",
            NODES, NODES_BLOCKS, ("build-elsewhere.html", "Build on another machine"), ("cloudflare-tunnel.html", "No open ports? Use a tunnel"))
     render("cloudflare-tunnel.html", "No open ports? Use a tunnel",
            "An optional way to run DeployMate on a machine that can't open ports 80 and 443, using a Cloudflare Tunnel.",
-           TUNNEL, TUNNEL_BLOCKS, ("worker-nodes.html", "Run a project on another machine"), None)
+           TUNNEL, TUNNEL_BLOCKS, ("worker-nodes.html", "Worker nodes"), None)
     render("index.html", "Documentation", "DeployMate documentation: quickstart, concepts and AI agent access.",
            INDEX, {}, None, ("quickstart.html", "Quickstart"))
 
