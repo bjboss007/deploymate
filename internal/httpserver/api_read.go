@@ -216,7 +216,7 @@ func (s *Server) handleAPIProject(w http.ResponseWriter, r *http.Request) {
 	for _, sv := range svcs {
 		ss = append(ss, toAPIService(sv, p.Name, s.consumers(sv)))
 	}
-	apiJSON(w, http.StatusOK, map[string]any{"slug": p.Slug, "name": p.Name, "apps": as, "services": ss})
+	apiJSON(w, http.StatusOK, map[string]any{"slug": p.Slug, "name": p.Name, "node": s.projectNodeName(p), "apps": as, "services": ss})
 }
 
 // GET /api/v1/apps/{slug} — everything about one app except secret values.
@@ -255,6 +255,7 @@ func (s *Server) handleAPIApp(w http.ResponseWriter, r *http.Request) {
 	deps, _ := s.store.ListDeployments(app.ID, 40)
 	out := map[string]any{
 		"app":         s.toAPIApp(r, row, project.Name),
+		"node":        s.projectNodeName(project),
 		"image":       app.Image,
 		"port":        app.Port,
 		"replicas":    app.Replicas,
@@ -412,4 +413,35 @@ func (s *Server) handleAPIService(w http.ResponseWriter, r *http.Request) {
 	}
 	project, _ := s.store.GetProjectByID(sv.ProjectID)
 	apiJSON(w, http.StatusOK, toAPIService(sv, project.Name, s.consumers(sv)))
+}
+
+// projectNodeName is the name of the worker node a project runs on, or "" for this server.
+func (s *Server) projectNodeName(p store.Project) string {
+	id, _ := s.store.ProjectNodeID(p.ID)
+	if id == "" {
+		return ""
+	}
+	if n, err := s.store.GetNode(id); err == nil {
+		return n.Name
+	}
+	return ""
+}
+
+// GET /api/v1/nodes — the worker nodes, their state and which projects run on each. No addresses or keys.
+func (s *Server) handleAPINodes(w http.ResponseWriter, r *http.Request) {
+	user, _ := auth.UserFromContext(r.Context())
+	nodes, _ := s.store.ListNodes()
+	projects, _ := s.store.ListProjects(user.ID)
+	out := []map[string]any{}
+	for _, n := range nodes {
+		on := []string{}
+		for _, p := range projects {
+			if id, _ := s.store.ProjectNodeID(p.ID); id == n.ID {
+				on = append(on, p.Slug)
+			}
+		}
+		out = append(out, map[string]any{"name": n.Name, "state": n.State, "cpus": n.CPUs, "memory_bytes": n.MemBytes, "os": n.OS, "arch": n.Arch,
+			"docker_version": n.DockerVersion, "gpu_runtime": n.GPURuntime, "last_seen_at": n.LastSeenAt, "last_error": n.LastError, "projects": on})
+	}
+	apiJSON(w, http.StatusOK, map[string]any{"nodes": out})
 }

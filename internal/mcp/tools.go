@@ -99,6 +99,12 @@ var readTools = []tool{
 		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/security", nil, nil },
 	},
 	{
+		Name: "list_nodes", Scope: store.ScopeRead,
+		Description: "The worker nodes (other machines that can run whole projects): name, state (ready, draining, offline), CPUs, memory, architecture, whether it has a GPU runtime, the last error, and which projects run on it. Use it before creating a project that should run on a node.",
+		Schema:      schema(map[string]any{}),
+		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/nodes", nil, nil },
+	},
+	{
 		Name: "list_projects", Scope: store.ScopeRead,
 		Description: "List projects with how many apps and services each has.",
 		Schema:      schema(map[string]any{}),

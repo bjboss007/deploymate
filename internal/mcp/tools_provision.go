@@ -11,14 +11,14 @@ func init() {
 	provisionTools = []tool{
 		{
 			Name: "create_project", Scope: store.ScopeProvision,
-			Description: "Create a project — the group that holds related apps and their databases/caches.",
-			Schema:      schema(map[string]any{"name": strProp("project name")}, "name"),
+			Description: "Create a project — the group that holds related apps and their databases/caches. Optionally run it on a worker node (see list_nodes) instead of this server; that is fixed for the project's life.",
+			Schema:      schema(map[string]any{"name": strProp("project name"), "node": strProp("optional: the name of a ready worker node to run the whole project on")}, "name"),
 			Build: func(a args) (string, string, any, error) {
 				v, err := a.need("name")
 				if err != nil {
 					return "", "", nil, err
 				}
-				return http.MethodPost, "/projects", map[string]string{"name": v[0]}, nil
+				return http.MethodPost, "/projects", map[string]string{"name": v[0], "node": a.str("node")}, nil
 			},
 		},
 		{

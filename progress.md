@@ -1898,3 +1898,4 @@ real Let's Encrypt issuance.
 Added `internal/httpserver/responsive_browser_test.go`: headless-Chrome audit of 13 dashboard pages at 375/320 px (overflow + table labels). Found and fixed `/security` overflow (`.sec-detail` overflow-wrap). Details in docs/knowledge/responsive.md. Website is not covered. Unreleased.
 Website guard added too: `site/responsive_test.go` (same method); fixed inline-code overflow on /docs/concepts and let the docs pager wrap.
 Docs: worker-nodes page rewritten as 'Worker nodes' with copy-paste setup commands, troubleshooting table, remove/drain; nav label renamed.
+Agents: list_nodes tool + GET /api/v1/nodes, node in project/app output, create_project accepts node; docs updated.

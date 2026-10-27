@@ -283,7 +283,7 @@ func TestProvisionToolsNeedAProvisionToken(t *testing.T) {
 	prov := newFakeAPI(t, "provision")
 	rep = rpc(t, prov, "dm_test", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`)
 	names := toolNames(rep[0])
-	for _, n := range []string{"create_project", "create_app", "create_service", "start_service", "set_variables", "connect_repository", "add_domain", "configure_app", "deploy_app", "fleet_status"} {
+	for _, n := range []string{"create_project", "create_app", "create_service", "start_service", "set_variables", "connect_repository", "add_domain", "configure_app", "deploy_app", "fleet_status", "list_nodes"} {
 		if !names[n] {
 			t.Errorf("a provision token should see %q", n)
 		}

@@ -27,11 +27,30 @@ func (s *Server) created(w http.ResponseWriter, r *http.Request, action, target,
 func (s *Server) handleAPIProjectCreate(w http.ResponseWriter, r *http.Request) {
 	var in struct {
 		Name string `json:"name"`
+		Node string `json:"node"`
 	}
 	if !apiBody(w, r, &in) {
 		return
 	}
 	user, _ := auth.UserFromContext(r.Context())
+	// Check the node before anything is created, so a refusal leaves no project behind.
+	var node store.Node
+	if in.Node != "" {
+		nodes, _ := s.store.ListNodes()
+		for _, n := range nodes {
+			if strings.EqualFold(n.Name, strings.TrimSpace(in.Node)) {
+				node = n
+			}
+		}
+		if node.ID == "" {
+			s.actionRefused(w, r, "create_project", in.Name, "No node is called "+in.Node+". list_nodes shows the names.", "")
+			return
+		}
+		if node.State != store.NodeReady {
+			s.actionRefused(w, r, "create_project", in.Name, node.Name+" is "+node.State+", so nothing can be placed on it now.", "")
+			return
+		}
+	}
 	p, refusal, err := s.createProjectCore(user.ID, in.Name)
 	if err != nil {
 		s.actionFailed(w, "create_project", err)
@@ -41,7 +60,13 @@ func (s *Server) handleAPIProjectCreate(w http.ResponseWriter, r *http.Request) 
 		s.actionRefused(w, r, "create_project", in.Name, refusal, "")
 		return
 	}
-	s.created(w, r, "create_project", p.Slug, "", "", map[string]any{"slug": p.Slug, "name": p.Name})
+	if node.ID != "" {
+		if err := s.store.SetProjectNode(p.ID, node.ID); err != nil {
+			s.actionFailed(w, "create_project", err)
+			return
+		}
+	}
+	s.created(w, r, "create_project", p.Slug, "", "", map[string]any{"slug": p.Slug, "name": p.Name, "node": node.Name})
 }
 
 // POST /api/v1/projects/{slug}/apps {name, environment?}

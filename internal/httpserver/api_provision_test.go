@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/habibmuhammad/deploymate/internal/crypto"
+	"github.com/habibmuhammad/deploymate/internal/store"
 )
 
 // send makes an authenticated JSON request and returns status + decoded body.
@@ -244,4 +245,52 @@ func TestAPIHasNoDeletes(t *testing.T) {
 	if _, err := e.st.GetAppBySlug("api"); err != nil {
 		t.Errorf("the app is gone: %v", err)
 	}
+}
+
+func TestAgentsCanSeeNodesAndPlaceAProjectOnAReadyOne(t *testing.T) {
+	e := newPrebuiltEnv(t)
+	tok := e.createToken(t, "agent", "provision", "90")
+	reader := e.createToken(t, "reader", "read", "90")
+	ready, _ := e.st.CreateNode(store.Node{Name: "friend-pc", Endpoint: "ssh://u@100.64.0.5", State: store.NodeReady, CPUs: 16})
+	e.st.CreateNode(store.Node{Name: "old-laptop", Endpoint: "ssh://u@100.64.0.6", State: store.NodeDraining})
+
+	code, res, body := e.send(t, http.MethodPost, "/api/v1/projects", tok, map[string]string{"name": "Training", "node": "Friend-PC"})
+	if code != http.StatusCreated || res["node"] != "friend-pc" {
+		t.Fatalf("create on node = %d %s", code, body)
+	}
+	if id, _ := e.st.ProjectNodeID(projectIDBySlug(t, e, "training")); id != ready.ID {
+		t.Errorf("project placed on %q, want %q", id, ready.ID)
+	}
+	// Refusals leave no project behind.
+	for _, c := range []struct{ node, want string }{{"old-laptop", "draining"}, {"nowhere", "No node is called"}} {
+		code, _, body := e.send(t, http.MethodPost, "/api/v1/projects", tok, map[string]string{"name": "Nope " + c.node, "node": c.node})
+		if code != http.StatusConflict || !strings.Contains(body, c.want) {
+			t.Errorf("node %q = %d %s", c.node, code, body)
+		}
+	}
+	if ps, _ := e.st.ListProjects(mustOwnerID(t, e)); len(ps) != 2 {
+		t.Errorf("projects = %d, want the seeded one plus Training", len(ps))
+	}
+
+	code, res, body = e.send(t, http.MethodGet, "/api/v1/nodes", reader, nil)
+	nodes, _ := res["nodes"].([]any)
+	if code != http.StatusOK || len(nodes) != 2 || strings.Contains(body, "ssh://") {
+		t.Fatalf("nodes = %d %s (endpoints must not be exposed)", code, body)
+	}
+	first := nodes[0].(map[string]any) // ordered by name: friend-pc
+	if first["name"] != "friend-pc" || first["state"] != "ready" || first["projects"].([]any)[0] != "training" {
+		t.Errorf("friend-pc = %v", first)
+	}
+	if _, res, _ := e.send(t, http.MethodGet, "/api/v1/projects/training", reader, nil); res["node"] != "friend-pc" {
+		t.Errorf("project node = %v", res["node"])
+	}
+}
+
+func projectIDBySlug(t *testing.T, e *prebuiltEnv, slug string) string {
+	t.Helper()
+	p, err := e.st.GetProjectBySlug(mustOwnerID(t, e), slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p.ID
 }

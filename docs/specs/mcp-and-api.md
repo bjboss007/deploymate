@@ -43,7 +43,7 @@ keys. These stay dashboard clicks by design.
 `apps/{slug}/deployments`, `apps/{slug}/activity`, `apps/{slug}/logs`,
 `deployments/{id}` (with the plain-words explanation and `can_retry`),
 `deployments/{id}/log`, `services/{slug}`, `server` (host health, numbers only; see
-`server-health.md`). MCP tools: `fleet_status`, `server_status`,
+`server-health.md`). MCP tools: `fleet_status`, `server_status`, `list_nodes` (GET /nodes: state, capacity, projects on each, never the address; `create_project` takes an optional `node` name, ready nodes only; project and app output carry `node`),
 `list_projects`, `get_project`, `get_app`, `list_deployments`,
 `get_deployment`, `get_deployment_log`, `get_app_logs`, `get_app_activity`,
 `get_service`. A test (`TestAPIReadEndpointsAndNoSecrets`) seeds a secret

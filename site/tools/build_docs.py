@@ -307,9 +307,9 @@ AGENTS = """
 
 <h2 id="tools">The tools</h2>
 <table>
-<tr><th>Read</th><td><code>fleet_status</code> <code>server_status</code> <code>list_projects</code> <code>get_project</code> <code>get_app</code> <code>list_deployments</code> <code>get_deployment</code> <code>get_deployment_log</code> <code>get_app_logs</code> <code>get_app_activity</code> <code>get_service</code> <code>wait_for_deployment</code></td></tr>
+<tr><th>Read</th><td><code>fleet_status</code> <code>server_status</code> <code>security_status</code> <code>list_nodes</code> <code>list_projects</code> <code>get_project</code> <code>get_app</code> <code>list_deployments</code> <code>get_deployment</code> <code>get_deployment_log</code> <code>get_app_logs</code> <code>get_app_activity</code> <code>get_service</code> <code>wait_for_deployment</code></td></tr>
 <tr><th>Deploy</th><td><code>deploy_app</code> <code>redeploy_app</code> <code>run_workflow</code> <code>retry_deployment</code> <code>rollback_deployment</code> <code>restart_app</code> <code>start_app</code> <code>stop_app</code></td></tr>
-<tr><th>Provision</th><td><code>create_project</code> <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code></td></tr>
+<tr><th>Provision</th><td><code>create_project</code> (optionally on a worker node) <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code></td></tr>
 </table>
 
 <h2 id="safety">What it can never do</h2>
@@ -317,6 +317,7 @@ AGENTS = """
 <li><strong>Delete anything.</strong> There is no delete in the API at all — not apps, services, projects or data.</li>
 <li><strong>Read a secret.</strong> Variables are write-only: <code>set_variables</code> stores a value (encrypted), and nothing ever returns it. Connection strings, the GitHub token and the webhook secret never leave the dashboard. <code>connect_repository</code> returns only the <em>public</em> deploy key.</li>
 <li><strong>Manage tokens</strong> or touch backup credentials.</li>
+<li><strong>Add, drain or remove a worker node.</strong> Trusting another machine is your decision, made in the dashboard. An agent can only see nodes and place a new project on a ready one.</li>
 </ul>
 <p>And everything it does is on the record: each change is listed on the API tokens page and in the affected app's history, with the name of the token that made it. Writes are rate-limited per token (20 a minute, 200 an hour), so a looping agent hits a wall, not your server.</p>
 
@@ -326,6 +327,7 @@ AGENTS = """
 <ul>
 <li><em>"How is everything?"</em> — <code>fleet_status</code></li>
 <li><em>"Is the server okay? Is there room for a big build?"</em> — <code>server_status</code></li>
+<li><em>"Which machines can I run something heavy on?"</em> — <code>list_nodes</code>. With a provision token: <em>"Create a project called Training on friend-pc."</em> — <code>create_project</code> with a node. A project's node is fixed when it is created.</li>
 <li><em>"Why did the last deploy of invoicer fail?"</em> — <code>get_app</code>, <code>get_deployment_log</code></li>
 <li>With a deploy token: <em>"Retry it and tell me when it's done."</em> — <code>retry_deployment</code>, <code>wait_for_deployment</code></li>
 <li>With a provision token: <em>"Create a staging copy of the API with its own Postgres."</em></li>

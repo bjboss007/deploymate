@@ -133,6 +133,7 @@ func (s *Server) Handler() http.Handler {
 		// Read tier: monitoring.
 		r.Get("/fleet", s.handleAPIFleet)
 		r.Get("/server", s.handleAPIServer)
+		r.Get("/nodes", s.handleAPINodes)
 		r.Get("/security", s.handleAPISecurity)
 		r.Get("/projects", s.handleAPIProjects)
 		r.Get("/projects/{slug}", s.handleAPIProject)
