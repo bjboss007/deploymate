@@ -1903,3 +1903,4 @@ Agents: list_nodes tool + GET /api/v1/nodes, node in project/app output, create_
 GPU switch per app (migration 0029): Spec.GPU -> docker DeviceRequests, refusal with reason, node gpu_info via nvidia-smi over SSH, docs section on the Worker nodes page. NOT verified on a real NVIDIA machine; tour snapshots not recaptured (demo has no gpu_info).
 
 App persistent folders (migration 0030) + `gpu`/`volumes` in configure_app + demo node shows its GPU; docs: concepts 'Persistent folders'. Volumes not in backups, not cleaned up on app delete.
+Fixed a race in the ssh transport: ssh's error text could be lost behind a bare EOF (flaky test caught it in CI).

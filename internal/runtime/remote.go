@@ -135,10 +135,15 @@ type stdioConn struct {
 	out    io.ReadCloser
 	stderr *limitedBuffer
 	report func(string) // tells the dialer what ssh said, once the stream ends
+	waited sync.Once
 }
 
 func (c *stdioConn) Read(p []byte) (int, error) {
 	n, err := c.out.Read(p)
+	if err == io.EOF && n == 0 {
+		// Stdout can end before the copy of ssh's stderr has caught up; waiting for the process finishes that copy.
+		c.waited.Do(func() { _ = c.cmd.Wait() })
+	}
 	if err == io.EOF && n == 0 && c.stderr.Len() > 0 {
 		if c.report != nil {
 			c.report(c.stderr.String())
