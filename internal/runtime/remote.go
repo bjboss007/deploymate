@@ -152,7 +152,20 @@ func (c *stdioConn) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
-func (c *stdioConn) Write(p []byte) (int, error) { return c.in.Write(p) }
+func (c *stdioConn) Write(p []byte) (int, error) {
+	n, err := c.in.Write(p)
+	if err != nil {
+		// ssh already died (broken pipe): its message is the real error, so surface it as Read would.
+		c.waited.Do(func() { _ = c.cmd.Wait() })
+		if c.stderr.Len() > 0 {
+			if c.report != nil {
+				c.report(c.stderr.String())
+			}
+			return n, fmt.Errorf("%w: %s", err, c.stderr.String())
+		}
+	}
+	return n, err
+}
 func (c *stdioConn) Close() error {
 	_ = c.in.Close()
 	_ = c.cmd.Process.Kill()
