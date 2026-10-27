@@ -45,7 +45,7 @@ func (s *Server) handleNodesPage(w http.ResponseWriter, r *http.Request) {
 	}
 	for _, n := range list {
 		row := templates.NodeRow{ID: n.ID, Name: n.Name, Endpoint: n.Endpoint, Address: n.Address, State: n.State, Draining: n.State == store.NodeDraining, Error: n.LastError,
-			CPUs: n.CPUs, MemBytes: n.MemBytes, OS: n.OS, DockerVersion: n.DockerVersion, GPU: n.GPURuntime, LastSeenAt: n.LastSeenAt}
+			CPUs: n.CPUs, MemBytes: n.MemBytes, OS: n.OS, DockerVersion: n.DockerVersion, GPU: n.GPURuntime, GPUInfo: n.GPUInfo, LastSeenAt: n.LastSeenAt}
 		v.Nodes = append(v.Nodes, row)
 	}
 	render(w, r, http.StatusOK, templates.NodesPage(s.viewCtx(r), v))

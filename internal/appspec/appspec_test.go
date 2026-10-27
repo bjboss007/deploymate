@@ -79,6 +79,17 @@ func TestBuildSpecCarriesCommandOverrides(t *testing.T) {
 	}
 }
 
+func TestBuildSpecAsksForGPUsOnlyWhenTheAppDoes(t *testing.T) {
+	app := testApp()
+	if BuildSpec(app, Options{Image: "img", Name: CanonicalName("web")}).GPU {
+		t.Fatal("a plain app must not get a GPU")
+	}
+	app.GPU = true
+	if !BuildSpec(app, Options{Image: "img", Name: CanonicalName("web")}).GPU {
+		t.Fatal("an app with GPU on must ask for one")
+	}
+}
+
 // TestSplitArgs pins the whitespace-split contract of the deploy form
 // fields: empty and whitespace-only input is nil ("image default"), runs
 // of whitespace collapse, tabs/newlines split.

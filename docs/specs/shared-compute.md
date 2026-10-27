@@ -170,3 +170,12 @@ whose outputs land in object storage; a node going offline mid-job.
 4. **Trusted friends only.** The trust model stands: a node sees everything that runs on it. No untrusted-code isolation work.
 
 First step is phase 1 (remote builds), because it needs only a reachable BuildKit and no scheduler.
+
+## GPU placement, first step (built 2026-10-27)
+Per-app switch `apps.gpu` ("Use the machine's GPUs", dashboard only; `gpu` is shown in the API app output): the
+container gets `--gpus all` on whichever machine its project runs. `runtime.Docker.Create` refuses with a plain reason
+when the machine has no NVIDIA runtime (Docker Desktop gets its own message), and the switch is refused up front when
+the project's node has none. Nodes record their cards (`nodes.gpu_info`, from `nvidia-smi` over the node's SSH login,
+shown on the Nodes page and as `gpus` in `list_nodes`). Placement stays manual: the owner pins the project to the GPU
+node. Verified: unit tests, and the refusal against this Mac's real Docker. **Not verified on a real NVIDIA machine.**
+Not built: automatic node choice by free GPU/VRAM, a GPU count, GPU in `configure_app`, jobs.

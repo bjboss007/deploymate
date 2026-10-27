@@ -256,6 +256,7 @@ func (s *Server) handleAPIApp(w http.ResponseWriter, r *http.Request) {
 	out := map[string]any{
 		"app":         s.toAPIApp(r, row, project.Name),
 		"node":        s.projectNodeName(project),
+		"gpu":         app.GPU,
 		"image":       app.Image,
 		"port":        app.Port,
 		"replicas":    app.Replicas,
@@ -441,7 +442,7 @@ func (s *Server) handleAPINodes(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		out = append(out, map[string]any{"name": n.Name, "state": n.State, "cpus": n.CPUs, "memory_bytes": n.MemBytes, "os": n.OS, "arch": n.Arch,
-			"docker_version": n.DockerVersion, "gpu_runtime": n.GPURuntime, "last_seen_at": n.LastSeenAt, "last_error": n.LastError, "projects": on})
+			"docker_version": n.DockerVersion, "gpu_runtime": n.GPURuntime, "gpus": n.GPUInfo, "last_seen_at": n.LastSeenAt, "last_error": n.LastError, "projects": on})
 	}
 	apiJSON(w, http.StatusOK, map[string]any{"nodes": out})
 }

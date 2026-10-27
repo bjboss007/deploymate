@@ -80,7 +80,7 @@ func Check(ctx context.Context, st *store.Store, n store.Node, probe ProbeFunc) 
 		_ = st.SetNodeProbe(n.ID, false, store.Node{}, msg)
 		return err
 	}
-	return st.SetNodeProbe(n.ID, true, store.Node{CPUs: c.CPUs, MemBytes: c.MemBytes, OS: c.OS, Arch: c.Arch, DockerVersion: c.DockerVersion, GPURuntime: c.GPURuntime}, "")
+	return st.SetNodeProbe(n.ID, true, store.Node{CPUs: c.CPUs, MemBytes: c.MemBytes, OS: c.OS, Arch: c.Arch, DockerVersion: c.DockerVersion, GPURuntime: c.GPURuntime, GPUInfo: c.GPUInfo}, "")
 }
 
 func short(s string) string {
@@ -149,7 +149,7 @@ func (w *Watcher) Once(ctx context.Context) {
 				return
 			}
 			w.fails[n.ID] = 0
-			_ = w.st.SetNodeProbe(n.ID, true, store.Node{CPUs: c.CPUs, MemBytes: c.MemBytes, OS: c.OS, Arch: c.Arch, DockerVersion: c.DockerVersion, GPURuntime: c.GPURuntime}, "")
+			_ = w.st.SetNodeProbe(n.ID, true, store.Node{CPUs: c.CPUs, MemBytes: c.MemBytes, OS: c.OS, Arch: c.Arch, DockerVersion: c.DockerVersion, GPURuntime: c.GPURuntime, GPUInfo: c.GPUInfo}, "")
 		}(n)
 	}
 	wg.Wait()
@@ -168,6 +168,10 @@ func RealProbe(dataDir string) ProbeFunc {
 				return runtime.Capacity{}, ErrNoKey
 			}
 		}
-		return Probe(ctx, endpoint, key)
+		c, err := Probe(ctx, endpoint, key)
+		if err == nil && c.GPURuntime {
+			c.GPUInfo = runtime.GPUInfoOver(ctx, endpoint, key)
+		}
+		return c, err
 	}
 }

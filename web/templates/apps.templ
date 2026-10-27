@@ -77,6 +77,8 @@ type ReplicasInfo struct {
 	OnTarget   int
 	Target     string // current_deployment_id — the rollout target
 	HealthPath string
+	GPU        bool
+	GPUNote    string // where the GPU would come from, or why it cannot
 }
 
 // Degraded reports some-but-not-all replicas answering the probe.
@@ -975,6 +977,17 @@ templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
 				<input type="text" name="health_path" placeholder="/" value={ ri.HealthPath } maxlength="200" pattern="/.*" title="A path on the app, starting with / (e.g. /healthz)"/>
 			</label>
 			<button class="btn btn-ghost" type="submit">Save</button>
+		</form>
+		<form method="post" action={ "/apps/" + app.Slug + "/gpu" } class="deploy-form">
+			<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
+			<label class="check">
+				<input type="checkbox" name="gpu" value="on" checked?={ ri.GPU }/>
+				Use the machine's GPUs
+			</label>
+			<button class="btn btn-ghost" type="submit">Save</button>
+			if ri.GPUNote != "" {
+				<p class="muted">{ ri.GPUNote }</p>
+			}
 		</form>
 		if len(ri.Slots) > 0 {
 			<table class="deploy-table replica-table">

@@ -1899,3 +1899,5 @@ Added `internal/httpserver/responsive_browser_test.go`: headless-Chrome audit of
 Website guard added too: `site/responsive_test.go` (same method); fixed inline-code overflow on /docs/concepts and let the docs pager wrap.
 Docs: worker-nodes page rewritten as 'Worker nodes' with copy-paste setup commands, troubleshooting table, remove/drain; nav label renamed.
 Agents: list_nodes tool + GET /api/v1/nodes, node in project/app output, create_project accepts node; docs updated.
+
+GPU switch per app (migration 0029): Spec.GPU -> docker DeviceRequests, refusal with reason, node gpu_info via nvidia-smi over SSH, docs section on the Worker nodes page. NOT verified on a real NVIDIA machine; tour snapshots not recaptured (demo has no gpu_info).

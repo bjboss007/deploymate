@@ -36,6 +36,7 @@ type Spec struct {
 	CPULimit   float64           // cpu limit in cores (0 = unlimited)
 	Entrypoint []string          // entrypoint override; nil = the image's own
 	Cmd        []string          // command override; nil = the image's own
+	GPU        bool              // give the container every GPU on the machine (docker --gpus all)
 }
 
 // PreviewPort derives a stable loopback port for an app's preview URL.

@@ -413,6 +413,8 @@ func (s *Server) replicasInfo(app store.App) templates.ReplicasInfo {
 		Max:        store.MaxReplicas,
 		Target:     app.CurrentDeploymentID,
 		HealthPath: appspec.HealthPath(app),
+		GPU:        app.GPU,
+		GPUNote:    s.gpuNote(app),
 	}
 	rows, err := s.store.ListAppReplicas(app.ID)
 	if err != nil {

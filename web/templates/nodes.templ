@@ -10,7 +10,7 @@ type NodesView struct {
 
 // NodeRow is one node, already formatted.
 type NodeRow struct {
-	ID, Name, Endpoint, Address, State, OS, DockerVersion, LastSeenAt, Error string
+	ID, Name, Endpoint, Address, State, OS, DockerVersion, LastSeenAt, Error, GPUInfo string
 	CPUs                                                           int
 	MemBytes                                                       uint64
 	GPU, Draining                                                  bool
@@ -21,7 +21,9 @@ func nodeSpecs(n NodeRow) string {
 		return ""
 	}
 	s := strconv.Itoa(n.CPUs) + " CPUs · " + fmtBytes(n.MemBytes) + " · " + n.OS + " · Docker " + n.DockerVersion
-	if n.GPU {
+	if n.GPUInfo != "" {
+		s += " · " + n.GPUInfo
+	} else if n.GPU {
 		s += " · NVIDIA runtime"
 	}
 	return s

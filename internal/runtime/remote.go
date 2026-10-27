@@ -6,9 +6,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/url"
 	"os"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -185,6 +187,7 @@ type Capacity struct {
 	OS, Arch      string
 	DockerVersion string
 	GPURuntime    bool // the NVIDIA container runtime is installed (GPU containers can start)
+	GPUInfo       string
 }
 
 // Capacity asks the daemon about its machine.
@@ -266,4 +269,43 @@ func NormalizeArch(a string) string {
 		return "arm"
 	}
 	return a
+}
+
+// GPUInfoOver asks an ssh:// machine what its GPUs are ("NVIDIA GeForce RTX 4090 24 GB", several joined with ", ").
+// Docker's API cannot say, so this runs nvidia-smi over the same SSH login. "" when it cannot be told.
+func GPUInfoOver(ctx context.Context, endpoint, keyFile string) string {
+	u, err := url.Parse(endpoint)
+	if err != nil || u.Scheme != "ssh" {
+		return ""
+	}
+	port := ""
+	if u.Port() != "" {
+		port = ":" + u.Port()
+	}
+	args := sshArgs(u.User.Username(), u.Hostname(), port, keyFile)
+	args = append(args[:len(args)-3], "nvidia-smi", "--query-gpu=name,memory.total", "--format=csv,noheader,nounits")
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(cctx, sshCommand(), args...).Output()
+	if err != nil {
+		return ""
+	}
+	return ParseGPUInfo(string(out))
+}
+
+// ParseGPUInfo turns nvidia-smi's "name, MiB" lines into one readable line.
+func ParseGPUInfo(out string) string {
+	var gpus []string
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		name, mib, ok := strings.Cut(line, ",")
+		if !ok {
+			continue
+		}
+		n, err := strconv.Atoi(strings.TrimSpace(mib))
+		if err != nil || strings.TrimSpace(name) == "" {
+			continue
+		}
+		gpus = append(gpus, fmt.Sprintf("%s %d GB", strings.TrimSpace(name), (n+512)/1024))
+	}
+	return strings.Join(gpus, ", ")
 }

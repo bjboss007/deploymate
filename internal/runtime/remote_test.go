@@ -78,3 +78,47 @@ func TestSSHFailuresSayWhatWentWrongAndWhatToDo(t *testing.T) {
 		}
 	}
 }
+
+func TestParseGPUInfo(t *testing.T) {
+	got := ParseGPUInfo("NVIDIA GeForce RTX 4090, 24564\nNVIDIA GeForce RTX 3060, 12288\n")
+	if got != "NVIDIA GeForce RTX 4090 24 GB, NVIDIA GeForce RTX 3060 12 GB" {
+		t.Errorf("got %q", got)
+	}
+	for _, junk := range []string{"", "nvidia-smi: command not found", "x, notanumber"} {
+		if ParseGPUInfo(junk) != "" {
+			t.Errorf("%q should give nothing", junk)
+		}
+	}
+}
+
+func TestGPUProblemExplainsWhyNot(t *testing.T) {
+	if gpuProblem(true, "Ubuntu 24.04") != "" {
+		t.Error("a machine with the NVIDIA runtime has no problem")
+	}
+	if !strings.Contains(gpuProblem(false, "Docker Desktop"), "Mac or Windows") {
+		t.Error("Docker Desktop needs its own explanation")
+	}
+	if !strings.Contains(gpuProblem(false, "Ubuntu 24.04"), "NVIDIA Container Toolkit") {
+		t.Error("Linux without the runtime should be told what to install")
+	}
+}
+
+// With a real Docker (DEPLOYMATE_DOCKER_TESTS=1): asking for a GPU on a machine without one fails before anything
+// is created, with the reason. (A machine that does have an NVIDIA runtime skips this.)
+func TestCreateRefusesAGPUWhereThereIsNone(t *testing.T) {
+	if os.Getenv("DEPLOYMATE_DOCKER_TESTS") != "1" {
+		t.Skip("set DEPLOYMATE_DOCKER_TESTS=1 to run against a real Docker daemon")
+	}
+	d, err := NewDocker()
+	if err != nil {
+		t.Skip(err)
+	}
+	c, err := d.Capacity(context.Background())
+	if err != nil || c.GPURuntime {
+		t.Skip("this Docker has a GPU runtime")
+	}
+	_, err = d.Create(context.Background(), Spec{Name: "dm-gpu-test", Image: "alpine:3", GPU: true})
+	if err == nil || !strings.Contains(err.Error(), "GPU requested but") {
+		t.Fatalf("err = %v", err)
+	}
+}

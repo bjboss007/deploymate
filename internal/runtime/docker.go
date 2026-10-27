@@ -13,6 +13,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -135,7 +136,28 @@ const containerPidsLimit int64 = 4096
 
 var pidsLimit = containerPidsLimit
 
+// gpuProblem says in plain words why a machine cannot give containers a GPU ("" = it can).
+func gpuProblem(hasNvidiaRuntime bool, operatingSystem string) string {
+	switch {
+	case hasNvidiaRuntime:
+		return ""
+	case strings.Contains(operatingSystem, "Docker Desktop"):
+		return "Docker Desktop (a Mac or Windows laptop) cannot give containers a GPU; use a Linux machine with an NVIDIA card"
+	}
+	return "this machine has no NVIDIA container runtime; install the NVIDIA Container Toolkit (docs: Worker nodes, GPUs) and restart Docker"
+}
+
 func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
+	if spec.GPU {
+		info, err := d.cli.Info(ctx)
+		if err != nil {
+			return "", fmt.Errorf("docker info: %w", err)
+		}
+		_, nvidia := info.Runtimes["nvidia"]
+		if why := gpuProblem(nvidia, info.OperatingSystem); why != "" {
+			return "", fmt.Errorf("GPU requested but %s", why)
+		}
+	}
 	// Network via HostConfig.NetworkMode ONLY — exactly what the docker CLI
 	// sends for `--network X -p ...`. Passing NetworkingConfig alongside it
 	// (or instead of it) makes the daemon silently drop PortBindings.
@@ -166,6 +188,9 @@ func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 	}
 	if spec.CPULimit > 0 {
 		hostCfg.NanoCPUs = int64(spec.CPULimit * 1e9)
+	}
+	if spec.GPU {
+		hostCfg.DeviceRequests = []container.DeviceRequest{{Count: -1, Capabilities: [][]string{{"gpu"}}}}
 	}
 	// ExposedPorts must include the published port: Docker Desktop's image
 	// store only materializes PortBindings for ports present here (the CLI

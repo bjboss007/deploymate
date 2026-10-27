@@ -19,15 +19,16 @@ type Node struct {
 	MemBytes                           uint64
 	OS, Arch, DockerVersion            string
 	GPURuntime                         bool
+	GPUInfo                            string // e.g. "NVIDIA GeForce RTX 4090 24 GB"; "" = none or unknown
 	LastSeenAt, LastError, CreatedAt   string
 }
 
-const nodeColumns = `id, name, endpoint, address, state, cpus, mem_bytes, os, arch, docker_version, gpu_runtime, last_seen_at, last_error, created_at`
+const nodeColumns = `id, name, endpoint, address, state, cpus, mem_bytes, os, arch, docker_version, gpu_runtime, gpu_info, last_seen_at, last_error, created_at`
 
 func (n *Node) scan(r interface{ Scan(...any) error }) error {
 	var mem int64
 	var gpu int
-	if err := r.Scan(&n.ID, &n.Name, &n.Endpoint, &n.Address, &n.State, &n.CPUs, &mem, &n.OS, &n.Arch, &n.DockerVersion, &gpu, &n.LastSeenAt, &n.LastError, &n.CreatedAt); err != nil {
+	if err := r.Scan(&n.ID, &n.Name, &n.Endpoint, &n.Address, &n.State, &n.CPUs, &mem, &n.OS, &n.Arch, &n.DockerVersion, &gpu, &n.GPUInfo, &n.LastSeenAt, &n.LastError, &n.CreatedAt); err != nil {
 		return err
 	}
 	n.MemBytes, n.GPURuntime = uint64(mem), gpu != 0
@@ -40,8 +41,8 @@ func (s *Store) CreateNode(n Node) (Node, error) {
 	if n.State == "" {
 		n.State = NodeOffline
 	}
-	_, err := s.db.Exec(`INSERT INTO nodes (`+nodeColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-		n.ID, n.Name, n.Endpoint, n.Address, n.State, n.CPUs, int64(n.MemBytes), n.OS, n.Arch, n.DockerVersion, boolInt(n.GPURuntime), n.LastSeenAt, n.LastError, n.CreatedAt)
+	_, err := s.db.Exec(`INSERT INTO nodes (`+nodeColumns+`) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+		n.ID, n.Name, n.Endpoint, n.Address, n.State, n.CPUs, int64(n.MemBytes), n.OS, n.Arch, n.DockerVersion, boolInt(n.GPURuntime), n.GPUInfo, n.LastSeenAt, n.LastError, n.CreatedAt)
 	return n, err
 }
 
@@ -85,8 +86,8 @@ func (s *Store) GetNode(id string) (Node, error) {
 func (s *Store) SetNodeProbe(id string, ok bool, n Node, errMsg string) error {
 	if ok {
 		_, err := s.db.Exec(`UPDATE nodes SET state = CASE WHEN state = 'draining' THEN state ELSE 'ready' END,
-			cpus = ?, mem_bytes = ?, os = ?, arch = ?, docker_version = ?, gpu_runtime = ?, last_seen_at = ?, last_error = '' WHERE id = ?`,
-			n.CPUs, int64(n.MemBytes), n.OS, n.Arch, n.DockerVersion, boolInt(n.GPURuntime), Now(), id)
+			cpus = ?, mem_bytes = ?, os = ?, arch = ?, docker_version = ?, gpu_runtime = ?, gpu_info = ?, last_seen_at = ?, last_error = '' WHERE id = ?`,
+			n.CPUs, int64(n.MemBytes), n.OS, n.Arch, n.DockerVersion, boolInt(n.GPURuntime), n.GPUInfo, Now(), id)
 		return err
 	}
 	_, err := s.db.Exec(`UPDATE nodes SET state = CASE WHEN state = 'draining' THEN state ELSE 'offline' END, last_error = ? WHERE id = ?`, errMsg, id)

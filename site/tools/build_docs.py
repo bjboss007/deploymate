@@ -508,17 +508,34 @@ NODES = """
 <tr><th>Host key verification failed</th><td>The node was reinstalled, so its SSH identity changed. If that is expected, remove the old line for it from the <code>known_hosts</code> of the user that runs DeployMate.</td></tr>
 </table>
 
+<h2 id="gpu">GPUs</h2>
+<p>An app can use the node's NVIDIA graphics cards, for example to serve a language model. This works on a <strong>Linux machine with an NVIDIA card</strong>. Docker on a Mac or Windows laptop cannot pass a GPU to containers, and AMD or Intel cards are not supported yet.</p>
+<h3>1. Install the GPU support on the node</h3>
+<p>Install the NVIDIA driver first (<code>nvidia-smi</code> should print your card), then:</p>
+[[gpu]]
+<p>The last command must print the same table as <code>nvidia-smi</code>. Then press <strong>Check</strong> on the node in DeployMate: the node's line now shows the card and its memory, such as <em>NVIDIA GeForce RTX 4090 24 GB</em>.</p>
+<h3>2. Switch it on for the app</h3>
+<p>Put the project on the GPU node (step 3 above), then on the app's page tick <strong>Use the machine's GPUs</strong> and press Save. It applies from the next deploy. If the node has no GPU support, DeployMate says so instead of saving; if a deploy asks for a GPU on a machine that has none, it fails with the reason and what to install.</p>
+<p>An app gets <em>all</em> the GPUs on its machine. GPU memory is not shared out between apps: two apps on one card compete for its memory.</p>
+<h3>Example: your own AI model server</h3>
+<ol>
+<li>Create a project on the GPU node and an app in it. Set its image to <code>ollama/ollama</code> and its port to <code>11434</code>, and turn on the GPU.</li>
+<li>Deploy, add a domain, then load a model with <code>curl https://your-domain/api/pull -d '{"model":"llama3.1"}'</code>.</li>
+</ol>
+<p>Apps do not have a persistent disk yet, so the model is downloaded again after every redeploy. That is fine for trying it out; keep large models in mind until volumes for apps exist.</p>
+
 <h2 id="notes">Good to know</h2>
 <ul>
 <li><strong>Images travel to the node.</strong> The build runs on your server (or on a <a href="build-elsewhere.html">build machine</a>) and the image is sent over. A multi-gigabyte image takes a while over a home connection. If the node has a different CPU type from where the image was built, the node downloads its own copy instead.</li>
 <li><strong>Ports stay private.</strong> What an app publishes on the node is bound to the node's private address, not to its public interface.</li>
 <li><strong>A drained or offline node blocks deploys</strong> to it, including redeploying something that already runs there. Nothing quietly falls back to your server.</li>
-<li><strong>Not yet:</strong> moving a project between machines, GPU scheduling, spreading one project over several machines, and picking a node automatically.</li>
+<li><strong>Not yet:</strong> moving a project between machines, picking a node by free GPU automatically, jobs that run to completion, spreading one project over several machines, and picking a node automatically.</li>
 </ul>
 """
 
 NODES_BLOCKS = {
     "prepare": "curl -fsSL https://get.docker.com | sudo sh\ncurl -fsSL https://tailscale.com/install.sh | sh\nsudo tailscale up\n\n# a user DeployMate will log in as, allowed to run Docker\nsudo adduser --disabled-password --gecos \"\" dmnode\nsudo usermod -aG docker dmnode",
+    "gpu": "curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg\ncurl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \\\n  | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \\\n  | sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list\nsudo apt-get update && sudo apt-get install -y nvidia-container-toolkit\nsudo nvidia-ctk runtime configure --runtime=docker\nsudo systemctl restart docker\n\n# the test\ndocker run --rm --gpus all ubuntu nvidia-smi",
     "authorize": "sudo -u dmnode mkdir -p -m 700 /home/dmnode/.ssh\necho 'PASTE THE PUBLIC KEY HERE' | sudo -u dmnode tee -a /home/dmnode/.ssh/authorized_keys\nsudo chmod 600 /home/dmnode/.ssh/authorized_keys",
 }
 
