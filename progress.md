@@ -1909,3 +1909,5 @@ Real server GPU check (2026-10-27): dm-server has an NVIDIA NVS 3100M (GT218, ~2
 - Write path of the ssh stream now also waits for ssh and reports its message on broken pipe (CI flaked on the write side after the read-side fix); 60 repeated runs pass.
 
 - 2026-10-27 GPU count + automatic node choice: apps.gpu_count (0031), server.applyGPU, pickGPUNode (most unclaimed GPUs on a ready node), "Any node with a free GPU" in the project picker and node "gpu" in create_project, gpu_count / gpus_free in the API and list_nodes. Claims ignore VRAM/load. Unreleased. Next: jobs (shared-compute phase 3), app-volume backups.
+
+- 2026-10-27 Backlog: "Ideas borrowed from Coolify" added to docs/improvements.md (Compose deploys, app templates, scheduled tasks, log drains, container terminal). Comparison not placed on the website; verify Coolify claims first.

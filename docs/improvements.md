@@ -449,6 +449,20 @@ change.
 
 ## Medium-term (feature depth)
 
+- [ ] **Ideas borrowed from Coolify** — 2026-10-27, from a comparison with Coolify (docs read, not installed; re-check before
+  relying on it). DeployMate started from managing the owner's own resources, not from replacing Coolify, so only what fits that is
+  listed. In this order:
+  - [ ] **Docker Compose deploys** — an app whose source is a `compose.yaml` (repo or pasted): many projects ship only that. Needs a
+    decision on how services map to apps/services, networks, and routes; keep node pinning (one project = one machine).
+  - [ ] **App templates (one-click)** — a short curated list first (Ollama, n8n, Open WebUI, Uptime Kuma, a static site), each a prefilled
+    image, port, variables and persistent folders, optionally with GPU. Builds on persistent folders and the GPU switch.
+  - [ ] **Compose-based service templates** for databases beyond Postgres/MySQL/Redis/Mongo, only if the template list proves useful.
+  - [ ] **Scheduled tasks** per app (a cron line run inside the app's container) — pairs with the jobs work in shared compute phase 3.
+  - [ ] **Log drains / notification targets** — send app logs or alerts to an outside service; check what alerts already cover.
+  - [ ] **Container terminal** in the dashboard (exec into an app) — owner-only, audited; weigh against the security stance first.
+  - [ ] Teams and roles stay under *Later → Multi-user / teams*; only if DeployMate is shared with others.
+  - Not borrowing: a hosted cloud edition (that is the managed-servers track), Docker Swarm.
+
 - [x] **App replicas (horizontal scaling)** — done 2026-09-30 (ADR 0018;
   spec docs/specs/app-replicas.md incl. spike results). 1–5 slots per app
   (migration 0015: `apps.replicas`, `apps.health_path`, `app_replicas`),
