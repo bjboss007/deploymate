@@ -150,6 +150,7 @@ func (s *Server) placement(p store.Project) templates.Placement {
 	pl := templates.Placement{}
 	cur, _ := s.store.ProjectNodeID(p.ID)
 	pl.Locked, _ = s.store.ProjectHasWorkloads(p.ID)
+	_, pl.AnyGPU = s.pickGPUNode()
 	list, _ := s.store.ListNodes()
 	for _, n := range list {
 		if n.ID == cur {
@@ -179,6 +180,14 @@ func (s *Server) handleProjectNode(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.FormValue("node")
+	if id == autoGPUNode {
+		n, ok := s.pickGPUNode()
+		if !ok {
+			back("No ready node has an unclaimed GPU.")
+			return
+		}
+		id = n.ID
+	}
 	if id != "" {
 		n, err := s.store.GetNode(id)
 		if err != nil {

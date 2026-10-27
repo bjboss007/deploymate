@@ -88,6 +88,10 @@ func TestBuildSpecAsksForGPUsOnlyWhenTheAppDoes(t *testing.T) {
 	if !BuildSpec(app, Options{Image: "img", Name: CanonicalName("web")}).GPU {
 		t.Fatal("an app with GPU on must ask for one")
 	}
+	app.GPUCount = 2
+	if sp := BuildSpec(app, Options{Image: "img", Name: CanonicalName("web")}); sp.GPUCount != 2 {
+		t.Fatalf("GPUCount = %d, want 2", sp.GPUCount)
+	}
 }
 
 // TestSplitArgs pins the whitespace-split contract of the deploy form

@@ -190,7 +190,11 @@ func (d *Docker) Create(ctx context.Context, spec Spec) (string, error) {
 		hostCfg.NanoCPUs = int64(spec.CPULimit * 1e9)
 	}
 	if spec.GPU {
-		hostCfg.DeviceRequests = []container.DeviceRequest{{Count: -1, Capabilities: [][]string{{"gpu"}}}}
+		count := -1 // every GPU
+		if spec.GPUCount > 0 {
+			count = spec.GPUCount
+		}
+		hostCfg.DeviceRequests = []container.DeviceRequest{{Count: count, Capabilities: [][]string{{"gpu"}}}}
 	}
 	// ExposedPorts must include the published port: Docker Desktop's image
 	// store only materializes PortBindings for ports present here (the CLI

@@ -10,7 +10,7 @@ change.
   - [ ] **Try a node over real Tailscale** with a friend's machine (the one link not yet proven; only ssh-through-Cloudflare + LAN address was).
   - [ ] **Two-factor sign-in (TOTP)** — own round: secret storage, enrolment, recovery codes, login step (`docs/specs/server-security.md` phase C).
   - [ ] **Sign-in extras** — an alert for a sign-in from a never-seen address; sign-in counts in `GET /api/v1/security` and the MCP `security_status`.
-  - [ ] **Shared compute phase 3** (`docs/specs/shared-compute.md`): run-to-completion jobs and array jobs, picking a node by free GPU automatically (the per-app GPU switch is built, see progress.md), a GPU count instead of all, `gpu` in MCP configure_app, backups and clean-up of app volumes (built 2026-10-27 without either), node availability
+  - [ ] **Shared compute phase 3** (`docs/specs/shared-compute.md`): run-to-completion jobs and array jobs, (GPU switch, GPU count, `gpu` in configure_app and automatic node choice by unclaimed GPU are built, see progress.md; not VRAM aware), backups and clean-up of app volumes (built 2026-10-27 without either), node availability
     windows, **build on the node** (avoid copying multi-GB images), move a project between nodes, pick a node automatically, reserve the host port on the
     node (today it is chosen free on this server and can collide on the node), image cleanup on nodes.
   - [ ] **Unattended install steps 2-4** (`docs/specs/unattended-install.md`): installer `--unattended`, provisioning file, profile-aware firewall,

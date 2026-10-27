@@ -105,3 +105,53 @@ func TestPersistentFoldersAndAgentConfig(t *testing.T) {
 		t.Errorf("volumes not cleared: %v", res["volumes"])
 	}
 }
+
+// An app can ask for some of a node's GPUs; asking for more than the node has is refused, claimed GPUs are not offered
+// again, and "any node with a free GPU" picks the ready node with the most left.
+func TestGPUCountAndAutomaticNodeChoice(t *testing.T) {
+	st, app := replicaTestEnv(t, store.App{Name: "Llm", Slug: "llm", Port: 11434})
+	s := &Server{store: st}
+	two, _ := st.CreateNode(store.Node{Name: "two-cards", Endpoint: "ssh://u@100.64.0.1", State: store.NodeReady})
+	st.SetNodeProbe(two.ID, true, store.Node{GPURuntime: true, GPUInfo: "NVIDIA RTX 3060 12 GB, NVIDIA RTX 3060 12 GB"}, "")
+	one, _ := st.CreateNode(store.Node{Name: "one-card", Endpoint: "ssh://u@100.64.0.2", State: store.NodeReady})
+	st.SetNodeProbe(one.ID, true, store.Node{GPURuntime: true, GPUInfo: "NVIDIA GTX 1060 6 GB"}, "")
+	off, _ := st.CreateNode(store.Node{Name: "off-card", Endpoint: "ssh://u@100.64.0.3", State: store.NodeReady})
+	st.SetNodeProbe(off.ID, false, store.Node{GPURuntime: true, GPUInfo: "NVIDIA RTX 4090 24 GB, NVIDIA RTX 4090 24 GB, NVIDIA RTX 4090 24 GB"}, "gone")
+
+	two, _ = st.GetNode(two.ID) // the probe filled in its GPUs
+	if n, ok := s.pickGPUNode(); !ok || n.Name != "two-cards" {
+		t.Fatalf("pick = %q %v, want two-cards (offline nodes are never chosen)", n.Name, ok)
+	}
+	if err := st.SetProjectNode(app.ProjectID, two.ID); err != nil {
+		t.Fatal(err)
+	}
+	if why, _ := s.applyGPU(app, true, 3); !strings.Contains(why, "has 2 GPU(s)") {
+		t.Errorf("3 of 2: %q", why)
+	}
+	if why, err := s.applyGPU(app, true, 1); why != "" || err != nil {
+		t.Fatalf("1 of 2: %q %v", why, err)
+	}
+	if got := s.gpusFree(two); got != 1 {
+		t.Errorf("free after claiming 1 = %d, want 1", got)
+	}
+	a, _ := st.GetAppByID(app.ID)
+	if !a.GPU || a.GPUCount != 1 {
+		t.Fatalf("app = gpu %v count %d", a.GPU, a.GPUCount)
+	}
+	// Taking every GPU claims the whole node, so the next pick moves on.
+	if why, _ := s.applyGPU(a, true, 0); why != "" {
+		t.Fatal(why)
+	}
+	if got := s.gpusFree(two); got != 0 {
+		t.Errorf("free after claiming all = %d, want 0", got)
+	}
+	if n, ok := s.pickGPUNode(); !ok || n.Name != "one-card" {
+		t.Errorf("pick = %q %v, want one-card", n.Name, ok)
+	}
+	if why, _ := s.applyGPU(a, false, 5); why != "" {
+		t.Fatal(why)
+	}
+	if b, _ := st.GetAppByID(app.ID); b.GPU || b.GPUCount != 0 {
+		t.Errorf("after off: gpu %v count %d", b.GPU, b.GPUCount)
+	}
+}

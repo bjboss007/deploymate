@@ -184,7 +184,7 @@ func BuildSpec(app store.App, o Options) runtime.Spec {
 	if app.CPULimit > 0 {
 		spec.CPULimit = app.CPULimit
 	}
-	spec.GPU = app.GPU
+	spec.GPU, spec.GPUCount = app.GPU, app.GPUCount
 	spec.Entrypoint = o.Entrypoint
 	spec.Cmd = o.Cmd
 	return spec

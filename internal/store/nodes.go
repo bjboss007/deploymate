@@ -207,3 +207,21 @@ func (s *Store) NodeInUse(nodeID string) (bool, error) {
 	err := s.db.QueryRow(`SELECT (SELECT COUNT(*) FROM projects WHERE node_id = ?) + (SELECT COUNT(*) FROM container_nodes WHERE node_id = ?)`, nodeID, nodeID).Scan(&n)
 	return n > 0, err
 }
+
+// NodeGPUClaims lists the GPU counts of the GPU apps in projects pinned to the node (0 = an app that takes every GPU).
+func (s *Store) NodeGPUClaims(nodeID string) ([]int, error) {
+	rows, err := s.db.Query(`SELECT a.gpu_count FROM apps a JOIN projects p ON p.id = a.project_id WHERE p.node_id = ? AND a.gpu = 1`, nodeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int
+	for rows.Next() {
+		var c int
+		if err := rows.Scan(&c); err != nil {
+			return nil, err
+		}
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}

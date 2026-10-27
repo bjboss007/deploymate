@@ -312,7 +312,7 @@ AGENTS = """
 <table>
 <tr><th>Read</th><td><code>fleet_status</code> <code>server_status</code> <code>security_status</code> <code>list_nodes</code> <code>list_projects</code> <code>get_project</code> <code>get_app</code> <code>list_deployments</code> <code>get_deployment</code> <code>get_deployment_log</code> <code>get_app_logs</code> <code>get_app_activity</code> <code>get_service</code> <code>wait_for_deployment</code></td></tr>
 <tr><th>Deploy</th><td><code>deploy_app</code> <code>redeploy_app</code> <code>run_workflow</code> <code>retry_deployment</code> <code>rollback_deployment</code> <code>restart_app</code> <code>start_app</code> <code>stop_app</code></td></tr>
-<tr><th>Provision</th><td><code>create_project</code> (optionally on a worker node) <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code> (image, port, GPU, persistent folders)</td></tr>
+<tr><th>Provision</th><td><code>create_project</code> (optionally on a worker node) <code>create_app</code> <code>create_service</code> <code>start_service</code> <code>set_variables</code> <code>connect_repository</code> <code>add_domain</code> <code>configure_app</code> (image, port, GPU and how many, persistent folders)</td></tr>
 </table>
 
 <h2 id="safety">What it can never do</h2>
@@ -519,7 +519,9 @@ NODES = """
 <p>The last command must print the same table as <code>nvidia-smi</code>. Then press <strong>Check</strong> on the node in DeployMate: the node's line now shows the card and its memory, such as <em>NVIDIA GeForce RTX 4090 24 GB</em>.</p>
 <h3>2. Switch it on for the app</h3>
 <p>Put the project on the GPU node (step 3 above), then on the app's page tick <strong>Use the machine's GPUs</strong> and press Save. It applies from the next deploy. If the node has no GPU support, DeployMate says so instead of saving; if a deploy asks for a GPU on a machine that has none, it fails with the reason and what to install.</p>
-<p>An app gets <em>all</em> the GPUs on its machine. GPU memory is not shared out between apps: two apps on one card compete for its memory.</p>
+<p>By default an app gets <em>all</em> the GPUs on its machine. To give it fewer, type a number in <strong>How many</strong> (an agent sets <code>gpu_count</code>); asking for more than the node has is refused. GPU memory is not shared out between apps: two apps on one card compete for its memory.</p>
+<h3>Let DeployMate pick the node</h3>
+<p>When you create a project (or on its page, before it has anything deployed) choose <strong>Any node with a free GPU</strong>. DeployMate puts it on the ready node with the most unclaimed GPUs. A GPU is claimed by every GPU app already placed on that node (an app that takes all GPUs claims them all), whether or not it is running. Each node shows its cards and how many are unclaimed, on the Nodes page and in <code>list_nodes</code>; an agent passes <code>gpu</code> as the node name in <code>create_project</code>.</p>
 <h3>Example: your own AI model server</h3>
 <ol>
 <li>Create a project on the GPU node and an app in it. Set its image to <code>ollama/ollama</code> and its port to <code>11434</code>, turn on the GPU, and add <code>/root/.ollama</code> under <strong>Persistent folders</strong> so downloaded models are kept.</li>
@@ -532,7 +534,7 @@ NODES = """
 <li><strong>Images travel to the node.</strong> The build runs on your server (or on a <a href="build-elsewhere.html">build machine</a>) and the image is sent over. A multi-gigabyte image takes a while over a home connection. If the node has a different CPU type from where the image was built, the node downloads its own copy instead.</li>
 <li><strong>Ports stay private.</strong> What an app publishes on the node is bound to the node's private address, not to its public interface.</li>
 <li><strong>A drained or offline node blocks deploys</strong> to it, including redeploying something that already runs there. Nothing quietly falls back to your server.</li>
-<li><strong>Not yet:</strong> moving a project between machines, picking a node by free GPU automatically, jobs that run to completion, spreading one project over several machines, and picking a node automatically.</li>
+<li><strong>Not yet:</strong> moving a project between machines, jobs that run to completion, spreading one project over several machines, and picking a node automatically.</li>
 </ul>
 """
 

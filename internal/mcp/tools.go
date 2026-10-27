@@ -100,7 +100,7 @@ var readTools = []tool{
 	},
 	{
 		Name: "list_nodes", Scope: store.ScopeRead,
-		Description: "The worker nodes (other machines that can run whole projects): name, state (ready, draining, offline), CPUs, memory, architecture, whether it has a GPU runtime, the last error, and which projects run on it. Use it before creating a project that should run on a node.",
+		Description: "The worker nodes (other machines that can run whole projects): name, state (ready, draining, offline), CPUs, memory, architecture, whether it has a GPU runtime, how many GPUs (gpu_count) and how many are unclaimed (gpus_free), the last error, and which projects run on it. Use it before creating a project that should run on a node.",
 		Schema:      schema(map[string]any{}),
 		Build:       func(a args) (string, string, any, error) { return http.MethodGet, "/nodes", nil, nil },
 	},

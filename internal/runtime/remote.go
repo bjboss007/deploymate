@@ -327,3 +327,11 @@ func ParseGPUInfo(out string) string {
 	}
 	return strings.Join(gpus, ", ")
 }
+
+// GPUCount is how many cards a ParseGPUInfo line describes (each entry ends in "<n> GB").
+// shortcut: counted from the display text rather than stored, so a GPU name ending in a number plus " GB" would miscount; fine for nvidia-smi names.
+func GPUCount(info string) int {
+	return len(gpuEntry.FindAllString(info, -1))
+}
+
+var gpuEntry = regexp.MustCompile(`\d+ GB(, |$)`)

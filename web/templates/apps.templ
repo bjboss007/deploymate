@@ -2,6 +2,7 @@ package templates
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/habibmuhammad/deploymate/internal/builder"
@@ -78,6 +79,7 @@ type ReplicasInfo struct {
 	Target     string // current_deployment_id — the rollout target
 	HealthPath string
 	GPU        bool
+	GPUCount   int    // 0 = every GPU
 	GPUNote    string // where the GPU would come from, or why it cannot
 	Volumes    string // persistent folders, one per line
 }
@@ -985,6 +987,9 @@ templ replicasPanel(vc ViewCtx, app store.App, ri ReplicasInfo) {
 				<input type="checkbox" name="gpu" value="on" checked?={ ri.GPU }/>
 				Use the machine's GPUs
 			</label>
+			<label>How many
+				<input type="number" name="gpu_count" min="1" max="16" placeholder="all" value={ gpuCountValue(ri.GPUCount) } style="width:6em"/>
+			</label>
 			<button class="btn btn-ghost" type="submit">Save</button>
 			if ri.GPUNote != "" {
 				<p class="muted">{ ri.GPUNote }</p>
@@ -1165,4 +1170,12 @@ func tlsHint(dm store.Domain) string {
 		return "DeployMate is set not to ask for certificates (DEPLOYMATE_LE_MODE=off). Visitors get the certificate your tunnel or proxy serves, which DeployMate cannot see."
 	}
 	return "No certificate has been issued for this name yet. It appears after DNS points here and the proxy has requested one; checked every 2 minutes."
+}
+
+// gpuCountValue is the number box's text; an app that takes every GPU leaves it empty.
+func gpuCountValue(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strconv.Itoa(n)
 }

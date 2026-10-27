@@ -178,7 +178,7 @@ when the machine has no NVIDIA runtime (Docker Desktop gets its own message), an
 the project's node has none. Nodes record their cards (`nodes.gpu_info`, from `nvidia-smi` over the node's SSH login,
 shown on the Nodes page and as `gpus` in `list_nodes`). Placement stays manual: the owner pins the project to the GPU
 node. Verified: unit tests, and the refusal against this Mac's real Docker. **Not verified on a real NVIDIA machine.**
-Not built: automatic node choice by free GPU/VRAM, a GPU count, GPU in `configure_app`, jobs.
+Not built here: jobs. (GPU count, automatic choice and `configure_app` gpu came next, see below.)
 
 ### Follow-up (same day): persistent folders for apps
 `apps.volumes` (migration 0030): absolute paths, one per line, each a named volume `dm-app-<slug>-<crc32 of path>`
@@ -186,3 +186,13 @@ mounted by `appspec.BuildSpec`; the volume lives on whichever machine the contai
 deletion (like a service's volume), and is shared by replicas. Validation in `appspec.ParseVolumes` (absolute, no `..`,
 no reserved paths, at most 8). Dashboard form on the app page; `volumes` and `gpu` accepted by `configure_app` and shown
 in the API app output. Not built: backups of these volumes, removing orphaned volumes, per-replica volumes.
+
+### Follow-up (2026-10-27): GPU count and automatic node choice
+`apps.gpu_count` (migration 0031; 0 = every GPU) becomes `DeviceRequest.Count`; `configure_app` takes `gpu` and
+`gpu_count` (a count alone switches GPU on). `server.applyGPU` is the one place that validates and saves it: refused
+when the node has no runtime or fewer cards than asked. A node's card count is derived from `nodes.gpu_info`
+(`runtime.GPUCount`, no new column). A GPU is *claimed* by every GPU app in a project pinned to the node, running or not
+(`store.NodeGPUClaims`; an app with count 0 claims all). `pickGPUNode` chooses the ready node with the GPU runtime and
+the most unclaimed cards (ties by name). Offered as "Any node with a free GPU" in the project's node picker and as node
+name `gpu` in `create_project`; `list_nodes` shows `gpu_count` and `gpus_free`. Limits: claims ignore VRAM and actual
+load, a project cannot move once it has workloads, and an existing project's GPU apps are not re-placed when cards change.

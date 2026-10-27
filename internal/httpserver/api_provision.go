@@ -35,7 +35,14 @@ func (s *Server) handleAPIProjectCreate(w http.ResponseWriter, r *http.Request) 
 	user, _ := auth.UserFromContext(r.Context())
 	// Check the node before anything is created, so a refusal leaves no project behind.
 	var node store.Node
-	if in.Node != "" {
+	if strings.EqualFold(strings.TrimSpace(in.Node), autoGPUNode) {
+		n, ok := s.pickGPUNode()
+		if !ok {
+			s.actionRefused(w, r, "create_project", in.Name, "No ready node has an unclaimed GPU. list_nodes shows each node's GPUs and what is free.", "")
+			return
+		}
+		node = n
+	} else if in.Node != "" {
 		nodes, _ := s.store.ListNodes()
 		for _, n := range nodes {
 			if strings.EqualFold(n.Name, strings.TrimSpace(in.Node)) {
@@ -275,6 +282,7 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 		Port          *int      `json:"port"`
 		RootDirectory *string   `json:"root_directory"`
 		GPU           *bool     `json:"gpu"`
+		GPUCount      *int      `json:"gpu_count"`
 		Volumes       *[]string `json:"volumes"`
 	}
 	if !apiBody(w, r, &in) {
@@ -295,13 +303,28 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if in.Image == nil && in.Port == nil && in.RootDirectory == nil && in.GPU == nil && in.Volumes == nil {
-		s.actionRefused(w, r, "configure_app", app.Slug, "Send an image, a port, a root_directory, gpu and/or volumes.", app.ID)
+	if in.Image == nil && in.Port == nil && in.RootDirectory == nil && in.GPU == nil && in.GPUCount == nil && in.Volumes == nil {
+		s.actionRefused(w, r, "configure_app", app.Slug, "Send an image, a port, a root_directory, gpu, gpu_count and/or volumes.", app.ID)
 		return
 	}
-	if in.GPU != nil && *in.GPU {
-		if why := s.gpuRefusal(app); why != "" {
-			s.actionRefused(w, r, "configure_app", app.Slug, why, app.ID)
+	if in.GPU != nil || in.GPUCount != nil {
+		on, count := app.GPU, app.GPUCount
+		if in.GPU != nil {
+			on = *in.GPU
+		}
+		if in.GPUCount != nil {
+			count = *in.GPUCount
+			if in.GPU == nil {
+				on = true // naming a count means the app wants GPUs
+			}
+		}
+		refusal, err := s.applyGPU(app, on, count)
+		if err != nil {
+			s.actionFailed(w, "configure_app", err)
+			return
+		}
+		if refusal != "" {
+			s.actionRefused(w, r, "configure_app", app.Slug, refusal, app.ID)
 			return
 		}
 	}
@@ -315,13 +338,6 @@ func (s *Server) handleAPIAppConfig(w http.ResponseWriter, r *http.Request) {
 			s.actionRefused(w, r, "configure_app", app.Slug, refusal, app.ID)
 			return
 		}
-	}
-	if in.GPU != nil && *in.GPU != app.GPU {
-		if err := s.store.SetAppGPU(app.ID, *in.GPU); err != nil {
-			s.actionFailed(w, "configure_app", err)
-			return
-		}
-		_ = s.store.RecordEvent(app.ID, store.EventGPUChanged, map[bool]string{true: "GPU access on", false: "GPU access off"}[*in.GPU])
 	}
 	if in.RootDirectory != nil {
 		dir, why := cleanRootDirectory(*in.RootDirectory)

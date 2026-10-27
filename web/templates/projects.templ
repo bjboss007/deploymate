@@ -296,6 +296,7 @@ type Placement struct {
 	Current string       // the node's name, "" = this server
 	Locked  bool         // has services or deploys, so it stays where it is
 	Nodes   []NodeOption // ready nodes to choose from
+	AnyGPU  bool         // some ready node has an unclaimed GPU, so "any node with a free GPU" can be offered
 }
 
 // NodeOption is one node in the picker.
@@ -396,6 +397,9 @@ templ ProjectPage(vc ViewCtx, p store.Project, cards []AppCard, unused []Resourc
 						<input type="hidden" name="csrf_token" value={ vc.CSRF }/>
 						<select name="node">
 							<option value="">This server</option>
+							if place.AnyGPU {
+								<option value="gpu">Any node with a free GPU</option>
+							}
 							for _, n := range place.Nodes {
 								<option value={ n.ID } selected?={ n.Selected }>{ n.Name }</option>
 							}

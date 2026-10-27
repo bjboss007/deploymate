@@ -122,3 +122,14 @@ func TestCreateRefusesAGPUWhereThereIsNone(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+func TestGPUCount(t *testing.T) {
+	for in, want := range map[string]int{
+		"": 0, "NVIDIA GeForce RTX 4090 24 GB": 1,
+		"NVIDIA RTX 3060 12 GB, NVIDIA RTX 3060 12 GB": 2,
+	} {
+		if got := GPUCount(in); got != want {
+			t.Errorf("GPUCount(%q) = %d, want %d", in, got, want)
+		}
+	}
+}
