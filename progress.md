@@ -1893,3 +1893,6 @@ real Let's Encrypt issuance.
    unverified) and re-order "Next up".
 2. Add any new quirk/rule you discovered.
 3. Commit `progress.md` together with the work and push (bjboss007 rule).
+
+## Responsive guard (2026-10-27)
+Added `internal/httpserver/responsive_browser_test.go`: headless-Chrome audit of 13 dashboard pages at 375/320 px (overflow + table labels). Found and fixed `/security` overflow (`.sec-detail` overflow-wrap). Details in docs/knowledge/responsive.md. Website is not covered. Unreleased.

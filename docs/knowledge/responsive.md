@@ -25,3 +25,12 @@ Checked at 375 px and 320 px, dark and light, on every dashboard page and every 
 - The dashboard's CSS variables are `--font-mono`, `--panel-2`, `--muted`, `--faint`; the site's are `--mono`, `--panel`. A wrong name
   makes the whole `font:` shorthand invalid and silently inherited.
 - The screenshot tool can lag one step behind a scroll or a tab click: take a second one before concluding something did not render.
+
+## The automated guard
+`internal/httpserver/responsive_browser_test.go` (`TestDashboardFitsAPhoneAndTablesBecomeLabelledCards`) seeds the demo
+fleet, starts the real server, and drives headless Chrome through a page that loads 13 dashboard pages in 375 px and
+320 px frames with `overflow-x: clip` switched off. It fails with the page name, width, and the element reaching past
+the edge, or with the number of table cells that have no `data-label`. Takes ~13 s. It is skipped when no Chrome is
+found (`DEPLOYMATE_CHROME` points at one); CI's Ubuntu runner has Chrome, so it runs there. Add a page to the list in
+the test when you add a page. First run found `/security` 904 px wide (a long unbroken path in `.sec-detail`).
+Not covered: landscape, tablets, the website (its audit is still manual).
