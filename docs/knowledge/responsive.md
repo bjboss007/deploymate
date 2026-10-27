@@ -33,4 +33,4 @@ fleet, starts the real server, and drives headless Chrome through a page that lo
 the edge, or with the number of table cells that have no `data-label`. Takes ~13 s. It is skipped when no Chrome is
 found (`DEPLOYMATE_CHROME` points at one); CI's Ubuntu runner has Chrome, so it runs there. Add a page to the list in
 the test when you add a page. First run found `/security` 904 px wide (a long unbroken path in `.sec-detail`).
-Not covered: landscape, tablets, the website (its audit is still manual).
+The website has the same guard in `site/responsive_test.go` (every `site/*.html` and `site/docs/*.html` at 375/320 px, labels checked on docs tables that have a heading row; key/value tables are deliberately unlabelled). It found a 9 px overflow from a long inline `code` path. Not covered: landscape, tablets, the tour snapshots.

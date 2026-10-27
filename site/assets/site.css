@@ -39,6 +39,7 @@ a:hover { text-decoration: underline; text-underline-offset: 3px; }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
 ::selection { background: var(--accent); color: var(--accent-ink); }
 code, pre, .mono { font-family: var(--mono); }
+:not(pre) > code { overflow-wrap: anywhere; }
 .wrap { width: 100%; max-width: var(--max); margin: 0 auto; padding: 0 24px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .skip { position: absolute; left: -999px; top: 8px; background: var(--accent); color: var(--accent-ink); padding: 8px 14px; border-radius: 8px; z-index: 100; }
@@ -227,7 +228,7 @@ footer a { color: var(--muted); }
 .callout { border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--panel); padding: 14px 18px; margin: 20px 0; color: var(--muted); font-size: 15.5px; }
 .callout.warn { border-left-color: var(--amber); }
 .callout strong { display: block; margin-bottom: 4px; }
-.pager { display: flex; justify-content: space-between; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); }
+.pager { display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--border); }
 
 /* nodes */
 .nodeflow { display: flex; align-items: stretch; margin: 8px 0 6px; }
