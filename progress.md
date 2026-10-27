@@ -1904,3 +1904,4 @@ GPU switch per app (migration 0029): Spec.GPU -> docker DeviceRequests, refusal 
 
 App persistent folders (migration 0030) + `gpu`/`volumes` in configure_app + demo node shows its GPU; docs: concepts 'Persistent folders'. Volumes not in backups, not cleaned up on app delete.
 Fixed a race in the ssh transport: ssh's error text could be lost behind a bare EOF (flaky test caught it in CI).
+Real server GPU check (2026-10-27): dm-server has an NVIDIA NVS 3100M (GT218, ~2010): no driver, no toolkit; too old for any current NVIDIA driver/CUDA on Ubuntu 24.04, so a real GPU run is not possible there. The refusal path was verified on that real Linux node (TestGPURequestIsRefusedOnARealNodeWithoutOne). A real GPU run still needs a modern NVIDIA card.

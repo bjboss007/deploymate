@@ -90,3 +90,27 @@ func TestPlacementOnARealSecondMachine(t *testing.T) {
 		t.Errorf("removed from the node: %v", err)
 	}
 }
+
+// On a real node without the NVIDIA runtime, asking for a GPU is refused with the reason before anything is created
+// (nothing is pulled or started). Skipped when the node does have the runtime.
+func TestGPURequestIsRefusedOnARealNodeWithoutOne(t *testing.T) {
+	endpoint := os.Getenv("DEPLOYMATE_REAL_NODE")
+	if endpoint == "" {
+		t.Skip("set DEPLOYMATE_REAL_NODE=ssh://user@host to run against a real second machine")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	node, err := runtime.NewRemote(ctx, endpoint, os.Getenv("DEPLOYMATE_REAL_NODE_KEY"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer node.Close()
+	if c, err := node.Capacity(ctx); err != nil || c.GPURuntime {
+		t.Skip("this node has a GPU runtime")
+	}
+	_, err = node.Create(ctx, runtime.Spec{Name: "dm-gpu-refusal-test", Image: "alpine:3", GPU: true})
+	if err == nil || !strings.Contains(err.Error(), "NVIDIA Container Toolkit") {
+		t.Fatalf("err = %v", err)
+	}
+	t.Log(err)
+}
