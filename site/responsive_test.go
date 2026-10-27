@@ -89,7 +89,11 @@ func TestWebsiteFitsAPhone(t *testing.T) {
 		}
 	}))
 	t.Cleanup(srv.Close)
-	cmd := exec.Command(chrome, "--headless", "--disable-gpu", "--no-sandbox", "--user-data-dir="+t.TempDir(), srv.URL+"/__audit")
+	// Chrome's helper processes can still be writing when it is killed, so the profile is removed best-effort
+	// (t.TempDir would fail the test on "directory not empty").
+	profile, _ := os.MkdirTemp("", "dm-chrome-")
+	t.Cleanup(func() { os.RemoveAll(profile) })
+	cmd := exec.Command(chrome, "--headless", "--disable-gpu", "--no-sandbox", "--user-data-dir="+profile, srv.URL+"/__audit")
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
