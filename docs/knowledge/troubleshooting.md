@@ -164,6 +164,15 @@ printf '[Service]\nEnvironment=DOCKER_MIN_API_VERSION=1.24\n' | sudo tee /etc/sy
 sudo systemctl daemon-reload && sudo systemctl restart docker
 ```
 
+## An app with two or more domains answers 404 on all of them (Traefik v3 rule syntax)
+
+Symptom: an app with one domain works; adding a second makes every hostname return Traefik's
+`404 page not found`, and `docker logs traefik` shows `error while parsing rule Host(`a`, `b`): ...
+unexpected number of parameters`. Cause: Traefik v3 allows one argument per `Host()`; the old
+`Host(`a`, `b`)` (v2 syntax) made it drop the router. Fixed: `proxy.HostRule` writes
+``Host(`a`) || Host(`b`)`` (a single domain is unchanged). The labels live on the container, so an
+already-running app keeps the broken rule until it is redeployed (or restarted from its row).
+
 ## The dashboard's own domain answers 404 or a certificate error
 
 Set `DEPLOYMATE_DASHBOARD_HOST` and DeployMate writes `<data dir>/traefik-dynamic/dashboard.yml` at startup

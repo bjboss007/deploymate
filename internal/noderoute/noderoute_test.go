@@ -44,7 +44,7 @@ func TestRenderRoutesDomainsToTheNodeAndRefusesBadInput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Host(`a.example.com`, `b.example.com`)", "url: http://100.64.0.5:20123", "url: http://100.64.0.5:20124", "certResolver: letsencrypt", "path: /health", "entryPoints:"} {
+	for _, want := range []string{"Host(`a.example.com`) || Host(`b.example.com`)", "url: http://100.64.0.5:20123", "url: http://100.64.0.5:20124", "certResolver: letsencrypt", "path: /health", "entryPoints:"} {
 		if !strings.Contains(string(body), want) {
 			t.Errorf("missing %q in:\n%s", want, body)
 		}
