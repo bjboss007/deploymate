@@ -9,7 +9,7 @@ func TestAppLabels(t *testing.T) {
 	labels := AppLabels(AppLabelsOpts{Slug: "mysite", Port: 8080, Domains: []string{"example.com", "www.example.com"}, LEResolver: "staging"})
 	want := map[string]string{
 		"traefik.enable":                                      "true",
-		"traefik.http.routers.mysite.rule":                    "Host(`example.com`, `www.example.com`)",
+		"traefik.http.routers.mysite.rule":                    "Host(`example.com`) || Host(`www.example.com`)",
 		"traefik.http.routers.mysite.entrypoints":             "websecure",
 		"traefik.http.routers.mysite.tls":                     "true",
 		"traefik.http.routers.mysite.tls.certresolver":        "staging",
@@ -134,5 +134,47 @@ func TestAppLabelsNoHealthPathNoHealthcheck(t *testing.T) {
 		if strings.Contains(k, "healthcheck") {
 			t.Errorf("unexpected healthcheck label %s without a health path", k)
 		}
+	}
+}
+
+// Traefik v3 rejects several arguments to Host() and drops the whole router (every request 404s),
+// so each domain gets its own Host() joined with ||. One domain keeps the exact old form.
+func TestHostRule(t *testing.T) {
+	tests := []struct {
+		name    string
+		domains []string
+		want    string
+	}{
+		{"none", nil, ""},
+		{"one", []string{"a.example.com"}, "Host(`a.example.com`)"},
+		{"two", []string{"a.example.com", "b.example.com"}, "Host(`a.example.com`) || Host(`b.example.com`)"},
+		{"three keep order", []string{"c.io", "a.io", "b.io"}, "Host(`c.io`) || Host(`a.io`) || Host(`b.io`)"},
+		{"single label", []string{"intranet"}, "Host(`intranet`)"},
+		{"bad ones skipped, good kept", []string{"a.io", "x`) || Host(`evil.com", "b.io"}, "Host(`a.io`) || Host(`b.io`)"},
+		{"all bad", []string{"a b.io", "a.io`", "(a.io)", "a.io || b.io", "A.io", "", "-a.io", "a..io"}, ""},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := HostRule(tc.domains); got != tc.want {
+				t.Errorf("HostRule(%q) = %q, want %q", tc.domains, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestAppLabelsRuleFormats(t *testing.T) {
+	rule := func(d ...string) (string, bool) {
+		l := AppLabels(AppLabelsOpts{Slug: "s", Port: 80, Domains: d})
+		r, ok := l["traefik.http.routers.s.rule"]
+		return r, ok
+	}
+	if r, _ := rule("a.io"); r != "Host(`a.io`)" {
+		t.Errorf("one domain: %q", r)
+	}
+	if r, _ := rule("a.io", "b.io"); r != "Host(`a.io`) || Host(`b.io`)" {
+		t.Errorf("two domains: %q", r)
+	}
+	if _, ok := rule("bad host"); ok {
+		t.Error("an app whose only domain is invalid must get no labels")
 	}
 }

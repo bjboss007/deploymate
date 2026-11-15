@@ -71,7 +71,7 @@ func Render(r Route) ([]byte, error) {
 	}
 	name := "node-" + r.Slug
 	var f file
-	rt := router{Rule: "Host(`" + strings.Join(r.Domains, "`, `") + "`)", EntryPoints: []string{"websecure"}, Service: name}
+	rt := router{Rule: proxy.HostRule(r.Domains), EntryPoints: []string{"websecure"}, Service: name}
 	rt.TLS.CertResolver = r.Resolver
 	f.HTTP.Routers = map[string]router{name: rt}
 	var svc service

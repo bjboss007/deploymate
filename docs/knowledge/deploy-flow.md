@@ -44,7 +44,8 @@ every build line with sequence numbers.
    `apps.replicas` are removed at the end. Each new container gets:
    - env = service connection URLs from the app's **environment** only
      (0003/0010/0017) + app env vars (decrypted) + `GIT_SHA`;
-   - labels = ownership + Traefik routing (if domains exist);
+   - labels = ownership + Traefik routing (if domains exist; several domains become
+     ``Host(`a`) || Host(`b`)``, one `Host()` each, because Traefik v3 rejects `Host(`a`, `b`)`);
    - network `deploymate-net`, `restart: unless-stopped`.
 6. **Finish** — deployment `running`, app `running` +
    `current_deployment_id`, then prune images beyond the newest 5 per app.

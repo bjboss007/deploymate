@@ -7,6 +7,11 @@
 
 ## Where we stopped
 
+**2026-11-15 (multi-domain apps 404)** — An app with two or more domains answered Traefik's 404 on every hostname: `proxy.AppLabels` wrote `Host(`a`, `b`)`, which Traefik v3 rejects
+("unexpected number of parameters") and drops the router. New `proxy.HostRule` writes ``Host(`a`) || Host(`b`)`` (one domain unchanged), skips and logs hostnames that are not plain DNS names;
+`noderoute.Render` uses it too (dashroute's single-host rules were already fine). Verified against a real `traefik:v3.7.14` (file provider): both hosts 502 (matched, dummy backend down), old form 404.
+Running containers keep their old labels until redeployed. Troubleshooting entry added.
+
 **2026-10-26 (mobile responsiveness)** — The owner asked for the product to be "really responsive on mobile" and suggested tables should be neat labelled cards. Audited every
 dashboard and site page at 375/320 px. Dashboard: three pages scrolled sideways (stats 764 px, tokens 655, an app 499: bare tables, a stretched `<select>`, the 24-hour
 dots), the "New project" pop-over hung off the left edge, and the bottom action bar squeezed its main label. Site: the nav vanished under 680 px, docs tables overflowed. Fixes: one

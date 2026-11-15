@@ -22,9 +22,31 @@ package proxy
 import (
 	"fmt"
 	"hash/crc32"
+	"log/slog"
+	"regexp"
 	"strconv"
 	"strings"
 )
+
+// hostnameRe is the add-time rule for a domain (httpserver.hostnameRe): plain lowercase DNS
+// names. Anything else could break out of the backticks in a Traefik rule.
+var hostnameRe = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$`)
+
+// HostRule builds the Traefik v3 rule matching any of the domains: one Host(`x`) per domain
+// joined with " || " (v3 rejects several arguments to Host and drops the whole router, so every
+// request would 404). A hostname that is not a plain DNS name is skipped and logged rather than
+// being allowed into the rule; "" means no valid domain is left.
+func HostRule(domains []string) string {
+	var parts []string
+	for _, d := range domains {
+		if len(d) > 253 || !hostnameRe.MatchString(d) {
+			slog.Warn("proxy: skipping invalid hostname in Traefik rule", "hostname", d)
+			continue
+		}
+		parts = append(parts, "Host(`"+d+"`)")
+	}
+	return strings.Join(parts, " || ")
+}
 
 // Traefik active healthcheck cadence for the shared service: a sick replica
 // leaves rotation within one interval, and rejoins automatically when it
@@ -57,7 +79,8 @@ func ServiceName(slug string, port int, healthPath string) string {
 // AppLabels returns the Traefik labels for an app container. Empty when the
 // app has no domains — unexposed containers stay unreachable.
 func AppLabels(o AppLabelsOpts) map[string]string {
-	if len(o.Domains) == 0 {
+	rule := HostRule(o.Domains)
+	if rule == "" {
 		return nil
 	}
 	router := o.RouterName
@@ -66,7 +89,7 @@ func AppLabels(o AppLabelsOpts) map[string]string {
 	}
 	labels := map[string]string{
 		"traefik.enable": "true",
-		"traefik.http.routers." + router + ".rule":       "Host(`" + strings.Join(o.Domains, "`, `") + "`)",
+		"traefik.http.routers." + router + ".rule":       rule,
 		"traefik.http.routers." + router + ".entrypoints": "websecure",
 		"traefik.http.routers." + router + ".tls":         "true",
 	}
